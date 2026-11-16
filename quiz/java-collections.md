@@ -21,10 +21,6 @@ Compute `hashCode`, spread it with `h ^ (h >>> 16)`, mask to a bucket with `(n -
 
 So the bucket index is a bitmask (`hash & (n - 1)`) rather than a modulo, and so a resize can split each bucket into exactly two destinations (`i` and `i + oldCapacity`) using one extra hash bit without recomputing hashes.
 
-## What happens if you override `equals` but not `hashCode`?
-
-Two objects that are equal can land in different buckets, so a `HashMap.get` with an equal key misses and a `HashSet` accepts duplicates. The contract is: equal objects must have equal hash codes.
-
 ## When does a `HashMap` bucket become a tree, and why?
 
 When a bucket already holding 8 nodes receives another and the table has at least 64 buckets, it converts to a red-black tree so that pathological collisions degrade lookups to O(log n) instead of O(n). It reverts to a list when it shrinks to 6.
@@ -96,10 +92,6 @@ The element at index 1, because `remove(int)` is a more specific overload than `
 ## Why did `Collectors.toMap` throw `IllegalStateException`?
 
 Two elements mapped to the same key and no merge function was provided. Pass a third argument such as `(a, b) -> a` or `Integer::sum`, and a fourth for the map type if you need ordering.
-
-## What is the difference between `map` and `flatMap` on a stream?
-
-`map` is one-to-one. `flatMap` maps each element to a stream and concatenates them, flattening `Stream<List<T>>` to `Stream<T>`; same semantics as JS `flatMap`.
 
 ## When do stream intermediate operations execute?
 
