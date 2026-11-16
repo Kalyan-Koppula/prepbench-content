@@ -1,0 +1,20 @@
+{
+  "sample": [
+    { "args": [7], "expected": true, "explain": "7 -> 49 -> 97 -> 130 -> 10 -> 1." },
+    { "args": [4], "expected": false, "explain": "4 -> 16 -> 37 -> 58 -> 89 -> 145 -> 42 -> 20 -> 4 loops without reaching 1." },
+    { "args": [1], "expected": true }
+  ],
+  "hidden": [
+    { "args": [2] },
+    { "args": [10] },
+    { "args": [100] },
+    { "args": [19] },
+    { "args": [20] },
+    { "args": [1111111] },
+    { "args": [999999999] },
+    { "args": [2147483647] },
+    { "args": [1000000000] },
+    { "args": [3] },
+    { "args": [68] }
+  ]
+}

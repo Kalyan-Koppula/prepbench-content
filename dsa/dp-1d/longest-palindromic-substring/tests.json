@@ -1,0 +1,22 @@
+{
+  "sample": [
+    { "args": ["racecars"], "expected": "racecar" },
+    { "args": ["abacdc"], "expected": "aba", "explain": "aba and cdc both have length 3; aba starts first." },
+    { "args": ["xy"], "expected": "x" }
+  ],
+  "hidden": [
+    { "args": ["a"] },
+    { "args": ["aa"] },
+    { "args": ["abcd"] },
+    { "args": ["zbbq"] },
+    { "args": ["aaaa"] },
+    { "args": ["abbaxyzzyx"] },
+    { "args": ["mxkayakdqlevelz"] },
+    { "args": ["Aa"] },
+    { "args": ["12321abc1234554321"] },
+    { "args": ["abcbabcbabcba"] },
+    { "args": ["bccabaabaacacacaccbbabcaabcabccaabbbacaacaaaccbbcabbabaaaaababbbccbbaabcaacbbcbbaccccbccaaaabbcccbabaabcbaacaacbbbbbbbccbcbcbababbccccbcaabbababccabcccbcbabbaccccbbcccbccabbbbcbbcacbcbacbbabcccbbabcbbacaacaccbaacaababaabcaacaccabcaaabbacbccbcbacbbbaccccbbaabbcccccccbcacbcabbbbbabccbcabacbaccbcbacbbc"] },
+    { "args": ["ababbaaaabbaabbaabaabbaabbbabbaaabbababbabbbbbaabbaaabbbbaaababbabbbabaaabaababbaababbabbbabababbabbababababbbababaaaaaazzxzxzyzxyxxzyyzxyxxyyyxxyyxzyxyxxxyyxzxxzxyyxxxyxyzxyyxxyyyxxyxzyyzxxyxzyzxzxzzaaaaaabababbbababababbabbabababbbabbabaabbabaabaaa"] },
+    { "args": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"] }
+  ]
+}

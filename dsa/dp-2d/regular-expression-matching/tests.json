@@ -1,0 +1,26 @@
+{
+  "sample": [
+    { "args": ["abbbc", "ab*c"], "expected": true, "explain": "b* expands to bbb." },
+    { "args": ["ax", ".*y"], "expected": false, "explain": ".* can cover ax, but the y has nothing to match." },
+    { "args": ["b", "a*b"], "expected": true, "explain": "a* is used zero times." }
+  ],
+  "hidden": [
+    { "args": ["a", "a"] },
+    { "args": ["a", "b"] },
+    { "args": ["a", "."] },
+    { "args": ["bb", "b"] },
+    { "args": ["bbb", "b*"] },
+    { "args": ["zq", ".*"] },
+    { "args": ["abc", "a.c"] },
+    { "args": ["xxy", "z*x*y"] },
+    { "args": ["banana", "b.n*an*a"] },
+    { "args": ["aaa", "ab*a*c*a"] },
+    { "args": ["aaa", "aaaa"] },
+    { "args": ["ab", ".*c"] },
+    { "args": ["bbbba", ".*a*a"] },
+    { "args": ["abcd", "d*"] },
+    { "args": ["aaaaaaaaaaaaaaaaaaab", "a*a*a*a*a*a*a*a*a*c"] },
+    { "args": ["aaaaaaaaaaaaaaaaaaaa", "a*a*a*a*a*a*a*a*a*a*"] },
+    { "args": ["abababababababababab", ".*.*.*.*.*.*.*.*.*c"] }
+  ]
+}

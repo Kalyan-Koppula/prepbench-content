@@ -1,0 +1,22 @@
+{
+  "sample": [
+    {"args": ["aab"], "expected": "aba"},
+    {"args": ["aaab"], "expected": "", "explain": "Three \"a\"s need at least two separators, but only one other letter exists."},
+    {"args": ["aabb"], "expected": "abab", "explain": "\"baba\" is also accepted."}
+  ],
+  "hidden": [
+    {"args": ["z"]},
+    {"args": ["zz"]},
+    {"args": ["ab"]},
+    {"args": ["aaabb"]},
+    {"args": ["aaaabb"]},
+    {"args": ["abcabcabc"]},
+    {"args": ["bbbbbbbaaaaaac"]},
+    {"args": ["eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeefgh"]},
+    {"args": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbc"]},
+    {"args": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"]},
+    {"args": ["jsjoqkvzincisjtezozszjeewagabdkpyaukzmdtpboihylatmhjcfupzhsldvfamlrtvqhpdocyilicrmacqmgjquuvqbtrkkbidcknmcumwrpzhcjttounjrsquuiglqgdckttjxblesrnleumtawmdizlxfnslbwjfgawunnpuvetduzpetgxzjjgrsbhqyqnerzoytabkpzzrhwtwxvritueyzzjksrixxtxipsbdwjvpgrsyuxwsppqxyprlchtqkscshzeeppbsntrscxybigixvldraaavykralmdbflvcfwxtqnmkomcpagzgtsqemskntzboetjzpxbwnukffifxfbqqslipishsgseshrhziczdewuzkbzyifulqmaiytoigabsrqkwewuyegcqpcecoekrmkzvbluihmmeqivshyuvkrxhkgqaiurkmbsurpqzcbnuqpvtzeqpybchsmnqhaadalxeaiftsvkqpqzpwud"]},
+    {"args": ["bacabcacbacccaaaaabacacccaacacaabbccaaccaacaabbcbaccacbbcbcbbabbacabccbccbaaaabccaccaabaaaacbbccbacccbbcaacacabcbcbbabaabbcaccbcaabaabbabbababacaaccabaaacaabacaacacabacbabacbaccaccaaccbabcbcccaabacbaaaacbaacbcccccbcccccbccaaaaaacaccaacacbacbabcbbabcabacacaabcabaccbcbaabacaabaaacbaabbbaaaaacaaababccaaaccbcabcbccaaabbbaaccacaaabbabcbaaacaacccabacbcbcaaacaaaccbaaabbcaacbaacaaabaabaaaababbacccbccaaaaababacbbaaaaababaaccbacbbbacaccbaabaacccabcbacaaccaabcbcaaacaabbbbcaabbaacbaabaabbaaccacaabbcbbabbaa"]},
+    {"args": ["xxzxyxxxyzxxxxxxxxxxzzxxxxxxxzxxxxxxxxzxyxxyxxxyxxxxxyxxxyzxxzxxxxzxxxxxzxxxxzxxzyxxxyxyxxyxxxxxxzzxzzxxxxxyxxxxyxzxxxxxzxyxxyzxxzzyxxyzxxxxxxxyyxyxxxxxxxxxyxzzxxyxzxzzyxxxxxxxxxxxxxxxxzzzzxxxxxxyxxyyxxxxxxxxxxzyyxxxzyxxxyxxxxxxxxxxxzyxxyxxxxyxxxxyxxxzxxxxxxxzzxxxxxxzxxxyxzyxxxxxxxxxxxzxxxyxxxxxyyxxxzxxxxxzzxxxxxxxxzzxxxxxxxzxyxxyxyxxxxxxyxxyxxxxyzyxzxzzxyxxxxzxxzxxyxxxxxxxxxzxxzxxxxxxxxxxzxxzxyxy"]}
+  ]
+}

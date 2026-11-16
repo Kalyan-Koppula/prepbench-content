@@ -1,0 +1,18 @@
+{
+  "sample": [
+    { "args": [2], "expected": 2, "explain": "1+1 or 2." },
+    { "args": [3], "expected": 3, "explain": "1+1+1, 1+2, 2+1." },
+    { "args": [5], "expected": 8 }
+  ],
+  "hidden": [
+    { "args": [1] },
+    { "args": [4] },
+    { "args": [6] },
+    { "args": [10] },
+    { "args": [20] },
+    { "args": [30] },
+    { "args": [38] },
+    { "args": [44] },
+    { "args": [45] }
+  ]
+}

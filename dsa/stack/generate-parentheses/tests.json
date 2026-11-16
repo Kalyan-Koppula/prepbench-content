@@ -1,0 +1,14 @@
+{
+  "sample": [
+    { "args": [1], "expected": ["()"] },
+    { "args": [3], "expected": ["((()))", "(()())", "(())()", "()(())", "()()()"], "explain": "The five ways to arrange three well-formed pairs." }
+  ],
+  "hidden": [
+    { "args": [2] },
+    { "args": [4] },
+    { "args": [5] },
+    { "args": [6] },
+    { "args": [7] },
+    { "args": [8] }
+  ]
+}

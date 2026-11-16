@@ -1,0 +1,22 @@
+{
+  "sample": [
+    { "args": [7], "expected": 4, "explain": "4 + 1 + 1 + 1; no shorter sum of squares makes 7." },
+    { "args": [18], "expected": 2, "explain": "9 + 9." },
+    { "args": [26], "expected": 2, "explain": "25 + 1. Greedy also finds it here, but not always." }
+  ],
+  "hidden": [
+    { "args": [1] },
+    { "args": [2] },
+    { "args": [3] },
+    { "args": [4] },
+    { "args": [12] },
+    { "args": [43] },
+    { "args": [48] },
+    { "args": [112] },
+    { "args": [9999] },
+    { "args": [10000] },
+    { "args": [7927] },
+    { "args": [8191] },
+    { "args": [6655] }
+  ]
+}

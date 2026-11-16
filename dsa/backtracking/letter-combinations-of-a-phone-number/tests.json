@@ -1,0 +1,18 @@
+{
+  "sample": [
+    { "args": ["38"], "expected": ["dt", "du", "dv", "et", "eu", "ev", "ft", "fu", "fv"], "explain": "3 letters for '3' times 3 letters for '8'." },
+    { "args": [""], "expected": [] },
+    { "args": ["7"], "expected": ["p", "q", "r", "s"] }
+  ],
+  "hidden": [
+    { "args": ["2"] },
+    { "args": ["9"] },
+    { "args": ["22"] },
+    { "args": ["79"] },
+    { "args": ["234"] },
+    { "args": ["567"] },
+    { "args": ["2468"] },
+    { "args": ["7999"] },
+    { "args": ["9999"] }
+  ]
+}

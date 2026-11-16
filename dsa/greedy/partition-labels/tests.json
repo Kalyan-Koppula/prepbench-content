@@ -1,0 +1,21 @@
+{
+  "sample": [
+    { "args": ["abacdcef"], "expected": [3, 3, 1, 1], "explain": "Pieces \"aba\", \"cdc\", \"e\", \"f\"." },
+    { "args": ["abcab"], "expected": [5], "explain": "a and b both reappear at the end, so the whole string is one piece." },
+    { "args": ["xyz"], "expected": [1, 1, 1] }
+  ],
+  "hidden": [
+    { "args": ["a"] },
+    { "args": ["aaaa"] },
+    { "args": ["abba"] },
+    { "args": ["abcdefghijklmnopqrstuvwxyz"] },
+    { "args": ["zabcz"] },
+    { "args": ["aabbccdd"] },
+    { "args": ["abcdbefgfhh"] },
+    { "args": ["qwertyqazxswedcvfrtgbnhy"] },
+    { "args": ["aebbedaddcfgchgijkkjlm"] },
+    { "args": ["aaaaaabaaaabbaaaaaaadcccddcdddcdddcccdcddcddddccccdcccdeeefefefffhhghghhhhhhggggghghghhgghjjjjiijjjiijijijiikllkkkklklkkllllkklkkllkklkllknmnmmnnmnmmmnmnnnmnmmpoopppopopooppppoooppopqqqrrqqqrrrqqrqrqrqrrrrrqqrqrrrqqtsttsstssssssssttuuuuuvuuuuvuvuvvuvuuuvvvuvuuuxxxxxxwxwxwwwwxwwxxwzzzyzzyyyzzzzyzyyy"] },
+    { "args": ["ppfbtykgbmvbftbbshbchmdtipmkvivkfklnxobxxamuvlvtnrugbuawzfbjpfsjlgkfbltlejledornqhcunstrgiftvzjaysixgegdceupbrytrvpwastgwtzdluzohklchjkgxujqqzdldwwjxgojqacdmdvjmqikcarbngrnfiqblvrfjbcbhpywdfzdzsctlsjwvlsgdghzfhljaqrialskihicvhgtgvvjrfmofgouerlkhkcteuaqprzerayazlkiefiirlappdkgzybdkkrdusbwxmbptonshfgmxznjuskwkqrafgtmtlaasepklrvzbvrmpltezlnaupmgjpduwgwlitojohrlwwbzgyvehxhotzjqxvvdjwhkkdnkiucpnpxfvjleqfkbktoirwujqkjyybeardyxscjjrrgsxvvnukobqekxzuoinveavgcsqrhckrtgypgrigbmzreohfmyflvpmqjxsxrmzvjqcrll"] },
+    { "args": ["abcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxyzbcdefghijklmnopqrstuvwxa"] }
+  ]
+}

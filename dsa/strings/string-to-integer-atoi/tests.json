@@ -1,0 +1,25 @@
+{
+  "sample": [
+    { "args": ["   -0042abc"], "expected": -42, "explain": "Spaces skipped, '-' read, digits 0042 read, stop at 'a'." },
+    { "args": ["words 99"], "expected": 0, "explain": "The first non-space character is a letter, so no digits are read." },
+    { "args": ["99999999999"], "expected": 2147483647 }
+  ],
+  "hidden": [
+    { "args": [""] },
+    { "args": ["   "] },
+    { "args": ["0"] },
+    { "args": ["+1"] },
+    { "args": ["-"] },
+    { "args": ["+-12"] },
+    { "args": [" + 4"] },
+    { "args": ["-2147483648"] },
+    { "args": ["-2147483649"] },
+    { "args": ["2147483647"] },
+    { "args": ["2147483648"] },
+    { "args": ["-0"] },
+    { "args": ["3.14159"] },
+    { "args": ["00000000000000000000000012"] },
+    { "args": ["-91283472332 is big"] },
+    { "args": ["  7 8"] }
+  ]
+}

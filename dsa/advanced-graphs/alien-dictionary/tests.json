@@ -1,0 +1,21 @@
+{
+  "sample": [
+    { "args": [["cab", "cba", "ab", "bb"]], "expected": "cab", "explain": "The pairs give a < b, c < a and a < b again, so the only order is c, a, b." },
+    { "args": [["ab", "a"]], "expected": "", "explain": "A word can never come before its own proper prefix." },
+    { "args": [["zx", "zb", "xa", "xab", "ba"]], "expected": "zxba", "explain": "The list forces z < x < b; a is unconstrained, so any position for it is accepted." }
+  ],
+  "hidden": [
+    { "args": [["a"]] },
+    { "args": [["abc", "ab"]] },
+    { "args": [["z", "z"]] },
+    { "args": [["ab", "ab", "abc"]] },
+    { "args": [["x", "y", "x"]] },
+    { "args": [["ba", "bc", "ac", "cab"]] },
+    { "args": [["wxy", "wxz", "wy", "z"]] },
+    { "args": [["ca", "cb", "ba", "bc", "ab"]] },
+    { "args": [["hello", "hi", "world", "word"]] },
+    { "args": [["iiv","iugwyh","izrr","eizmy","elxlmkwe","ek","d","de","dklfn","dkol","da","dwwrg","xahgwywi","xvrdjq","h","hm","hy","hsow","hqivyfc","hqe","gdkqwsv","gbkdzbks","gws","goyokyxj","fxcslhxe","fg","ffssai","fcz","fvswu","fn","fz","mkb","ma","mvabbkl","mjisw","ywivasyv","uxyxd","uwcqfmc","usk","ujrwvvj","t","tscag","tn","tqkjjggm","lywckiez","lbdhuync","ln","k","kxikur","kuuuef","c","cf","cc","axzsbx","abyg","ajx","b","brki","wkpwqycj","wamilaw","wjr","p","pdvl","pkfsjdhv","pcbzglkw","psht","vfuydpas","vtntzsz","vcu","vspchdy","rdvrozcv","rx","rch","rpgygcbk","rrw","rjxtrjln","o","ofk","oufxgoyc","siu","sgewc","stnfu","sp","sqgg","jkonu","jrqa","jsviqnro","n","nqqesn","qdhcurh","qb","qplk","qrlyekt","qra","qoqhrbi","ze","zehdtds","zf","zudtw","zjvxnkb"]] },
+    { "args": [["h","hh","hc","hdb","he","hec","hei","had","hjg","g","ghi","gg","gd","gdj","ged","ga","gj","gjb","gje","c","cg","ccg","ccb","ce","ceg","ca","cah","cag","cii","cfd","cj","cjb","d","dgb","dc","ddc","db","dei","df","b","bh","bg","bd","bdg","bdf","ba","bjj","e","ehg","eg","ec","ed","eb","eef","eai","ef","ej","a","ahc","ac","ad","adg","ae","aeg","af","i","ihg","ihf","ihj","ic","id","idd","ibg","ibe","ia","ii","iif","ifh","ifa","ij","f","fgb","fge","fgi","fdb","fba","fed","fi","ff","ffj","fj","j","jg","jd","jb","je","jej","ji","jij","jj"]] },
+    { "args": [["i","dzzxy","xmtdt","xjo","h","haqhc","hpl","hot","hnw","g","gayns","fqptw","m","mtpl","mn","y","yimm","ym","yravl","yohjv","ue","uo","uj","thhk","tpe","l","k","kuql","cqen","cqxan","bvq","bv","brqf","wivhg","wxz","wuiwo","wkfax","wajio","pxmv","ptqa","pvm","pvbju","vujgq","vc","vq","r","rias","rkhr","rn","rzvy","oyofl","sl","j","jeths","jmwwf","nywck","nyrni","nkyyr","z","zm","zs"]] }
+  ]
+}

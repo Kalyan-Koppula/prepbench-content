@@ -1,0 +1,19 @@
+{
+  "sample": [
+    { "args": [1], "expected": 2147483648, "explain": "Bit 0 moves to bit 31, which is 2^31." },
+    { "args": [6], "expected": 1610612736, "explain": "Bits 1 and 2 move to bits 30 and 29: 2^30 + 2^29." },
+    { "args": [4294967294], "expected": 2147483647, "explain": "Every bit but bit 0 is set; after reversal, every bit but bit 31." }
+  ],
+  "hidden": [
+    { "args": [0] },
+    { "args": [4294967295] },
+    { "args": [2147483648] },
+    { "args": [2147483647] },
+    { "args": [19088743] },
+    { "args": [3221225471] },
+    { "args": [305419896] },
+    { "args": [2863311530] },
+    { "args": [65535] },
+    { "args": [16] }
+  ]
+}

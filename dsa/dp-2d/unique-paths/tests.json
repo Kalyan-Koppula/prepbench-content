@@ -1,0 +1,20 @@
+{
+  "sample": [
+    { "args": [3, 3], "expected": 6, "explain": "Any order of 2 rights and 2 downs: C(4, 2) = 6." },
+    { "args": [2, 4], "expected": 4 },
+    { "args": [1, 1], "expected": 1, "explain": "The robot already stands on the target." }
+  ],
+  "hidden": [
+    { "args": [1, 100] },
+    { "args": [100, 1] },
+    { "args": [2, 2] },
+    { "args": [4, 6] },
+    { "args": [6, 4] },
+    { "args": [10, 10] },
+    { "args": [16, 16] },
+    { "args": [23, 12] },
+    { "args": [51, 9] },
+    { "args": [100, 3] },
+    { "args": [2, 100] }
+  ]
+}

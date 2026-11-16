@@ -1,0 +1,19 @@
+{
+  "sample": [
+    { "args": ["noon"], "expected": [["n", "o", "o", "n"], ["n", "oo", "n"], ["noon"]], "explain": "Every piece must read the same both ways; \"no\" and \"on\" don't." },
+    { "args": ["x"], "expected": [["x"]] },
+    { "args": ["aba"], "expected": [["a", "b", "a"], ["aba"]] }
+  ],
+  "hidden": [
+    { "args": ["ab"] },
+    { "args": ["aa"] },
+    { "args": ["abc"] },
+    { "args": ["racecar"] },
+    { "args": ["abbab"] },
+    { "args": ["aaaaa"] },
+    { "args": ["abacaba"] },
+    { "args": ["abcdefghijkl"] },
+    { "args": ["aaaaaaaaaa"] },
+    { "args": ["aabbaabbaabb"] }
+  ]
+}

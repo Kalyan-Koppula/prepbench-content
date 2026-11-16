@@ -1,0 +1,23 @@
+{
+  "sample": [
+    { "args": ["pineappletart",["pine","apple","tart","pineapple"]], "expected": true, "explain": "pineapple + tart (or pine + apple + tart)." },
+    { "args": ["bluebird",["blue","bir","bi","r"]], "expected": false, "explain": "Nothing in the dictionary ends with d." },
+    { "args": ["aaaa",["aaa","aa"]], "expected": true, "explain": "aa + aa; greedily taking aaa first leaves a stray a." }
+  ],
+  "hidden": [
+    { "args": ["a",["a"]] },
+    { "args": ["a",["b"]] },
+    { "args": ["ab",["a","b"]] },
+    { "args": ["abab",["ab"]] },
+    { "args": ["aaaaaaa",["aaaa","aaa"]] },
+    { "args": ["aaaaaaa",["aaaa","aa"]] },
+    { "args": ["carsandcats",["car","cars","and","sand","cat"]] },
+    { "args": ["carsandcats",["car","cars","and","sand","cats"]] },
+    { "args": ["goalspecial",["go","goal","goals","special"]] },
+    { "args": ["abcd",["a","abc","b","cd"]] },
+    { "args": ["xyz",["xyzw","x"]] },
+    { "args": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab",["a","aa","aaa","aaaa","aaaaa","aaaaaa","aaaaaaa","aaaaaaaa","aaaaaaaaa","aaaaaaaaaa"]] },
+    { "args": ["cabbabaababbcabaabcababcbbcabaccaababcbaabbacccabbacabcccababccabbcacabcabababbabacabcabcabbabbaaabbacabbacccabbaabbcccabcabcabbaabcbcabbaabbabccabbabcabbabcabcabbcabcacababcabbaabbccabaabccbccabbcaabcabbaabcbabcabaabbaabcabbabcaabcbcabbaabccabcbabaabbcabbcabbaaababccabbabcabbacab",["ab","abc","cab","ba","cabba","b","cc","bca","aab"]] },
+    { "args": ["aabcccabbacabcababccaababcccabbcacabaabbcacabcabbaababccababcbcaabccabbabababcaabccabbababcacabbaccabbaabbcaabbcaaabcababbabcaabcababcbabaccababccabababcaabbabcaabcbcabaabccabcabababcabbacabcabbaababcbcabacababccabcccabcccaabbabcabaabbcaccabbcaabcbabaaabcabbaccabccabbacabbaabcababcb",["ab","abc","cab","ba","cabba","cc","bca","aab"]] }
+  ]
+}

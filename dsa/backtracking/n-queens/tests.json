@@ -1,0 +1,14 @@
+{
+  "sample": [
+    { "args": [4], "expected": [[".Q..", "...Q", "Q...", "..Q."], ["..Q.", "Q...", "...Q", ".Q.."]], "explain": "On a 4×4 board there are exactly two non-attacking placements, mirror images of each other." },
+    { "args": [3], "expected": [], "explain": "Three queens cannot be placed on a 3×3 board without two of them attacking each other." }
+  ],
+  "hidden": [
+    { "args": [1] },
+    { "args": [2] },
+    { "args": [5] },
+    { "args": [6] },
+    { "args": [7] },
+    { "args": [8] }
+  ]
+}

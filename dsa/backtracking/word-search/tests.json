@@ -1,0 +1,22 @@
+{
+  "sample": [
+    { "args": [[["s", "e", "a"], ["t", "a", "r"], ["o", "n", "e"]], "seat"], "expected": true, "explain": "s(0,0) → e(0,1) → a(1,1) → t(1,0)." },
+    { "args": [[["s", "e", "a"], ["t", "a", "r"], ["o", "n", "e"]], "seas"], "expected": false, "explain": "The only 's' is already used at the start." },
+    { "args": [[["q"]], "q"], "expected": true }
+  ],
+  "hidden": [
+    { "args": [[["q"]], "z"] },
+    { "args": [[["a"]], "aa"] },
+    { "args": [[["a", "b"], ["c", "d"]], "abdc"] },
+    { "args": [[["a", "b"], ["c", "d"]], "abca"] },
+    { "args": [[["a", "b"], ["c", "d"]], "ad"] },
+    { "args": [[["s", "e", "a"], ["t", "a", "r"], ["o", "n", "e"]], "tone"] },
+    { "args": [[["A", "a"], ["a", "A"]], "AaA"] },
+    { "args": [[["A", "a"], ["a", "A"]], "AA"] },
+    { "args": [[["c", "a", "a"], ["a", "a", "a"], ["b", "c", "d"]], "aab"] },
+    { "args": [[["m", "a", "p", "s"], ["e", "t", "o", "p"], ["n", "a", "t", "s"]], "mapspots"] },
+    { "args": [[["a", "a", "a", "a"], ["a", "a", "a", "a"], ["a", "a", "a", "a"], ["a", "a", "a", "a"]], "aaaaaaaaaaaab"] },
+    { "args": [[["a", "a", "a", "a"], ["a", "a", "a", "a"], ["a", "a", "a", "a"], ["a", "a", "a", "a"]], "aaaaaaaaaaaaaaa"] },
+    { "args": [[["x", "y", "z", "x", "y", "z"], ["z", "x", "y", "z", "x", "y"], ["y", "z", "x", "y", "z", "x"], ["x", "y", "z", "x", "y", "z"], ["z", "x", "y", "z", "x", "y"], ["y", "z", "x", "y", "z", "q"]], "xyzxyzxyzxyzq"] }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "sample": [
+    { "args": ["XIV"], "expected": 14, "explain": "X = 10, then IV = 4." },
+    { "args": ["MMXXIV"], "expected": 2024 },
+    { "args": ["CDXLIV"], "expected": 444, "explain": "CD = 400, XL = 40, IV = 4." }
+  ],
+  "hidden": [
+    { "args": ["I"] },
+    { "args": ["IV"] },
+    { "args": ["IX"] },
+    { "args": ["LVIII"] },
+    { "args": ["XC"] },
+    { "args": ["CM"] },
+    { "args": ["MMMCMXCIX"] },
+    { "args": ["MDCCLXXVI"] },
+    { "args": ["MCMXC"] },
+    { "args": ["MMMDCCCLXXXVIII"] },
+    { "args": ["DCXXI"] },
+    { "args": ["XLIX"] }
+  ]
+}

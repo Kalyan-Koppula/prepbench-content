@@ -1,0 +1,20 @@
+{
+  "sample": [
+    { "args": [3, 5], "expected": 8, "explain": "011 + 101: the carries ripple through every bit." },
+    { "args": [-4, 1], "expected": -3 },
+    { "args": [7, -7], "expected": 0 }
+  ],
+  "hidden": [
+    { "args": [0, 0] },
+    { "args": [0, -1000] },
+    { "args": [1, 1] },
+    { "args": [-1, -1] },
+    { "args": [-1, 1] },
+    { "args": [1000, 1000] },
+    { "args": [-1000, -1000] },
+    { "args": [1000, -999] },
+    { "args": [511, 1] },
+    { "args": [-512, -1] },
+    { "args": [123, 456] }
+  ]
+}

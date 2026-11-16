@@ -1,0 +1,23 @@
+{
+  "sample": [
+    { "args": ["ab","cd","acbd"], "expected": true, "explain": "a (s1), c (s2), b (s1), d (s2)." },
+    { "args": ["abc","d","adcb"], "expected": false, "explain": "s1's b would have to come after its c." },
+    { "args": ["","",""], "expected": true }
+  ],
+  "hidden": [
+    { "args": ["","abc","abc"] },
+    { "args": ["abc","","abd"] },
+    { "args": ["a","b","abc"] },
+    { "args": ["a","a","aa"] },
+    { "args": ["aab","ac","aacab"] },
+    { "args": ["aab","ac","acaab"] },
+    { "args": ["xy","yx","yxyx"] },
+    { "args": ["abab","baba","abbabaab"] },
+    { "args": ["abc","abc","aabbcc"] },
+    { "args": ["abc","abc","abcabd"] },
+    { "args": ["aababbbbaababbabbaabaaaababaabbabaabbabaababbabbbbababbabbabaabbbababbaaaaaabbbbbabaababbabbbbbabbaa","aaabaaaabababaabbaaababbbbbbaabbbbabababaaabaaabbabaabbbabaaabaabbabbaaaabaababaabababbbabbbaaababba","aabaaabaaabbbabaaababbabbababbaaabababaaaaaabbabaaabbbbbbabbbaaabbbbabbaababaababbbabaaabbbbaabbaabbaababbbaabbaaababbbbabbaabbabaaaaabaaaabbabbaaaababbbaabbabbaaabbaaababbabbabbbbbbabbabbabaababbbaaa"] },
+    { "args": ["aababbbbaababbabbaabaaaababaabbabaabbabaababbabbbbababbabbabaabbbababbaaaaaabbbbbabaababbabbbbbabbaa","aaabaaaabababaabbaaababbbbbbaabbbbabababaaabaaabbabaabbbabaaabaabbabbaaaabaababaabababbbabbbaaababba","aabaaabaaabbbabaaababbabbababbaaabababaaaaaabbabaaabbbbbbabbbaaabbbbabbaababaababbbabaaabbbbaabbaabbaababbbaabbaaababbbbabbaabbabaaaaabaaaabbabbaaaababbababbabbaaabbaaababbabbabbbbbbabbabbabaababbbaaa"] },
+    { "args": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab","aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"] },
+    { "args": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab","aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaba"] }
+  ]
+}

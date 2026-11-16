@@ -1,0 +1,23 @@
+{
+  "sample": [
+    { "args": [2048], "expected": 8402 },
+    { "args": [-450], "expected": -54, "explain": "The trailing zero becomes a leading zero and disappears; the sign stays." },
+    { "args": [1999999999], "expected": 0, "explain": "9999999991 is larger than 2^31 - 1." }
+  ],
+  "hidden": [
+    { "args": [0] },
+    { "args": [7] },
+    { "args": [-7] },
+    { "args": [10] },
+    { "args": [-100000] },
+    { "args": [2147483647] },
+    { "args": [-2147483648] },
+    { "args": [1463847412] },
+    { "args": [-1463847412] },
+    { "args": [1563847412] },
+    { "args": [-1563847412] },
+    { "args": [1000000003] },
+    { "args": [1534236469] },
+    { "args": [123456789] }
+  ]
+}
