@@ -1,0 +1,24 @@
+**Key insight:** selector engines match **right to left**. Test each element against the last compound (cheap and selective), then climb its ancestors to satisfy the rest. With only descendant combinators, greedily taking the nearest matching ancestor is always correct.
+
+## Approach
+
+1. **Parse.** Trim, split on `/\s+/`. Parse each part with a small regex: an optional leading tag or `*`, then any number of `#id` and `.class` tokens. Lower-case the tag.
+2. **Match a compound:** tag (if any) equals `tagName.toLowerCase()`, every id equals `el.id`, every class is in `classList`.
+3. **Match the full selector:** the element must match the last compound. Then walk `parentElement` upward with a pointer at the previous compound, decrementing the pointer each time an ancestor matches. Success when the pointer passes the first compound.
+4. **Collect:** a pre-order walk over `root`'s descendants (not `root`), pushing each element that matches. Pre-order gives document order and no duplicates.
+
+## Pitfalls
+
+- Matching left to right from `root` ("find all `nav`, then all `a` inside them") produces duplicates when matches nest and loses document order unless you de-duplicate and sort.
+- Stopping the ancestor walk at `root`: native `querySelectorAll` evaluates the selector against the whole document, then filters to `root`'s descendants.
+- Substring checks on `className` (`.item` matching `item-list`).
+- Comparing `tagName` without lower-casing (`DIV` vs `div`).
+- Letting the element itself satisfy an ancestor compound: `.c .c` must not match a lone `.c`. Start the climb at `parentElement`.
+
+## Follow-ups interviewers add
+
+- **Child combinator `>`:** greedy no longer works. `a > b c` needs backtracking: if the nearest `b` ancestor's parent isn't an `a`, try a farther `b`.
+- **Selector lists:** `a, b` means union; merge results and keep document order.
+- **Attribute selectors and `:not()`:** extend the compound parser into a proper tokenizer.
+- **Performance:** index by id/class/tag and start from the rarest part, or cache parsed selectors as browsers do.
+- **`matches(el, selector)` and `closest(el, selector)`:** both fall out of `matchesSelector`.

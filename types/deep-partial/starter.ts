@@ -1,0 +1,1 @@
+type DeepPartial<T> = any
