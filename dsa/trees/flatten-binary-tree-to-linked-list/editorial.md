@@ -38,7 +38,7 @@ A recursive alternative processes nodes in reverse preorder (right, left, node),
 
 | current | left subtree's rightmost | splice | chain after |
 | --- | --- | --- | --- |
-| 1 | 4 | 4.right = 5; 1.right = 2 | 1 → 2 → 3, 4 → 5 → 6 (3 still on 2's left) |
+| 1 | 4 | 4.right = 5; 1.right = 2 | 1 → 2; node 2 still has left 3 and right 4 → 5 → 6 |
 | 2 | 3 | 3.right = 4; 2.right = 3 | 1 → 2 → 3 → 4 → 5 → 6 |
 | 3, 4, 5, 6 | – | no left child | unchanged |
 
