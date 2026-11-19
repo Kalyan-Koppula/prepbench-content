@@ -191,6 +191,94 @@ boxes.forEach((el, i) => { el.style.height = `${widths[i]}px` })
 | Find the DOM path or common ancestor | `parentElement` loop, `contains`, a `Set` of ancestors |
 | Serialize/deserialize a DOM tree | Recursion over `childNodes`, `nodeType`, `attributes` |
 
+## Worked task: an accessible tabs widget with plain DOM
+
+A typical machine-coding prompt: "Build tabs without a framework." The markup carries the semantics:
+
+```html
+<div class="tabs">
+  <div role="tablist" aria-label="Account">
+    <button role="tab" id="tab-profile" aria-controls="panel-profile" aria-selected="true">Profile</button>
+    <button role="tab" id="tab-billing" aria-controls="panel-billing" aria-selected="false" tabindex="-1">Billing</button>
+  </div>
+  <section role="tabpanel" id="panel-profile" aria-labelledby="tab-profile">…</section>
+  <section role="tabpanel" id="panel-billing" aria-labelledby="tab-billing" hidden>…</section>
+</div>
+```
+
+The script uses delegation, `closest`, attributes and keyboard handling:
+
+```js
+function initTabs(root) {
+  const tablist = root.querySelector('[role="tablist"]')
+  const tabs = [...tablist.querySelectorAll('[role="tab"]')]
+
+  function select(tab) {
+    for (const t of tabs) {
+      const selected = t === tab
+      t.setAttribute('aria-selected', String(selected))
+      t.tabIndex = selected ? 0 : -1 // roving tabindex: only the active tab is in the Tab order
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !selected
+    }
+    tab.focus()
+  }
+
+  tablist.addEventListener('click', (event) => {
+    const tab = event.target.closest('[role="tab"]')
+    if (tab) select(tab)
+  })
+
+  tablist.addEventListener('keydown', (event) => {
+    const index = tabs.indexOf(document.activeElement)
+    if (index === -1) return
+    let next = null
+    if (event.key === 'ArrowRight') next = tabs[(index + 1) % tabs.length]
+    if (event.key === 'ArrowLeft') next = tabs[(index - 1 + tabs.length) % tabs.length]
+    if (event.key === 'Home') next = tabs[0]
+    if (event.key === 'End') next = tabs[tabs.length - 1]
+    if (next) {
+      event.preventDefault()
+      select(next)
+    }
+  })
+}
+
+document.querySelectorAll('.tabs').forEach(initTabs)
+```
+
+What an interviewer looks for: one listener per tab list (delegation), the `hidden` attribute instead of inline styles, ARIA state kept in sync, arrow-key navigation with a roving `tabindex`, and no global state, so several tab widgets can live on one page.
+
+## Rendering a list efficiently
+
+```js
+function renderList(container, items) {
+  const fragment = document.createDocumentFragment()
+  for (const item of items) {
+    const li = document.createElement('li')
+    li.dataset.id = item.id
+    li.textContent = item.label // text, never HTML, for user data
+    fragment.append(li)
+  }
+  container.replaceChildren(fragment) // one DOM mutation, clears old children
+}
+```
+
+- `textContent` escapes user data; building HTML strings with it invites XSS.
+- `replaceChildren` swaps everything in one operation.
+- For updates to long lists, key nodes by id (a `Map` from id to element) and only touch what changed: that is a tiny version of what frameworks do in reconciliation.
+- `<template>` elements hold inert markup you can clone with `template.content.cloneNode(true)`, a fast way to stamp out complex rows.
+
+## Live versus static collections
+
+| API | Returns | Updates when the DOM changes? |
+| --- | --- | --- |
+| `querySelectorAll` | `NodeList` | No: a snapshot |
+| `getElementsByClassName`, `getElementsByTagName` | `HTMLCollection` | Yes: live |
+| `element.children` | `HTMLCollection` | Yes: live |
+| `element.childNodes` | `NodeList` | Yes: live (includes text nodes) |
+
+Removing items while looping over a **live** collection skips elements, because indices shift under you. Copy it first (`[...collection]`) or loop backwards.
+
 ## Common interview questions
 
 **What's the difference between `NodeList` and `HTMLCollection`?**
@@ -213,3 +301,11 @@ Separate reads from writes: measure everything first, then mutate. For continuou
 
 **How do you remove all listeners added by a component?**
 Pass a shared `AbortController`'s `signal` to every `addEventListener` call and call `abort()` on teardown. Otherwise you must keep references to each handler and call `removeEventListener` with identical options.
+
+## Key takeaways
+
+- `querySelector`/`closest` for finding, `append`/`before`/`replaceChildren` for inserting, `remove` for deleting.
+- Attributes are the HTML source; properties are the live state. They differ for `value`, `checked` and others.
+- Batch DOM work with fragments or `replaceChildren`, and batch layout reads before writes.
+- Insert user data with `textContent`, never with HTML strings.
+- Know which collections are live, and copy them before mutating the DOM in a loop.

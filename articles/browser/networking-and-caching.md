@@ -154,6 +154,58 @@ Gotchas: a new service worker waits until all tabs using the old one close (unle
 
 Unused preloads waste bandwidth and trigger console warnings. Fonts must be preloaded with `crossorigin` even when same-origin.
 
+## A request's timeline
+
+DevTools' Network panel breaks every request into phases:
+
+| Phase | What happens | How to shrink it |
+| --- | --- | --- |
+| Queueing / stalled | Waiting for a connection slot or for higher-priority requests | HTTP/2 or 3, fewer competing requests, priority hints |
+| DNS lookup | Resolve the host name | `dns-prefetch`, fewer distinct hosts |
+| Initial connection + SSL | TCP and TLS handshakes (one QUIC handshake on HTTP/3) | `preconnect`, connection reuse, HTTP/3 |
+| Request sent | Upload the request | Small requests, small cookies |
+| Waiting (TTFB) | Server think time plus one round trip | Caching, CDNs, faster backends, streaming |
+| Content download | Transfer the body | Compression (Brotli), smaller payloads, CDNs |
+
+## Caching an SPA correctly
+
+A production SPA usually has two kinds of files, and they need opposite caching rules:
+
+| File | Example | Header | Why |
+| --- | --- | --- | --- |
+| Fingerprinted assets | `/assets/app.3f9a1c.js`, `/assets/logo.8b2e.svg` | `Cache-Control: public, max-age=31536000, immutable` | The name changes when the content does, so cache forever |
+| HTML entry points | `/index.html` | `Cache-Control: no-cache` (with an `ETag`) | Must be revalidated so users get the newest asset references |
+| API responses | `/api/products` | `private, no-cache` or a short `max-age`, often with `stale-while-revalidate` | Depends on how fresh the data must be |
+
+Deploying then works atomically: new HTML points at new hashed files; old tabs keep working with old files, which are still cached and should stay on the server for a while.
+
+### Revalidation, step by step
+
+1. First visit: `GET /index.html` → `200 OK`, `ETag: "v42"`, `Cache-Control: no-cache`.
+2. Second visit: the browser has a copy but must check. It sends `If-None-Match: "v42"`.
+3. If nothing changed, the server replies `304 Not Modified` with no body. The browser uses its copy: one round trip, almost no bytes.
+4. After a deploy, the server replies `200 OK` with the new HTML and `ETag: "v43"`.
+
+`no-cache` means "store it, but revalidate before use"; `no-store` means "never store it" (for sensitive responses).
+
+### `stale-while-revalidate`
+
+`Cache-Control: max-age=60, stale-while-revalidate=600` serves from cache for 60 seconds, then for the next 10 minutes serves the stale copy **immediately** while refreshing it in the background. Users get instant responses, and data is at most one request behind. The same idea powers data libraries like SWR on the client.
+
+## The service worker lifecycle
+
+1. **Register**: `navigator.serviceWorker.register('/sw.js')` from the page.
+2. **Install**: the new worker's `install` event fires; it typically pre-caches the app shell. If any file fails, installation fails.
+3. **Waiting**: if an older worker controls open tabs, the new one waits until they all close, so a page never runs with mismatched versions. (`skipWaiting()` overrides this; use with care.)
+4. **Activate**: the `activate` event fires; delete old caches here.
+5. **Fetch**: the active worker intercepts requests from the pages it controls and responds using its strategy.
+
+Updating the app means shipping a byte-different `sw.js`; the browser checks for updates on navigation. A common UX: detect a waiting worker and show "A new version is available — reload".
+
+## HTTP/2 multiplexing and head-of-line blocking
+
+HTTP/1.1 sends one request at a time per connection, so browsers opened about six connections per host, and tricks like sprite sheets and domain sharding existed to work around it. HTTP/2 multiplexes many requests as interleaved streams over **one** TCP connection, with header compression. But TCP delivers bytes in order: one lost packet stalls **every** stream until it is retransmitted (TCP head-of-line blocking). HTTP/3 runs over QUIC on UDP, where streams are independent, so a lost packet only delays its own stream. QUIC also combines the transport and TLS handshakes and survives network changes (Wi-Fi to mobile) without reconnecting.
+
 ## Common interview questions
 
 **What's the difference between `no-cache` and `no-store`?**
@@ -181,3 +233,11 @@ When you don't need offline or fine-grained caching; it adds complexity and risk
 - Preloading too many resources and starving the critical ones.
 - Forgetting `crossorigin` on font preloads, causing a double download.
 - No versioning or cleanup in service worker caches.
+
+## Key takeaways
+
+- Every request pays for DNS, connection, TLS, waiting and download; caching and CDNs skip most of them.
+- Fingerprinted assets get `immutable` and a one-year `max-age`; HTML gets `no-cache` with an `ETag`.
+- `304 Not Modified` makes revalidation cheap; `stale-while-revalidate` makes it invisible.
+- Service workers install, wait and activate; they enable offline support and custom caching strategies.
+- HTTP/2 multiplexes over one connection; HTTP/3 removes TCP head-of-line blocking.

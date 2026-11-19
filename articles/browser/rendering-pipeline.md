@@ -6,6 +6,18 @@ summary: From bytes to pixels — parse, style, layout, paint, composite — plu
 
 "What happens between receiving HTML and seeing pixels?" is a classic question, and it underpins every performance discussion: why some animations are smooth, why reading `offsetHeight` in a loop is slow, and why scripts block rendering.
 
+## From URL to bytes
+
+The pipeline starts before any HTML exists. Typing a URL and pressing Enter:
+
+1. **Navigation starts.** The browser checks the bfcache and service worker, then resolves the host with DNS (often cached).
+2. **Connection.** TCP and TLS handshakes (or a single QUIC handshake for HTTP/3). A reused connection skips this.
+3. **Request and response.** The server returns headers and starts streaming HTML. Time to first byte (TTFB) ends when the first byte arrives.
+4. **Parsing starts immediately** on the streamed bytes; the browser doesn't wait for the full document.
+5. A **preload scanner** reads ahead in the raw HTML and starts downloading stylesheets, scripts and images it finds, even while the main parser is blocked.
+
+See [Networking and Caching](/read/networking-and-caching) for the network side. The rest of this article is what the renderer does with the bytes.
+
 ## The pipeline
 
 ```text
@@ -23,6 +35,23 @@ CSS   ──parse──▶ CSSOM┘
 | Composite | GPU combines layers, applying transforms and opacity | `transform`, `opacity`, `filter` (on composited layers) |
 
 Each stage feeds the next, so a change early in the pipeline usually forces all later stages.
+
+### Each stage in more detail
+
+**Parsing.** The HTML parser turns bytes into tokens and tokens into DOM nodes, tolerating broken markup by design. When it meets a classic `<script>` without `async` or `defer`, it must stop, because the script might call `document.write` or read the DOM so far. CSS is parsed into the CSSOM separately. CSS **blocks rendering** (nothing is painted until the stylesheets in `<head>` are loaded) and also blocks scripts that come after it, because a script may read computed styles.
+
+**Style.** For each element, the engine finds matching rules, resolves the cascade (see [Cascade and Specificity](/read/cascade-and-specificity)), and computes final values: `em` becomes pixels, `inherit` is resolved, shorthand properties are expanded. Selectors are matched right to left, so `.nav a` checks each `a` for a `.nav` ancestor.
+
+**Layout.** The engine builds a layout tree (only boxes that render: no `display: none`, but including pseudo-elements) and computes each box's size and position. Layout is mostly top-down: a parent's width determines children's widths, and children's heights determine the parent's height. One change near the root can therefore re-lay out a large part of the page.
+
+**Paint.** The engine records drawing instructions (backgrounds, borders, text, shadows) in stacking order. Painting records commands; the actual pixel work (rasterisation) happens later, often on other threads and on the GPU.
+
+**Composite.** The page is split into layers. Elements with `transform` animations, `will-change`, video, canvas, or fixed positioning may get their own layer. The compositor thread combines rasterised layers into the final frame. Since it runs separately from the main thread, a transform animation keeps moving even when JavaScript is busy.
+
+### The frame budget
+
+At 60 frames per second, each frame has about 16.7 ms. In one frame the browser may run: input handlers, `requestAnimationFrame` callbacks, style, layout, paint and composite. If JavaScript plus rendering work exceeds the budget, frames are dropped and scrolling or animation stutters. On 120 Hz displays the budget halves.
+
 
 ## Reflow vs repaint
 
@@ -114,6 +143,27 @@ Use `defer` for app code that needs the DOM; `async` for independent scripts lik
 - `load`: all subresources (images, iframes, stylesheets) finished.
 - `pagehide` / `visibilitychange`: the reliable places to save state or send analytics; `unload` is unreliable and blocks the back/forward cache.
 
+## Debugging rendering in DevTools
+
+- **Performance panel**: record an interaction. Purple blocks are style and layout ("Recalculate Style", "Layout"), green blocks are paint and composite. A purple "Layout" with a red triangle and the warning "Forced reflow" points at layout thrashing, with a link to the JavaScript line that caused it.
+- **Rendering drawer**: "Paint flashing" highlights repainted areas in green; "Layout Shift Regions" highlights shifting content; "Frame Rendering Stats" shows frame rate and GPU memory.
+- **Layers panel**: shows which elements got their own compositor layer and why.
+
+## Avoiding work altogether
+
+- **`content-visibility: auto`** skips style, layout and paint for off-screen sections until they approach the viewport. Pair it with `contain-intrinsic-size` so the scrollbar doesn't jump:
+
+```css
+.article-section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 800px;
+}
+```
+
+- **CSS containment** (`contain: layout paint`) tells the browser that changes inside an element can't affect layout or painting outside it, limiting the scope of reflows.
+- **Avoid huge DOMs.** Style and layout cost grows with the number of elements. Virtualise long lists.
+- **Reserve space** for images, ads and embeds with `width`/`height` attributes or `aspect-ratio`, so loading them doesn't shift the layout.
+
 ## Common interview questions
 
 **What happens when you type a URL and press Enter?**
@@ -141,3 +191,12 @@ It lets the browser skip style, layout and paint for off-screen sections until t
 - Interleaving DOM reads and writes in loops.
 - Large synchronous scripts in `<head>` without `defer`.
 - Images without dimensions causing layout shift (CLS).
+
+## Key takeaways
+
+- HTML and CSS become the DOM and CSSOM, then style, layout, paint and composite produce pixels.
+- CSS blocks rendering; classic scripts block parsing. Use `defer` or `async` for scripts.
+- Geometry changes cost layout and everything after; colour changes cost paint; `transform` and `opacity` only composite.
+- Batch DOM reads before writes to avoid forced synchronous layout.
+- Keep each frame's work within about 16 ms; use DevTools' Performance panel and paint flashing to find the culprits.
+- `content-visibility`, containment and smaller DOMs let the browser skip work entirely.

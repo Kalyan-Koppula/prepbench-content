@@ -212,6 +212,81 @@ document.addEventListener('visibilitychange', () => {
 
 Use it to stop polling, pause media and animations, and flush analytics. Browsers already throttle timers in hidden tabs, but your own network requests continue unless you stop them.
 
+## Worked example: infinite scroll with IntersectionObserver
+
+```js
+function infiniteScroll({ list, sentinel, loadPage }) {
+  let page = 1
+  let loading = false
+  let done = false
+
+  const observer = new IntersectionObserver(
+    async (entries) => {
+      if (!entries[0].isIntersecting || loading || done) return
+      loading = true
+      try {
+        const items = await loadPage(page)
+        if (items.length === 0) {
+          done = true
+          observer.disconnect()
+          return
+        }
+        list.append(...items.map(renderItem))
+        page += 1
+      } finally {
+        loading = false
+      }
+    },
+    { rootMargin: '400px 0px' }, // start loading before the sentinel is actually visible
+  )
+
+  observer.observe(sentinel) // an empty element placed after the list
+  return () => observer.disconnect()
+}
+```
+
+Why this beats a scroll listener: the callback runs only when the sentinel crosses the threshold, off the scroll path, so scrolling stays smooth. The `loading` flag prevents duplicate page requests, and `rootMargin` prefetches before the user reaches the end. For very long feeds, combine it with virtualisation so old items leave the DOM.
+
+## Worked example: a client-side router with the History API
+
+```js
+const routes = {
+  '/': () => '<h1>Home</h1>',
+  '/about': () => '<h1>About</h1>',
+}
+
+function render(path) {
+  const view = routes[path] ?? (() => '<h1>Not found</h1>')
+  document.querySelector('#app').innerHTML = view() // trusted, static templates only
+}
+
+document.addEventListener('click', (event) => {
+  const link = event.target.closest('a[href^="/"]')
+  if (!link || event.metaKey || event.ctrlKey || event.shiftKey || link.target === '_blank') return
+  event.preventDefault() // keep modified clicks (new tab) working
+  history.pushState({}, '', link.getAttribute('href'))
+  render(location.pathname)
+})
+
+window.addEventListener('popstate', () => render(location.pathname)) // back and forward buttons
+render(location.pathname)
+```
+
+Points to mention: `pushState` changes the URL without a request and doesn't fire `popstate`; only back/forward navigation does. The server must return the app for every route (a fallback to `index.html`), or deep links 404. Moving focus to the new page's heading and updating `document.title` keeps the navigation accessible. The newer **Navigation API** (`navigation.addEventListener('navigate', …)`) intercepts all navigations in one place, where supported.
+
+## Choosing between similar APIs
+
+| Need | Use | Not |
+| --- | --- | --- |
+| Is an element on screen? | `IntersectionObserver` | `scroll` listener plus `getBoundingClientRect` |
+| Has an element changed size? | `ResizeObserver` | `window` `resize` (misses element-only changes) |
+| Has the DOM changed? | `MutationObserver` | Polling |
+| Run before the next frame | `requestAnimationFrame` | `setTimeout(fn, 16)` |
+| Run when idle | `requestIdleCallback` (with a timeout) or `scheduler.postTask` with low priority | A `setTimeout` guess |
+| Send analytics on page exit | `sendBeacon` or `fetch` with `keepalive` | `fetch` in `unload` |
+| Detect leaving the page | `visibilitychange` / `pagehide` | `unload` (unreliable, breaks the bfcache) |
+| Heavy computation | Web Worker | Chunking forever on the main thread |
+
 ## Common interview questions
 
 **Why is IntersectionObserver better than a scroll listener for lazy loading?**
@@ -234,3 +309,11 @@ MutationObserver callbacks are microtasks after the DOM change. ResizeObserver a
 
 **What does `pushState` not do?**
 It doesn't fire `popstate`, doesn't fetch anything, and doesn't render. Your router must call its render step itself after pushing.
+
+## Key takeaways
+
+- Observers (`Intersection`, `Resize`, `Mutation`) replace polling and scroll or resize listeners; always disconnect them.
+- `requestAnimationFrame` aligns visual work with frames; idle callbacks run low-priority work.
+- Workers move CPU-heavy work off the main thread; messages are copied or transferred.
+- The History API changes URLs without reloading; handle `popstate` and server-side fallbacks.
+- Use `visibilitychange`, `pagehide` and `sendBeacon` for reliable end-of-session work.

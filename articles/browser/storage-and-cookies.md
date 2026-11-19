@@ -102,6 +102,91 @@ const response = await cache.match('/app.js')
 
 Version cache names and delete old ones in the service worker's `activate` event. It doesn't honour HTTP caching headers; you decide when entries expire.
 
+## A cookie's life, step by step
+
+1. The user logs in. The server responds with:
+
+```http
+Set-Cookie: session=abc123; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=86400
+```
+
+2. The browser stores the cookie against the server's host, with its attributes.
+3. On every later request to that site, the browser checks each stored cookie: does the domain match? Is the path a prefix of the URL? Is the connection HTTPS (`Secure`)? Does the request context satisfy `SameSite`? Has it expired?
+4. Matching cookies go in a `Cookie: session=abc123` request header, automatically. JavaScript can't read `session`, because it is `HttpOnly`.
+5. On logout the server sends the same cookie with `Max-Age=0`, and the browser deletes it.
+
+The automatic sending in step 4 is both the convenience and the danger of cookies: it is what makes CSRF possible, and `SameSite` is what limits it (see [Web Security](/read/web-security)).
+
+### SameSite in practice
+
+| Request | `Strict` | `Lax` (default) | `None; Secure` |
+| --- | --- | --- | --- |
+| Same-site fetch or navigation | sent | sent | sent |
+| Top-level link from another site (GET) | not sent | sent | sent |
+| Form POST from another site | not sent | not sent | sent |
+| `fetch` or `<img>` from another site | not sent | not sent | sent |
+
+`Strict` breaks "click a link from an email and arrive logged in", which is why `Lax` is the usual choice for session cookies.
+
+## Third-party cookies and partitioning
+
+Cookies set by a site embedded in an iframe or loaded as a subresource on another site are **third-party** cookies. They powered cross-site tracking, so browsers now block or restrict them (Safari and Firefox by default; Chrome with user choice). Two consequences for engineers:
+
+- Embedded widgets (chat, payments, comments) that relied on their own cookies need the **Storage Access API** or **partitioned cookies** (`Set-Cookie: …; Partitioned`, known as CHIPS), which are keyed by the top-level site, so the same widget on two sites gets two separate cookie jars.
+- Other storage (localStorage, IndexedDB, Cache API) in third-party iframes is also **partitioned** by top-level site.
+
+## Working with IndexedDB
+
+The raw API is event-based and verbose. A small promise wrapper covers most needs:
+
+```js
+function openDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('notes-app', 1)
+    request.onupgradeneeded = () => {
+      const db = request.result
+      const store = db.createObjectStore('notes', { keyPath: 'id' })
+      store.createIndex('byUpdated', 'updatedAt')
+    }
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+}
+
+async function saveNote(note) {
+  const db = await openDb()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('notes', 'readwrite')
+    tx.objectStore('notes').put(note)
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+  })
+}
+```
+
+Key ideas: databases are versioned (schema changes happen in `onupgradeneeded`), all reads and writes happen in transactions, and values are stored with the structured clone algorithm, so dates, maps, blobs and files survive. In practice, use a thin library such as `idb` or Dexie.
+
+## Syncing between tabs
+
+Each tab has its own memory, but storage is shared per origin:
+
+- Writing to `localStorage` fires a `storage` event in **other** tabs of the same origin (not the one that wrote it).
+- `BroadcastChannel` sends arbitrary messages between same-origin tabs, workers and iframes:
+
+```js
+const channel = new BroadcastChannel('auth')
+channel.postMessage({ type: 'logout' })
+channel.onmessage = (event) => {
+  if (event.data.type === 'logout') location.assign('/login')
+}
+```
+
+This is the standard way to log a user out of every open tab at once.
+
+## Origin Private File System
+
+`navigator.storage.getDirectory()` gives a private, sandboxed file system per origin, invisible to the user. From a worker, `createSyncAccessHandle()` provides fast synchronous reads and writes, which is how SQLite compiled to WebAssembly runs in the browser with persistent storage.
+
 ## Quotas and eviction
 
 ```js
@@ -152,3 +237,12 @@ The `storage` event fires in other tabs when `localStorage` changes; `BroadcastC
 - Forgetting `try/catch` around storage writes.
 - Assuming storage persists forever; browsers can evict it.
 - Relying on `Path` to isolate cookies between apps on the same host.
+
+## Key takeaways
+
+- Cookies are sent automatically with matching requests; secure session cookies with `Secure`, `HttpOnly` and `SameSite=Lax`.
+- `localStorage` is small, synchronous and readable by any script on the origin; never put secrets in it.
+- IndexedDB is the real client database: asynchronous, transactional, large and structured.
+- The Cache API stores request/response pairs, mainly for service workers.
+- Third-party storage is blocked or partitioned; plan embedded features accordingly.
+- Use `BroadcastChannel` or the `storage` event to keep tabs in sync.
