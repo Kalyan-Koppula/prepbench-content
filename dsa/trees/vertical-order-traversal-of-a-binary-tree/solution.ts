@@ -1,22 +1,44 @@
-function verticalTraversal(root: TreeNode | null): number[][] {
-  const cells: [number, number, number][] = [] // [col, row, val]
-  const dfs = (node: TreeNode | null, row: number, col: number) => {
-    if (!node) return
-    cells.push([col, row, node.val])
-    dfs(node.left, row + 1, col - 1)
-    dfs(node.right, row + 1, col + 1)
+function record(node: TreeNode | null, row: number, col: number, rows: number[], cols: number[], vals: number[]): void {
+  if (node === null) {
+    return
   }
-  dfs(root, 0, 0)
-  cells.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2])
+  rows.push(row)
+  cols.push(col)
+  vals.push(node.val)
+  record(node.left, row + 1, col - 1, rows, cols, vals)
+  record(node.right, row + 1, col + 1, rows, cols, vals)
+}
 
-  const out: number[][] = []
-  let prevCol: number | null = null
-  for (const [col, , val] of cells) {
-    if (col !== prevCol) {
-      out.push([])
-      prevCol = col
-    }
-    out[out.length - 1].push(val)
+function verticalTraversal(root: TreeNode | null): number[][] {
+  // Record (row, col, value) for every node.
+  const rows: number[] = []
+  const cols: number[] = []
+  const vals: number[] = []
+  record(root, 0, 0, rows, cols, vals)
+
+  // Sort node indices by column, then row, then value.
+  const order: number[] = []
+  for (let i = 0; i < vals.length; i++) {
+    order.push(i)
   }
-  return out
+  order.sort((a, b) => {
+    if (cols[a] !== cols[b]) {
+      return cols[a] - cols[b]
+    }
+    if (rows[a] !== rows[b]) {
+      return rows[a] - rows[b]
+    }
+    return vals[a] - vals[b]
+  })
+
+  // Cut the sorted list into columns.
+  const result: number[][] = []
+  for (let k = 0; k < order.length; k++) {
+    const i = order[k]
+    if (k === 0 || cols[i] !== cols[order[k - 1]]) {
+      result.push([])
+    }
+    result[result.length - 1].push(vals[i])
+  }
+  return result
 }

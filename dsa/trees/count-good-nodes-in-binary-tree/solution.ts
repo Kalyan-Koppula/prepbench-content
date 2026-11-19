@@ -1,9 +1,18 @@
-function goodNodes(root: TreeNode | null): number {
-  const dfs = (node: TreeNode | null, maxSoFar: number): number => {
-    if (!node) return 0
-    const good = node.val >= maxSoFar ? 1 : 0
-    const nextMax = Math.max(maxSoFar, node.val)
-    return good + dfs(node.left, nextMax) + dfs(node.right, nextMax)
+// Count good nodes below `node`, given the largest value on the path above it.
+function countGood(node: TreeNode | null, maxAbove: number): number {
+  if (node === null) {
+    return 0
   }
-  return dfs(root, -Infinity)
+  let count = 0
+  if (node.val >= maxAbove) {
+    count = 1 // nothing on the path is bigger
+  }
+  const maxHere = node.val > maxAbove ? node.val : maxAbove
+  count += countGood(node.left, maxHere)
+  count += countGood(node.right, maxHere)
+  return count
+}
+
+function goodNodes(root: TreeNode | null): number {
+  return countGood(root, -Infinity)
 }

@@ -1,20 +1,35 @@
+// Record the root-to-node path of every node.
+function collectPaths(node: TreeNode | null, path: number[], paths: number[][]): void {
+  if (node === null) {
+    return
+  }
+  path.push(node.val)
+  paths.push(path.slice())
+  collectPaths(node.left, path, paths)
+  collectPaths(node.right, path, paths)
+  path.pop()
+}
+
 function distanceK(root: TreeNode | null, target: number, k: number): number[] {
-  // Record every node's root path, then distance = depth(a) + depth(b) - 2 * depth(lca).
+  // distance(a, b) = depth(a) + depth(b) - 2 * depth(lca), using shared path prefixes.
   const paths: number[][] = []
-  const walk = (node: TreeNode | null, path: number[]) => {
-    if (!node) return
-    const here = [...path, node.val]
-    paths.push(here)
-    walk(node.left, here)
-    walk(node.right, here)
+  collectPaths(root, [], paths)
+  let targetPath: number[] = []
+  for (let i = 0; i < paths.length; i++) {
+    if (paths[i][paths[i].length - 1] === target) {
+      targetPath = paths[i]
+    }
   }
-  walk(root, [])
-  const t = paths.find((p) => p[p.length - 1] === target)!
-  const out: number[] = []
-  for (const p of paths) {
+  const result: number[] = []
+  for (let i = 0; i < paths.length; i++) {
+    const p = paths[i]
     let common = 0
-    while (common < p.length && common < t.length && p[common] === t[common]) common++
-    if (p.length + t.length - 2 * common === k) out.push(p[p.length - 1])
+    while (common < p.length && common < targetPath.length && p[common] === targetPath[common]) {
+      common++
+    }
+    if (p.length + targetPath.length - 2 * common === k) {
+      result.push(p[p.length - 1])
+    }
   }
-  return out
+  return result
 }

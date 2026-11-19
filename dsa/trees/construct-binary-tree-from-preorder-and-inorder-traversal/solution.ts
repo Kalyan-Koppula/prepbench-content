@@ -1,16 +1,26 @@
 function buildTree(preorder: number[], inorder: number[]): TreeNode | null {
-  const indexOf = new Map<number, number>()
-  inorder.forEach((v, i) => indexOf.set(v, i))
-  let pre = 0
+  // Where each value sits in inorder, so splitting a range is O(1).
+  const inorderIndex = new Map<number, number>()
+  for (let i = 0; i < inorder.length; i++) {
+    inorderIndex.set(inorder[i], i)
+  }
+  const nextPre = [0] // next unused position in preorder
 
-  // Builds the subtree whose values occupy inorder[lo..hi].
-  const build = (lo: number, hi: number): TreeNode | null => {
-    if (lo > hi) return null
-    const node = new TreeNode(preorder[pre++])
-    const mid = indexOf.get(node.val)!
+  // Build the subtree whose values are exactly inorder[lo..hi].
+  function build(lo: number, hi: number): TreeNode | null {
+    if (lo > hi) {
+      return null
+    }
+    // Preorder lists a subtree's root before anything else in it.
+    const rootVal = preorder[nextPre[0]]
+    nextPre[0]++
+    const node = new TreeNode(rootVal)
+    const mid = inorderIndex.get(rootVal) as number
+    // Left subtree first: preorder lists all of it before the right subtree.
     node.left = build(lo, mid - 1)
     node.right = build(mid + 1, hi)
     return node
   }
+
   return build(0, inorder.length - 1)
 }

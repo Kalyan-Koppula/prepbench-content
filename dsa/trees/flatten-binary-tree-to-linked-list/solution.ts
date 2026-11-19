@@ -1,14 +1,18 @@
 function flatten(root: TreeNode | null): void {
-  let cur = root
-  while (cur) {
-    if (cur.left) {
-      // The left subtree's rightmost node is the last one in its preorder.
-      let pred = cur.left
-      while (pred.right) pred = pred.right
-      pred.right = cur.right
-      cur.right = cur.left
-      cur.left = null
+  let current = root
+  while (current !== null) {
+    if (current.left !== null) {
+      // The rightmost node of the left subtree comes last in its preorder.
+      // The right subtree must follow it, so hang it there.
+      let rightmost: TreeNode = current.left
+      while (rightmost.right !== null) {
+        rightmost = rightmost.right
+      }
+      rightmost.right = current.right
+      // Move the left subtree into the right slot.
+      current.right = current.left
+      current.left = null
     }
-    cur = cur.right
+    current = current.right
   }
 }

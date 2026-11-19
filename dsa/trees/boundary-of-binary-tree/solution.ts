@@ -1,35 +1,45 @@
+function isLeaf(node: TreeNode): boolean {
+  return node.left === null && node.right === null
+}
+
+function addLeaves(node: TreeNode | null, result: number[]): void {
+  if (node === null) {
+    return
+  }
+  if (isLeaf(node)) {
+    result.push(node.val)
+    return
+  }
+  addLeaves(node.left, result)
+  addLeaves(node.right, result)
+}
+
 function boundaryOfBinaryTree(root: TreeNode | null): number[] {
-  if (!root) return []
-  const isLeaf = (node: TreeNode) => !node.left && !node.right
-  const out = [root.val]
+  if (root === null) {
+    return []
+  }
+  const result: number[] = [root.val]
 
-  // Left edge, top-down, excluding the leaf at its end.
-  let cur = root.left
-  while (cur && !isLeaf(cur)) {
-    out.push(cur.val)
-    cur = cur.left ?? cur.right
+  // 1. Left edge, top-down, stopping before its leaf.
+  let current = root.left
+  while (current !== null && !isLeaf(current)) {
+    result.push(current.val)
+    current = current.left !== null ? current.left : current.right
   }
 
-  // Leaves, left to right. The root is never treated as a leaf.
-  const addLeaves = (node: TreeNode | null) => {
-    if (!node) return
-    if (isLeaf(node)) {
-      out.push(node.val)
-      return
-    }
-    addLeaves(node.left)
-    addLeaves(node.right)
-  }
-  addLeaves(root.left)
-  addLeaves(root.right)
+  // 2. Leaves, left to right. The root is never counted as a leaf.
+  addLeaves(root.left, result)
+  addLeaves(root.right, result)
 
-  // Right edge, collected top-down and emitted bottom-up.
-  const right: number[] = []
-  cur = root.right
-  while (cur && !isLeaf(cur)) {
-    right.push(cur.val)
-    cur = cur.right ?? cur.left
+  // 3. Right edge, collected top-down and added bottom-up.
+  const rightEdge: number[] = []
+  current = root.right
+  while (current !== null && !isLeaf(current)) {
+    rightEdge.push(current.val)
+    current = current.right !== null ? current.right : current.left
   }
-  for (let i = right.length - 1; i >= 0; i--) out.push(right[i])
-  return out
+  for (let i = rightEdge.length - 1; i >= 0; i--) {
+    result.push(rightEdge[i])
+  }
+  return result
 }

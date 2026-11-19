@@ -1,15 +1,26 @@
-function goodNodes(root: TreeNode | null): number {
-  // Collect every root-to-node path explicitly, then check each node against its path.
-  let count = 0
-  const path: number[] = []
-  const walk = (node: TreeNode | null) => {
-    if (!node) return
-    path.push(node.val)
-    if (path.every((v) => v <= node.val)) count++
-    walk(node.left)
-    walk(node.right)
-    path.pop()
+function walk(node: TreeNode | null, path: number[], counter: number[]): void {
+  if (node === null) {
+    return
   }
-  walk(root)
-  return count
+  // Check the node against every value on its path: O(depth) per node.
+  let good = true
+  for (let i = 0; i < path.length; i++) {
+    if (path[i] > node.val) {
+      good = false
+      break
+    }
+  }
+  if (good) {
+    counter[0]++
+  }
+  path.push(node.val)
+  walk(node.left, path, counter)
+  walk(node.right, path, counter)
+  path.pop()
+}
+
+function goodNodes(root: TreeNode | null): number {
+  const counter = [0]
+  walk(root, [], counter)
+  return counter[0]
 }

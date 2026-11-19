@@ -1,12 +1,19 @@
-function levelOrder(root: TreeNode | null): number[][] {
-  const out: number[][] = []
-  const dfs = (node: TreeNode | null, depth: number) => {
-    if (!node) return
-    if (!out[depth]) out[depth] = []
-    out[depth].push(node.val)
-    dfs(node.left, depth + 1)
-    dfs(node.right, depth + 1)
+function collect(node: TreeNode | null, depth: number, result: number[][]): void {
+  if (node === null) {
+    return
   }
-  dfs(root, 0)
-  return out
+  if (result.length === depth) {
+    result.push([]) // first node seen at this depth
+  }
+  result[depth].push(node.val)
+  // Left before right keeps each level in left-to-right order.
+  collect(node.left, depth + 1, result)
+  collect(node.right, depth + 1, result)
+}
+
+function levelOrder(root: TreeNode | null): number[][] {
+  // DFS that files each value under its depth.
+  const result: number[][] = []
+  collect(root, 0, result)
+  return result
 }

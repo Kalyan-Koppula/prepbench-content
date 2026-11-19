@@ -1,7 +1,11 @@
 function invertTree(root: TreeNode | null): TreeNode | null {
-  if (!root) return null
-  const left = invertTree(root.left)
-  root.left = invertTree(root.right)
-  root.right = left
+  if (root === null) {
+    return null
+  }
+  // Mirror both subtrees, then attach them on the opposite sides.
+  const invertedLeft = invertTree(root.left)
+  const invertedRight = invertTree(root.right)
+  root.left = invertedRight
+  root.right = invertedLeft
   return root
 }

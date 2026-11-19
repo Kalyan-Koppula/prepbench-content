@@ -1,14 +1,25 @@
 function levelOrder(root: TreeNode | null): number[][] {
-  const out: number[][] = []
-  let level: TreeNode[] = root ? [root] : []
-  while (level.length) {
-    out.push(level.map((node) => node.val))
+  const result: number[][] = []
+  if (root === null) {
+    return result
+  }
+  let level: TreeNode[] = [root]
+  while (level.length > 0) {
+    const values: number[] = []
     const next: TreeNode[] = []
-    for (const node of level) {
-      if (node.left) next.push(node.left)
-      if (node.right) next.push(node.right)
+    for (let i = 0; i < level.length; i++) {
+      const node = level[i]
+      values.push(node.val)
+      // Children are added left to right, so the next level stays in order.
+      if (node.left !== null) {
+        next.push(node.left)
+      }
+      if (node.right !== null) {
+        next.push(node.right)
+      }
     }
+    result.push(values)
     level = next
   }
-  return out
+  return result
 }

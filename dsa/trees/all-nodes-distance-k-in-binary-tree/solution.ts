@@ -1,34 +1,53 @@
 function distanceK(root: TreeNode | null, target: number, k: number): number[] {
-  const parent = new Map<TreeNode, TreeNode | null>()
+  if (root === null) {
+    return []
+  }
+  // 1. Record each node's parent so we can also walk upward.
+  const parent = new Map<TreeNode, TreeNode>()
   let start: TreeNode | null = null
-  const stack: TreeNode[] = root ? [root] : []
-  if (root) parent.set(root, null)
-  while (stack.length) {
-    const node = stack.pop()!
-    if (node.val === target) start = node
-    for (const child of [node.left, node.right]) {
-      if (child) {
-        parent.set(child, node)
-        stack.push(child)
-      }
+  const stack: TreeNode[] = [root]
+  while (stack.length > 0) {
+    const node = stack.pop() as TreeNode
+    if (node.val === target) {
+      start = node
+    }
+    if (node.left !== null) {
+      parent.set(node.left, node)
+      stack.push(node.left)
+    }
+    if (node.right !== null) {
+      parent.set(node.right, node)
+      stack.push(node.right)
     }
   }
-  if (!start) return []
+  if (start === null) {
+    return []
+  }
 
-  // BFS outward over left / right / parent edges.
-  const visited = new Set<TreeNode>([start])
+  // 2. BFS outward from the target over left, right and parent edges.
+  const visited = new Set<TreeNode>()
+  visited.add(start)
   let frontier: TreeNode[] = [start]
-  for (let dist = 0; dist < k && frontier.length; dist++) {
+  for (let distance = 0; distance < k && frontier.length > 0; distance++) {
     const next: TreeNode[] = []
-    for (const node of frontier) {
-      for (const nb of [node.left, node.right, parent.get(node) ?? null]) {
-        if (nb && !visited.has(nb)) {
-          visited.add(nb)
-          next.push(nb)
+    for (let i = 0; i < frontier.length; i++) {
+      const node = frontier[i]
+      const up = parent.get(node)
+      const neighbours: Array<TreeNode | null> = [node.left, node.right, up === undefined ? null : up]
+      for (let j = 0; j < neighbours.length; j++) {
+        const neighbour = neighbours[j]
+        if (neighbour !== null && !visited.has(neighbour)) {
+          visited.add(neighbour)
+          next.push(neighbour)
         }
       }
     }
     frontier = next
   }
-  return frontier.map((node) => node.val)
+
+  const result: number[] = []
+  for (let i = 0; i < frontier.length; i++) {
+    result.push(frontier[i].val)
+  }
+  return result
 }

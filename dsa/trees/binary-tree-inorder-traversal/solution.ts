@@ -1,15 +1,17 @@
 function inorderTraversal(root: TreeNode | null): number[] {
-  const out: number[] = []
-  const stack: TreeNode[] = []
-  let cur = root
-  while (cur || stack.length) {
-    while (cur) {
-      stack.push(cur)
-      cur = cur.left
+  const result: number[] = []
+  const stack: TreeNode[] = [] // nodes whose left side is being visited
+  let current = root
+  while (current !== null || stack.length > 0) {
+    // Go as far left as possible, remembering the path.
+    while (current !== null) {
+      stack.push(current)
+      current = current.left
     }
-    cur = stack.pop()!
-    out.push(cur.val)
-    cur = cur.right
+    // The left subtree is done: visit the node, then its right subtree.
+    const node = stack.pop() as TreeNode
+    result.push(node.val)
+    current = node.right
   }
-  return out
+  return result
 }

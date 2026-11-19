@@ -1,15 +1,32 @@
 function zigzagLevelOrder(root: TreeNode | null): number[][] {
-  const out: number[][] = []
-  let level: TreeNode[] = root ? [root] : []
-  while (level.length) {
-    const values = level.map((node) => node.val)
-    out.push(out.length % 2 === 1 ? values.reverse() : values)
+  const result: number[][] = []
+  if (root === null) {
+    return result
+  }
+  let level: TreeNode[] = [root]
+  let leftToRight = true
+  while (level.length > 0) {
+    // Fill this level's values from the front or the back depending on direction.
+    const values: number[] = new Array(level.length)
+    for (let i = 0; i < level.length; i++) {
+      const position = leftToRight ? i : level.length - 1 - i
+      values[position] = level[i].val
+    }
+    result.push(values)
+
+    // The next level is always collected left to right.
     const next: TreeNode[] = []
-    for (const node of level) {
-      if (node.left) next.push(node.left)
-      if (node.right) next.push(node.right)
+    for (let i = 0; i < level.length; i++) {
+      const node = level[i]
+      if (node.left !== null) {
+        next.push(node.left)
+      }
+      if (node.right !== null) {
+        next.push(node.right)
+      }
     }
     level = next
+    leftToRight = !leftToRight
   }
-  return out
+  return result
 }

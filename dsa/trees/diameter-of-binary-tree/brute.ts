@@ -1,12 +1,26 @@
+function height(node: TreeNode | null): number {
+  if (node === null) {
+    return 0
+  }
+  const left = height(node.left)
+  const right = height(node.right)
+  return 1 + (left > right ? left : right)
+}
+
 function diameterOfBinaryTree(root: TreeNode | null): number {
-  const height = (node: TreeNode | null): number => (node ? 1 + Math.max(height(node.left), height(node.right)) : 0)
-  let best = 0
-  const stack: TreeNode[] = root ? [root] : []
-  while (stack.length) {
-    const node = stack.pop()!
-    best = Math.max(best, height(node.left) + height(node.right))
-    if (node.left) stack.push(node.left)
-    if (node.right) stack.push(node.right)
+  // For every node, compute both subtree heights from scratch: O(n^2) worst case.
+  if (root === null) {
+    return 0
+  }
+  const throughRoot = height(root.left) + height(root.right)
+  const inLeft = diameterOfBinaryTree(root.left)
+  const inRight = diameterOfBinaryTree(root.right)
+  let best = throughRoot
+  if (inLeft > best) {
+    best = inLeft
+  }
+  if (inRight > best) {
+    best = inRight
   }
   return best
 }
