@@ -116,6 +116,70 @@ Silence is the expensive failure mode. A wrong idea spoken aloud gets corrected;
 
 "Lean hire" usually means the code worked but the interviewer had to drive. The fix is almost always the same: clarify early, test before saying "done", and name edge cases yourself.
 
+## A worked round: "Implement a `memoize` utility"
+
+**Clarify.** "Should it handle multiple arguments? Should the cache be bounded? Do we need to preserve `this`? What about async functions?" Interviewer: multiple primitive arguments, unbounded is fine for now, preserve `this`.
+
+**First version, with the reasoning spoken.**
+
+```js
+function memoize(fn) {
+  const cache = new Map()
+  return function (...args) {
+    const key = JSON.stringify(args) // fine for primitives; I'll mention the limits
+    if (cache.has(key)) return cache.get(key)
+    const result = fn.apply(this, args) // a regular function so `this` is forwarded
+    cache.set(key, result)
+    return result
+  }
+}
+```
+
+**Tests written before saying "done".**
+
+```js
+let calls = 0
+const slowSquare = memoize((n) => {
+  calls += 1
+  return n * n
+})
+console.assert(slowSquare(4) === 16 && slowSquare(4) === 16 && calls === 1, 'caches')
+console.assert(slowSquare(5) === 25 && calls === 2, 'different args miss')
+
+const counter = {
+  base: 10,
+  add: memoize(function (n) {
+    return this.base + n
+  }),
+}
+console.assert(counter.add(1) === 11, 'preserves this')
+```
+
+**Edge cases the candidate raises unprompted.** `JSON.stringify` treats `1` and `'1'` as different (good) but can't key objects by identity and throws on BigInt; `undefined` results are cached correctly because `has` is checked rather than truthiness; if `fn` throws, nothing is cached.
+
+**Follow-up: "Make it work for async functions."** "Cache the promise, so concurrent calls share one request, but delete the entry if it rejects, so a failure isn't cached forever:"
+
+```js
+function memoizeAsync(fn) {
+  const cache = new Map()
+  return function (...args) {
+    const key = JSON.stringify(args)
+    if (!cache.has(key)) {
+      const promise = fn.apply(this, args).catch((err) => {
+        cache.delete(key)
+        throw err
+      })
+      cache.set(key, promise)
+    }
+    return cache.get(key)
+  }
+}
+```
+
+**Follow-up: "Bound the cache."** "Use the `Map`'s insertion order as an LRU: on a hit, delete and re-insert the key; on insert, evict the first key when over the limit."
+
+What scored well: clarifying questions up front, a working version quickly, tests that prove the `this` and caching behaviour, and extensions discussed with their trade-offs.
+
 ## Common interview questions
 
 **Should I use TypeScript in a JS round?**
@@ -138,3 +202,11 @@ Don't guess-edit. Ask for or construct the failing input, trace it line by line 
 
 **How important is code style?**
 Moderately. Consistent naming, early returns and small helpers help the interviewer follow you. Formatting nitpicks rarely matter; unreadable nesting does.
+
+## Key takeaways
+
+- Clarify the API and edge cases before typing.
+- Get a correct simple version working, then extend it.
+- Write small asserts as you go; test `this`, arguments, timing and errors.
+- Raise edge cases yourself: that's what separates "hire" from "lean hire".
+- Talk through complexity and trade-offs for each extension.

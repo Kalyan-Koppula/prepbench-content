@@ -170,6 +170,51 @@ Symptoms: an "Uncaught (in promise)" error or a silent failure when an `async` f
 - Remove debug logs or say you'd remove them.
 - State complexity and the cases you deliberately didn't handle.
 
+## A worked debugging session
+
+The interviewer shares a "counter that sometimes skips numbers" and asks you to find the bug:
+
+```jsx
+function Clicker() {
+  const [count, setCount] = useState(0)
+  const [log, setLog] = useState([])
+
+  async function handleClick() {
+    await saveClick() // network call, 50–500 ms
+    setCount(count + 1)
+    setLog([...log, `clicked at ${count + 1}`])
+  }
+
+  return <button onClick={handleClick}>Clicked {count} times</button>
+}
+```
+
+A strong candidate narrates:
+
+1. **Reproduce.** "Clicking slowly works. Clicking three times quickly ends at 1 or 2. So it depends on timing: a race or a stale value."
+2. **Form a hypothesis.** "Each click's handler closes over the `count` from the render it was created in. Three quick clicks all start with `count = 0`, all await, then all set 1."
+3. **Confirm cheaply.** Add `console.log('start', count)` at the top of the handler: three logs of `start 0`. Hypothesis confirmed.
+4. **Fix the cause, not the symptom.** Use functional updates, which apply to the latest state:
+
+```jsx
+setCount((c) => c + 1)
+setLog((l) => [...l, 'clicked'])
+```
+
+5. **Check related risks.** "The log message used `count + 1` too; it would be wrong for the same reason. If the order of saves matters, I'd also queue them or disable the button while saving."
+6. **Verify.** Click quickly five times: the count reaches 5.
+
+The skills on display: reproducing before guessing, stating a hypothesis, the smallest experiment that tests it, a root-cause fix, and a check for the same bug nearby.
+
+## A debugging checklist to say out loud
+
+1. What exactly is wrong: expected versus actual, with a concrete input?
+2. Can I reproduce it reliably? What makes it go away?
+3. What changed recently?
+4. Where's the boundary between "correct" and "wrong" data? Bisect with logs or breakpoints.
+5. Is it timing (async, stale closures, races), identity (mutation, references), or types (coercion, `undefined`)?
+6. After the fix: does a test now fail without it and pass with it?
+
 ## Common interview questions
 
 **Why not just use Jest-style syntax in the editor?**
@@ -189,3 +234,11 @@ When values include `undefined`, functions, symbols, `NaN`, `Infinity`, `Map`/`S
 
 **How do you test a debounce without fake timers?**
 Call it several times synchronously, then check the recorder inside a `setTimeout` longer than the wait. Mention that in a real suite you'd use fake timers to make the test fast and deterministic.
+
+## Key takeaways
+
+- Write a tiny assert or `expect` helper so you can test without a framework.
+- Choose test cases deliberately: normal, edge, error and the case most likely to break your code.
+- Debug by reproducing, hypothesising, confirming with the smallest experiment, then fixing the root cause.
+- Narrate each step; interviewers score the process.
+- Suspect stale closures, off-by-one errors, mutation and coercion first.

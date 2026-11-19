@@ -123,6 +123,51 @@ Silence longer than about 30 seconds makes interviewers nervous. Thinking aloud,
 | In-place on linked list, cycle, middle | Fast and slow pointers |
 | Values in `1..n` in an array of size n | Index as hash / cyclic sort |
 
+## A worked round: "Longest substring without repeating characters"
+
+Here is how a strong candidate runs the full round, with the words they say.
+
+**Clarify (2 minutes).** "Is the input ASCII or any Unicode? Can it be empty? Do you want the length or the substring itself?" The interviewer says: any characters, may be empty, return the length.
+
+**Examples (2 minutes).** "For `abcabcbb` the answer is 3 (`abc`). For `bbbb` it's 1. For the empty string, 0. For `pwwkew` it's 3 (`wke`), which shows the window can start in the middle."
+
+**Brute force (3 minutes).** "Check every substring for duplicates: `O(n²)` substrings, each checked in up to `O(n)` with a set, so `O(n³)`, or `O(n²)` if I extend each start and stop at the first repeat. Correct but too slow for 10⁵ characters."
+
+**Optimise (5 minutes).** "When I extend the end and hit a repeat, every substring that starts before the earlier copy is invalid too. So I can move the start past the earlier copy instead of restarting. That's a sliding window: each pointer only moves forward, so `O(n)`. I'll store the last index of each character in a map."
+
+**Code (10 minutes).**
+
+```js
+function lengthOfLongestSubstring(s) {
+  const lastSeen = new Map()
+  let start = 0
+  let best = 0
+  for (let end = 0; end < s.length; end++) {
+    const c = s[end]
+    if (lastSeen.has(c) && lastSeen.get(c) >= start) {
+      start = lastSeen.get(c) + 1 // jump past the earlier copy
+    }
+    lastSeen.set(c, end)
+    best = Math.max(best, end - start + 1)
+  }
+  return best
+}
+```
+
+**Test (5 minutes).** The candidate traces `abba` aloud, because it catches the classic bug: at the second `a`, its last index (0) is **before** `start` (2), so the window must not move backwards. The `>= start` check handles it. Then the empty string (loop doesn't run, returns 0) and `bbbb`.
+
+**Complexity (1 minute).** "`O(n)` time; `O(min(n, alphabet))` space for the map."
+
+What made it strong: the candidate stated the brute force with its cost, derived the optimisation from the brute force's wasted work instead of announcing a pattern name, and tested a case chosen to break the code.
+
+## Practising effectively
+
+- **Solve by pattern, not by count.** Work through one pattern at a time (two pointers, sliding window, BFS, DP) until you can recognise it from the problem statement alone; see the pattern sheets on the [DSA hub](/dsa), starting with [Sliding Window](/problems/patterns/sliding-window) for this problem.
+- **Time-box.** Give a problem 25–30 minutes, then read the solution, then re-solve it from scratch a few days later. The re-solve is where learning sticks.
+- **Say it out loud.** Practise explaining while coding; it is a separate skill from solving.
+- **Keep a mistakes log.** Off-by-one in binary search, forgetting to mark visited before enqueueing, wrong loop direction in knapsack. Reviewing it before interviews prevents repeats.
+- **Mock interviews** with a peer expose communication gaps that solo practice hides.
+
 ## Common interview questions
 
 **Should I code the brute force first?**
@@ -148,3 +193,11 @@ Describe the remaining steps precisely and give the final complexity. A clear pl
 - Forgetting the empty-input case and the last element of a loop.
 - Claiming O(n) when there's a hidden `indexOf`, `slice` or `includes` inside a loop.
 - Using `arr.sort()` on numbers without a comparator — it sorts as strings.
+
+## Key takeaways
+
+- Follow the shape: clarify, examples, brute force, optimise, code, test, complexity.
+- State the brute force and its cost before optimising; derive the optimisation from its wasted work.
+- Narrate decisions, not keystrokes.
+- Test with a case designed to break your code, then the edge cases.
+- When stuck, return to examples, simplify the problem, or ask which constraint matters.

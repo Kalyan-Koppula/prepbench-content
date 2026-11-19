@@ -153,6 +153,47 @@ Pick the two or three most relevant to the product and go deep rather than listi
 
 Keep diagrams tidy and update them as decisions change; the final whiteboard is often what gets reviewed.
 
+## A worked opening: "Design a photo-sharing feed like an image social app"
+
+The first ten minutes decide the round. A strong opening sounds like this.
+
+**Requirements.** "Let me confirm scope. Users scroll a feed of photo posts with captions, like and comment, and see new posts. Is uploading in scope? (No.) Which devices? (Mobile web first.) Do we need offline? (Nice to have.) How fresh should the feed be? (New posts within a minute is fine.) I'll aim for fast first load on mid-range phones, smooth scrolling, and accessibility."
+
+**Architecture.** The candidate draws boxes and arrows while talking:
+
+```
+Server-rendered shell ─▶ Feed page
+                            ├─ FeedList (virtualised) ── PostCard ── ImageWithPlaceholder
+                            │                                    └── LikeButton / CommentsPreview
+                            ├─ NewPostsBanner ◀── polling or SSE
+                            └─ FeedStore (normalised posts, users, cursors) ◀▶ API client (cache, retries)
+```
+
+"The store is the single source of truth; components read slices of it. The API client handles caching, deduplication and retries, so components never fetch directly."
+
+**Data model.** "Posts and users normalised by id; the feed is an ordered list of post ids plus a `nextCursor`. Likes are optimistic, so each post keeps `likedByMe` and `likeCount`, with a pending flag for rollback."
+
+**Interface.** "`GET /feed?cursor=…&limit=20` returns posts, their authors and the next cursor. `POST /posts/:id/like` is idempotent. A server-sent events stream announces new post ids."
+
+Then the candidate **asks** what to go deeper on, offering options: "I could go deep on scroll performance and image loading, on the real-time update flow, or on offline support. Which is most interesting to you?"
+
+That question matters: it shows prioritisation and lets the interviewer steer to what they score.
+
+## Calibrating depth by level
+
+| Level | What interviewers expect |
+| --- | --- |
+| Junior / mid | A sensible component breakdown, state ownership, basic API design, awareness of performance and accessibility |
+| Senior | Trade-offs with reasons (pagination types, rendering strategies, caching layers), failure modes, measurable performance targets |
+| Staff | Cross-team concerns: design system reuse, rollout and experimentation, observability, migration paths, cost |
+
+## Back-of-the-envelope numbers worth knowing
+
+- A mid-range phone parses and compiles JavaScript several times slower than a laptop; 170 KB of compressed JS is a common per-route budget.
+- 60 fps leaves about 16 ms per frame; long tasks over 50 ms hurt responsiveness.
+- A round trip on a typical mobile network is 100–300 ms; every sequential request on the critical path adds one.
+- Good Core Web Vitals: LCP ≤ 2.5 s, INP ≤ 200 ms, CLS ≤ 0.1 at the 75th percentile.
+
 ## Common interview questions
 
 **How is this different from backend system design?**
@@ -177,3 +218,11 @@ Only data shared across distant components or needing persistence. Server data b
 - Listing every optimisation shallowly instead of going deep on a few.
 - Forgetting loading, error and empty states in the data model.
 - Ignoring accessibility and mobile constraints entirely.
+
+## Key takeaways
+
+- Use RADIO: requirements, architecture, data model, interface, optimisations.
+- Spend the first ten minutes on scope and a clear component and data-flow diagram.
+- Name the source of truth for state and keep components free of direct fetching.
+- Offer deep-dive options and let the interviewer choose.
+- Back trade-offs with numbers: budgets, latencies, Core Web Vitals targets.

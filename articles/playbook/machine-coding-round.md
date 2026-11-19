@@ -139,6 +139,63 @@ list.addEventListener('click', (e) => {
 
 In React, prefer `useReducer` once there are more than two or three related pieces of state; it makes actions explicit and is easy to extend with undo.
 
+## A worked round: "Build a star rating component"
+
+**Scoping (5 minutes).** "Five stars, click to set, hover to preview, keyboard accessible, optional read-only mode, half stars out of scope. Controlled or uncontrolled? Both would be nice; I'll support `value` plus `onChange` with a `defaultValue` fallback."
+
+**Design (5 minutes).** The candidate chooses native radio inputs as the foundation, because a rating is "choose one of five": keyboard arrows, focus, form submission and screen-reader semantics come for free.
+
+**Build (25 minutes).**
+
+```tsx
+function StarRating({ name, label, value, defaultValue = 0, onChange, max = 5, readOnly = false }: {
+  name: string
+  label: string
+  value?: number
+  defaultValue?: number
+  onChange?: (value: number) => void
+  max?: number
+  readOnly?: boolean
+}) {
+  const [internal, setInternal] = useState(defaultValue)
+  const [hovered, setHovered] = useState<number | null>(null)
+  const current = value ?? internal // controlled if `value` is provided
+  const shown = hovered ?? current
+
+  function select(next: number) {
+    if (readOnly) return
+    if (value === undefined) setInternal(next)
+    onChange?.(next)
+  }
+
+  return (
+    <fieldset className="stars" onMouseLeave={() => setHovered(null)} disabled={readOnly}>
+      <legend>{label}</legend>
+      {Array.from({ length: max }, (_, i) => i + 1).map((n) => (
+        <label key={n} onMouseEnter={() => !readOnly && setHovered(n)}>
+          <input
+            type="radio"
+            name={name}
+            value={n}
+            checked={current === n}
+            onChange={() => select(n)}
+            className="visually-hidden"
+          />
+          <span aria-hidden="true" className={n <= shown ? 'star filled' : 'star'}>★</span>
+          <span className="visually-hidden">{n} {n === 1 ? 'star' : 'stars'}</span>
+        </label>
+      ))}
+    </fieldset>
+  )
+}
+```
+
+**Polish (5 minutes).** Visible focus ring on the focused star (`:focus-visible` on the hidden input styles its sibling), `prefers-reduced-motion` for the hover animation, and a quick check with the keyboard: Tab into the group, arrows change the rating, the screen reader says "3 stars, radio button, 3 of 5".
+
+**Wrap-up.** "Next steps would be half-star support (ten radios with half-width labels), a clear button, and tests for controlled and uncontrolled modes."
+
+What scored well: scoping before coding, a semantic foundation that made accessibility cheap, a clean controlled/uncontrolled API, and a working, demonstrable component with time left to discuss extensions.
+
 ## Common interview questions
 
 **Why not store filtered results in state?**
@@ -164,3 +221,11 @@ React Testing Library for behaviour (type, see results, press arrow keys), unit 
 - `div` with `onClick` instead of `button`.
 - Silent scope creep: adding features nobody asked for while must-haves are broken.
 - Not running the app until the end.
+
+## Key takeaways
+
+- Spend the first 5–10 minutes scoping: features, states, edge cases, controlled or uncontrolled.
+- Choose semantic HTML foundations; they bring keyboard and screen-reader support for free.
+- Build the core working path first, then polish, then extend.
+- Keep state minimal and derived values computed.
+- Leave time to demo, test with the keyboard and discuss next steps.
