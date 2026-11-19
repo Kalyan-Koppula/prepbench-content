@@ -1,11 +1,16 @@
+// Remember every number seen; a repeat means we are in a cycle that misses 1.
 function isHappy(n: number): boolean {
-  // Any start falls below 1000 within a couple of steps and the cycle is short,
-  // so a generous fixed step budget is enough.
-  for (let step = 0; step < 1000; step++) {
-    if (n === 1) return true
-    n = String(n)
-      .split('')
-      .reduce((s, ch) => s + Number(ch) ** 2, 0)
+  const seen = new Set<number>()
+  while (n !== 1 && !seen.has(n)) {
+    seen.add(n)
+    let sum = 0
+    let x = n
+    while (x > 0) {
+      const digit = x % 10
+      sum += digit * digit
+      x = Math.floor(x / 10)
+    }
+    n = sum
   }
-  return false
+  return n === 1
 }

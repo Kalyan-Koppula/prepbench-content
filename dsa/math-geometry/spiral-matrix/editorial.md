@@ -1,25 +1,57 @@
-**Key insight:** maintain the unvisited region as a rectangle `[top..bottom] x [left..right]`; each edge you walk shrinks one side by one.
+**Key idea:** keep four boundaries: `top`, `bottom`, `left`, `right`. Read the top row left to right, then the right column downward, then the bottom row right to left, then the left column upward. After each side, move that boundary inward. Stop when the boundaries cross.
 
-## Approach
+## Recognising the pattern
 
-1. Walk the top row `left → right`, then `top++`.
-2. Walk the right column `top → bottom`, then `right--`.
-3. If rows remain (`top <= bottom`), walk the bottom row `right → left`, then `bottom--`.
-4. If columns remain (`left <= right`), walk the left column `bottom → top`, then `left++`.
-5. Repeat while the rectangle is non-empty.
+Traversing a matrix in a fixed geometric order is index bookkeeping from the [Math & Geometry](/problems/patterns/math-geometry) sheet. Boundaries describe the unread part of the matrix as a shrinking rectangle, which avoids any "visited" marks.
 
-The guards in steps 3–4 matter when the remaining region is a single row or column; without them, those cells are read twice.
+## Alternative: simulate the walk (shown below)
+
+Walk right; whenever the next cell is outside the matrix or already visited, turn clockwise. Stop after `m · n` cells. That is the reference brute force below. `O(m · n)` time like the boundary method, but it needs an `m × n` visited array.
+
+## Shrinking boundaries
+
+1. `top = 0`, `bottom = m − 1`, `left = 0`, `right = n − 1`.
+2. While `top ≤ bottom` and `left ≤ right`:
+   1. Top row, `left → right`; then `top++`.
+   2. Right column, `top → bottom`; then `right--`.
+   3. If `top ≤ bottom`: bottom row, `right → left`; then `bottom--`.
+   4. If `left ≤ right`: left column, `bottom → top`; then `left++`.
+
+**Why the two checks.** When only one row or one column remains, steps 1 and 2 already read it. Without the checks, steps 3 and 4 would read it again backwards.
+
+## Walkthrough
+
+`matrix = [[1, 2, 3, 4], [5, 6, 7, 8]]`
+
+| side | read | boundaries after |
+| --- | --- | --- |
+| top row | 1, 2, 3, 4 | top = 1 |
+| right column | 8 | right = 2 |
+| bottom row (1 ≤ 1) | 7, 6, 5 | bottom = 0 |
+| left column (0 ≤ 2) | nothing (bottom < top) | left = 1 |
+
+`top > bottom`, stop. Answer `[1, 2, 3, 4, 8, 7, 6, 5]`.
 
 ## Complexity
 
-- Time `O(m · n)` — each cell is output once.
-- Space `O(1)` beyond the output array.
+- Both approaches: `O(m · n)` time.
+- Boundaries: `O(1)` extra space beyond the output. Simulation: `O(m · n)` for the visited array.
 
-## Alternatives to mention
+## Edge cases
 
-- Direction simulation: move in the current direction and turn right when the next cell is out of bounds or already visited. Simpler to get right, but needs an `m x n` visited grid (or overwriting cells with a sentinel).
+- A single row: read left to right.
+- A single column: read top to bottom (the case the checks protect).
+- `1 × 1`: one element.
 
-## Pitfalls
+## Common mistakes
 
-- Non-square matrices: test `1 x n`, `m x 1`, and `3 x 2`.
-- Re-checking only one boundary pair: both the row guard and the column guard are needed.
+- Missing the `top ≤ bottom` and `left ≤ right` checks, which duplicates the middle row or column.
+- Updating a boundary before finishing the side that uses it.
+- Off-by-one in the loop ranges of the inner sides.
+
+## In the interview
+
+- Draw a `3 × 4` example with the four boundaries; the code follows directly.
+- Likely follow-ups:
+  - *Fill a matrix in spiral order (Spiral Matrix II)?* The same loops, writing `1, 2, 3, …` instead of reading.
+  - *Counter-clockwise?* Read the left column first, then the bottom row, and so on.

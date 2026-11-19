@@ -1,30 +1,41 @@
 class DetectSquares {
-  counts = new Map<number, number>() // encoded point -> copies
-  byColumn = new Map<number, Map<number, number>>() // x -> (y -> copies)
+  pointCount: Map<number, number> // encoded point -> number of copies
+  points: number[][] // one entry per distinct point
+
+  constructor() {
+    this.pointCount = new Map<number, number>()
+    this.points = []
+  }
 
   add(point: number[]): void {
-    const [x, y] = point
-    const key = x * 1001 + y
-    this.counts.set(key, (this.counts.get(key) ?? 0) + 1)
-    if (!this.byColumn.has(x)) this.byColumn.set(x, new Map())
-    const column = this.byColumn.get(x)!
-    column.set(y, (column.get(y) ?? 0) + 1)
+    const key = point[0] * 1001 + point[1] // coordinates are 0..1000
+    if (this.pointCount.has(key)) {
+      this.pointCount.set(key, (this.pointCount.get(key) as number) + 1)
+    } else {
+      this.pointCount.set(key, 1)
+      this.points.push([point[0], point[1]])
+    }
   }
 
   count(point: number[]): number {
-    const [qx, qy] = point
-    const column = this.byColumn.get(qx)
-    if (!column) return 0
-    const at = (x: number, y: number) => this.counts.get(x * 1001 + y) ?? 0
+    const qx = point[0]
+    const qy = point[1]
     let total = 0
-    // Pick the corner sharing the query's x; the side length then fixes the rest.
-    for (const [y, copies] of column) {
-      const side = y - qy
-      if (side === 0) continue
-      for (const x of [qx - side, qx + side]) {
-        total += copies * at(x, qy) * at(x, y)
+    // Each stored point that could be the corner DIAGONALLY opposite the query
+    // fixes the whole square; the other two corners must exist too.
+    for (let i = 0; i < this.points.length; i++) {
+      const x = this.points[i][0]
+      const y = this.points[i][1]
+      if (x === qx || Math.abs(x - qx) !== Math.abs(y - qy)) {
+        continue // same column, or not a square's diagonal
       }
+      total += this.copies(x, y) * this.copies(qx, y) * this.copies(x, qy)
     }
     return total
+  }
+
+  copies(x: number, y: number): number {
+    const key = x * 1001 + y
+    return this.pointCount.has(key) ? (this.pointCount.get(key) as number) : 0
   }
 }

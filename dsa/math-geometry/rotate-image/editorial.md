@@ -1,24 +1,56 @@
-**Key insight:** a clockwise rotation is a transpose followed by a horizontal flip — both are easy in-place swaps.
+**Key idea:** a 90° clockwise rotation sends cell `(r, c)` to `(c, n − 1 − r)`. That move is two simple reflections in a row: **transpose** (swap across the main diagonal, `(r, c) → (c, r)`), then **reverse each row** (`(c, r) → (c, n − 1 − r)`). Both are in-place swaps, so no extra matrix is needed.
 
-## Approach
+## Recognising the pattern
 
-1. Transpose: for every `i < j`, swap `matrix[i][j]` and `matrix[j][i]`.
-2. Reverse each row.
+Matrix transformations in place are index arithmetic, from the [Math & Geometry](/problems/patterns/math-geometry) sheet. The trick is to write down where `(r, c)` goes, then split that mapping into steps that are each easy to do with swaps.
 
-Check on a corner: the top-left element `(0, 0)` stays at `(0, 0)` after the transpose and moves to `(0, n - 1)` — the top-right — after the flip. That's where clockwise rotation sends it.
+## Alternative: copy, then place (shown below)
+
+Copy the matrix, then write each value to its new position: `matrix[c][n − 1 − r] = copy[r][c]`. That is the reference brute force below. `O(n²)` time and `O(n²)` extra space, which the problem forbids, but it is the clearest statement of the mapping.
+
+## Transpose, then reverse rows
+
+1. For each `i`, for each `j > i`: swap `matrix[i][j]` and `matrix[j][i]`.
+2. For each row: reverse it with two pointers.
+
+**Why `j > i`.** Swapping every pair twice would undo the transpose. Only the cells above the diagonal are swapped, each with its mirror below.
+
+**The other rotations.** Counter-clockwise: transpose, then reverse each **column** (or reverse rows first, then transpose). 180°: reverse each row and reverse the row order.
+
+## Walkthrough
+
+`matrix = [[2, 4, 6], [8, 10, 12], [14, 16, 18]]`
+
+| step | matrix |
+| --- | --- |
+| start | [2, 4, 6] / [8, 10, 12] / [14, 16, 18] |
+| transpose | [2, 8, 14] / [4, 10, 16] / [6, 12, 18] |
+| reverse rows | [14, 8, 2] / [16, 10, 4] / [18, 12, 6] |
+
+The left column, read bottom to top (14, 8, 2), is now the top row, as a clockwise turn requires.
 
 ## Complexity
 
-- Time `O(n²)` — every cell is touched a constant number of times.
-- Space `O(1)`.
+- Copy and place: `O(n²)` time, `O(n²)` space.
+- Transpose and reverse: `O(n²)` time, `O(1)` space.
+- Rotating four cells at a time, ring by ring: also `O(n²)` and `O(1)`, with trickier indices.
 
-## Alternatives to mention
+## Edge cases
 
-- **Four-way cycle by layers:** for each ring and each offset, rotate the four corresponding cells with one temp variable. Same complexity, one pass, but more index arithmetic — some interviewers ask for it specifically.
-- Counter-clockwise: transpose then reverse each column (or reverse rows top-to-bottom, then transpose).
-- Copying into a new matrix is `O(n²)` extra space and violates the in-place requirement.
+- `1 × 1`: unchanged.
+- `2 × 2`: the transpose swaps one pair; reversing swaps two.
+- Odd `n`: the centre cell stays put.
 
-## Pitfalls
+## Common mistakes
 
-- Looping `j` from `0` in the transpose swaps every pair twice and undoes the work.
-- Assigning a new array to `matrix` inside the function doesn't change the caller's matrix — mutate the rows.
+- Transposing with `j` from 0, which swaps every pair twice.
+- Reversing columns instead of rows, which rotates the other way.
+- Writing into the matrix while still reading from it in the direct mapping, without a copy.
+
+## In the interview
+
+- Write the mapping `(r, c) → (c, n − 1 − r)` first, then show the two reflections compose to it.
+- Likely follow-ups:
+  - *Counter-clockwise?* Transpose, then reverse each column.
+  - *Non-square matrix?* An in-place rotation isn't possible (the shape changes); build a new `n × m` matrix.
+  - *Four-way cycle version?* For each ring and offset, rotate the four corresponding cells with one temporary variable.
