@@ -1,17 +1,23 @@
 function asteroidCollision(asteroids: number[]): number[] {
-  const stack: number[] = []
-  for (const a of asteroids) {
+  const stack: number[] = [] // survivors so far, left to right
+  for (let i = 0; i < asteroids.length; i++) {
+    const current = asteroids[i]
     let alive = true
-    // Collisions only happen when a left-mover meets a right-mover on top.
-    while (alive && a < 0 && stack.length && stack[stack.length - 1] > 0) {
+    // Only a left-mover meeting a right-mover on top of the stack collides.
+    while (alive && current < 0 && stack.length > 0 && stack[stack.length - 1] > 0) {
       const top = stack[stack.length - 1]
-      if (top < -a) stack.pop() // top explodes, keep going
-      else {
-        if (top === -a) stack.pop() // both explode
+      if (top < -current) {
+        stack.pop() // the right-mover explodes; keep checking further left
+      } else {
+        if (top === -current) {
+          stack.pop() // equal sizes: both explode
+        }
         alive = false
       }
     }
-    if (alive) stack.push(a)
+    if (alive) {
+      stack.push(current)
+    }
   }
   return stack
 }

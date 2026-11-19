@@ -1,12 +1,16 @@
 function dailyTemperatures(temperatures: number[]): number[] {
-  const answer = new Array(temperatures.length).fill(0)
-  const waiting: number[] = [] // indices with non-increasing temperatures
-  for (let i = 0; i < temperatures.length; i++) {
-    while (waiting.length && temperatures[waiting[waiting.length - 1]] < temperatures[i]) {
-      const day = waiting.pop()!
+  const n = temperatures.length
+  const answer = new Array(n).fill(0)
+  // Indices of days still waiting for a warmer day.
+  // Their temperatures never increase from bottom to top.
+  const waiting: number[] = []
+  for (let i = 0; i < n; i++) {
+    // Today is the first warmer day for every cooler day on top of the stack.
+    while (waiting.length > 0 && temperatures[waiting[waiting.length - 1]] < temperatures[i]) {
+      const day = waiting.pop() as number
       answer[day] = i - day
     }
     waiting.push(i)
   }
-  return answer
+  return answer // days left on the stack keep 0
 }

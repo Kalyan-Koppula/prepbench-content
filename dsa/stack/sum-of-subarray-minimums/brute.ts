@@ -1,10 +1,13 @@
 function sumSubarrayMins(arr: number[]): number {
+  const MOD = 1000000007
   let total = 0
-  for (let i = 0; i < arr.length; i++) {
-    let min = Infinity
-    for (let j = i; j < arr.length; j++) {
-      min = Math.min(min, arr[j])
-      total = (total + min) % 1_000_000_007
+  for (let start = 0; start < arr.length; start++) {
+    let min = arr[start]
+    for (let end = start; end < arr.length; end++) {
+      if (arr[end] < min) {
+        min = arr[end]
+      }
+      total = (total + min) % MOD
     }
   }
   return total

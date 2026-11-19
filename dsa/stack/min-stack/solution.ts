@@ -1,11 +1,20 @@
 class MinStack {
-  values: number[] = []
-  mins: number[] = [] // mins[i] = minimum of values[0..i]
+  values: number[]
+  mins: number[] // mins[i] = smallest of values[0..i]
+
+  constructor() {
+    this.values = []
+    this.mins = []
+  }
 
   push(val: number): void {
     this.values.push(val)
-    const below = this.mins.length ? this.mins[this.mins.length - 1] : val
-    this.mins.push(Math.min(val, below))
+    if (this.mins.length === 0) {
+      this.mins.push(val)
+    } else {
+      const below = this.mins[this.mins.length - 1]
+      this.mins.push(val < below ? val : below)
+    }
   }
 
   pop(): void {

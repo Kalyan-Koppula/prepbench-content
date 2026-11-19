@@ -1,15 +1,33 @@
 function generateParenthesis(n: number): string[] {
   const result: string[] = []
-  // Every bitmask of length 2n is a candidate string; keep the balanced ones.
-  for (let mask = 0; mask < 1 << (2 * n); mask++) {
-    let s = ''
+
+  function isBalanced(s: string): boolean {
     let balance = 0
-    for (let i = 0; i < 2 * n && balance >= 0; i++) {
-      const open = (mask >> i) & 1
-      s += open ? '(' : ')'
-      balance += open ? 1 : -1
+    for (let i = 0; i < s.length; i++) {
+      if (s[i] === '(') {
+        balance++
+      } else {
+        balance--
+      }
+      if (balance < 0) {
+        return false
+      }
     }
-    if (balance === 0 && s.length === 2 * n) result.push(s)
+    return balance === 0
   }
+
+  // Build all 2^(2n) strings of '(' and ')', keeping the balanced ones.
+  function build(current: string): void {
+    if (current.length === 2 * n) {
+      if (isBalanced(current)) {
+        result.push(current)
+      }
+      return
+    }
+    build(current + '(')
+    build(current + ')')
+  }
+
+  build('')
   return result
 }
