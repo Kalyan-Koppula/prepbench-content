@@ -1,12 +1,16 @@
-function kthSmallest(root: TreeNode | null, k: number): number {
-  const vals: number[] = []
-  const collect = (node: TreeNode | null) => {
-    if (!node) return
-    vals.push(node.val)
-    collect(node.left)
-    collect(node.right)
+function collect(node: TreeNode | null, values: number[]): void {
+  if (node === null) {
+    return
   }
-  collect(root)
-  vals.sort((a, b) => a - b)
-  return vals[k - 1]
+  values.push(node.val)
+  collect(node.left, values)
+  collect(node.right, values)
+}
+
+function kthSmallest(root: TreeNode | null, k: number): number {
+  // Ignore the ordering: gather everything and sort. O(n log n).
+  const values: number[] = []
+  collect(root, values)
+  values.sort((a, b) => a - b)
+  return values[k - 1]
 }

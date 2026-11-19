@@ -1,21 +1,29 @@
 function recoverTree(root: TreeNode | null): void {
-  let first: TreeNode | null = null
-  let second: TreeNode | null = null
+  // In a correct BST, inorder values always increase. Swapping two values
+  // creates one "drop" (adjacent swap) or two drops (distant swap).
+  let first: TreeNode | null = null // larger value of the first drop
+  let second: TreeNode | null = null // smaller value of the last drop
   let prev: TreeNode | null = null
   const stack: TreeNode[] = []
-  let cur = root
-  while (cur || stack.length) {
-    while (cur) {
-      stack.push(cur)
-      cur = cur.left
+  let current = root
+  while (current !== null || stack.length > 0) {
+    while (current !== null) {
+      stack.push(current)
+      current = current.left
     }
-    cur = stack.pop()!
-    if (prev && prev.val > cur.val) {
-      if (!first) first = prev // larger value of the first break
-      second = cur // smaller value of the last break
+    const node = stack.pop() as TreeNode
+    if (prev !== null && prev.val > node.val) {
+      if (first === null) {
+        first = prev
+      }
+      second = node
     }
-    prev = cur
-    cur = cur.right
+    prev = node
+    current = node.right
   }
-  if (first && second) [first.val, second.val] = [second.val, first.val]
+  if (first !== null && second !== null) {
+    const temp = first.val
+    first.val = second.val
+    second.val = temp
+  }
 }

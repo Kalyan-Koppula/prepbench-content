@@ -1,19 +1,27 @@
 class BSTIterator {
-  values: number[] = []
-  index = 0
+  // Flatten the whole tree up front: O(1) per call, but O(n) memory.
+  values: number[]
+  index: number
 
   constructor(root: TreeNode | null) {
-    const walk = (node: TreeNode | null) => {
-      if (!node) return
-      walk(node.left)
-      this.values.push(node.val)
-      walk(node.right)
+    this.values = []
+    this.index = 0
+    this.collect(root)
+  }
+
+  collect(node: TreeNode | null): void {
+    if (node === null) {
+      return
     }
-    walk(root)
+    this.collect(node.left)
+    this.values.push(node.val)
+    this.collect(node.right)
   }
 
   next(): number {
-    return this.values[this.index++]
+    const value = this.values[this.index]
+    this.index++
+    return value
   }
 
   hasNext(): boolean {

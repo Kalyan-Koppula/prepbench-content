@@ -1,21 +1,23 @@
 function insertIntoBST(root: TreeNode | null, val: number): TreeNode | null {
   const node = new TreeNode(val)
-  if (!root) return node
-  let cur = root
+  if (root === null) {
+    return node
+  }
+  // Follow the search path and attach at the first missing child.
+  let current: TreeNode = root
   while (true) {
-    if (val < cur.val) {
-      if (!cur.left) {
-        cur.left = node
-        break
+    if (val < current.val) {
+      if (current.left === null) {
+        current.left = node
+        return root
       }
-      cur = cur.left
+      current = current.left
     } else {
-      if (!cur.right) {
-        cur.right = node
-        break
+      if (current.right === null) {
+        current.right = node
+        return root
       }
-      cur = cur.right
+      current = current.right
     }
   }
-  return root
 }

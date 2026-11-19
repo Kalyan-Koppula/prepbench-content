@@ -1,7 +1,24 @@
+function allLess(node: TreeNode | null, limit: number): boolean {
+  if (node === null) {
+    return true
+  }
+  return node.val < limit && allLess(node.left, limit) && allLess(node.right, limit)
+}
+
+function allGreater(node: TreeNode | null, limit: number): boolean {
+  if (node === null) {
+    return true
+  }
+  return node.val > limit && allGreater(node.left, limit) && allGreater(node.right, limit)
+}
+
 function isValidBST(root: TreeNode | null): boolean {
-  const values = (node: TreeNode | null): number[] => (node ? [node.val, ...values(node.left), ...values(node.right)] : [])
-  if (!root) return true
-  if (values(root.left).some((v) => v >= root.val)) return false
-  if (values(root.right).some((v) => v <= root.val)) return false
+  // At every node, scan both whole subtrees against it: O(n^2) worst case.
+  if (root === null) {
+    return true
+  }
+  if (!allLess(root.left, root.val) || !allGreater(root.right, root.val)) {
+    return false
+  }
   return isValidBST(root.left) && isValidBST(root.right)
 }

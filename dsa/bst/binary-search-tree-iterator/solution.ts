@@ -1,21 +1,25 @@
 class BSTIterator {
-  stack: TreeNode[] = []
+  // Nodes whose left side is done but which haven't been returned yet.
+  // The top is always the smallest value not returned so far.
+  stack: TreeNode[]
 
   constructor(root: TreeNode | null) {
-    this.pushLeft(root)
+    this.stack = []
+    this.pushLeftPath(root)
   }
 
-  // Push node and its chain of left children; the top is the smallest pending value.
-  pushLeft(node: TreeNode | null) {
-    while (node) {
-      this.stack.push(node)
-      node = node.left
+  pushLeftPath(node: TreeNode | null): void {
+    let current = node
+    while (current !== null) {
+      this.stack.push(current)
+      current = current.left
     }
   }
 
   next(): number {
-    const node = this.stack.pop()!
-    this.pushLeft(node.right)
+    const node = this.stack.pop() as TreeNode
+    // Its right subtree holds the next values; queue its leftmost path.
+    this.pushLeftPath(node.right)
     return node.val
   }
 

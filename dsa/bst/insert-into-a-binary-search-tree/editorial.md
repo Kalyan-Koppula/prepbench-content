@@ -1,22 +1,62 @@
-**Key insight:** an unsuccessful search for `val` ends at exactly one null child — put the new node there.
+**Key idea:** search for the value as if it were in the tree. The search falls off the tree at exactly the place the value belongs; attach a new leaf there. Nothing else moves.
 
-## Approach
+## Recognising the pattern
 
-1. Empty tree → return a new node.
-2. Walk down from the root: go left if `val < cur.val`, else right.
-3. When the chosen child is null, attach `new TreeNode(val)` there and stop.
-4. Return the original root.
+Insertion is the search path from the [Binary Search Trees](/problems/patterns/bst) sheet with one extra step at the end. It costs one comparison per level, `O(h)`.
+
+## Approach 1: iterative (reference solution)
+
+1. Create the new node. If the tree is empty, return it as the root.
+2. `current = root`. Repeat:
+   1. If `val < current.val`: if `current.left` is null, attach the node there and return `root`; otherwise go left.
+   2. Otherwise: if `current.right` is null, attach the node there and return `root`; otherwise go right.
+
+Checking the child before moving keeps a reference to the parent, which is where the new node must be attached.
+
+## Approach 2: recursive (shown below as the alternative)
+
+`insert(node, val)`: if `node` is null, return a new node. Otherwise insert into the correct subtree and assign the result back (`node.left = insert(node.left, val)`), then return `node`. Elegant, because the "attach to the parent" step happens through the return value, but it uses `O(h)` stack.
+
+## Walkthrough
+
+```
+      4                4
+     / \              / \
+    2   7    →       2   7
+   / \              / \  /
+  1   3            1  3 5
+```
+
+Inserting `5`:
+
+| node | comparison | action |
+| --- | --- | --- |
+| 4 | 5 > 4 | go right |
+| 7 | 5 < 7 | left child is null → attach 5 |
 
 ## Complexity
 
-- Time `O(h)` — one root-to-leaf walk.
-- Space `O(1)` iteratively; `O(h)` for the recursive form `node.left = insert(node.left, val)`.
+- Iterative: time `O(h)`, space `O(1)`.
+- Recursive: time `O(h)`, space `O(h)`.
 
-## Alternatives to mention
+`h` is `O(log n)` for a balanced tree and `O(n)` for a chain.
 
-- Recursive insert: returns the (possibly new) subtree root and reassigns the child pointer — very short, but uses stack space.
-- Other valid BSTs exist (e.g. making `val` the new root and re-hanging subtrees), which is why the statement pins down "insert as a leaf".
+## Edge cases
 
-## Follow-ups
+- Empty tree: the new node is the root.
+- The value smaller than everything: it becomes the left child of the leftmost node.
+- Inserting sorted values one by one builds a chain. Worth mentioning when discussing complexity.
 
-- Repeated inserts in sorted order produce a chain with `h = n`. Self-balancing trees (AVL, red-black) rotate after inserts to keep `h = O(log n)`.
+## Common mistakes
+
+- Walking to `null` without remembering the parent, so the node can't be attached.
+- Returning the new node instead of the original root.
+- Forgetting to assign the recursive result back to `left` or `right`.
+
+## In the interview
+
+- One sentence: "search for it and attach where the search ends."
+- Mention that repeated inserts can unbalance the tree, and that balanced trees fix this with rotations.
+- Likely follow-ups:
+  - *Delete a value?* Three cases: leaf, one child, two children with the inorder successor (Delete Node in a BST).
+  - *Duplicates allowed?* Decide a side (often right) or keep a count per node.
