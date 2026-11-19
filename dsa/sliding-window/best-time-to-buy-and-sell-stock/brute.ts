@@ -1,6 +1,12 @@
 function maxProfit(prices: number[]): number {
   let best = 0
-  for (let i = 0; i < prices.length; i++)
-    for (let j = i + 1; j < prices.length; j++) best = Math.max(best, prices[j] - prices[i])
+  for (let buy = 0; buy < prices.length; buy++) {
+    for (let sell = buy + 1; sell < prices.length; sell++) {
+      const profit = prices[sell] - prices[buy]
+      if (profit > best) {
+        best = profit
+      }
+    }
+  }
   return best
 }

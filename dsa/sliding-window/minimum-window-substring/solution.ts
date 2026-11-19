@@ -1,30 +1,41 @@
 function minWindow(s: string, t: string): string {
-  const need = new Map<string, number>()
-  for (const ch of t) need.set(ch, (need.get(ch) ?? 0) + 1)
-  let missing = t.length
+  // need[c] = how many more copies of character code c the window still needs.
+  // It goes negative when the window holds extra copies.
+  const need = new Array(128).fill(0)
+  for (let i = 0; i < t.length; i++) {
+    need[t.charCodeAt(i)]++
+  }
+  let missing = t.length // required characters not yet in the window
   let left = 0
   let bestStart = 0
-  let bestLen = Infinity
+  let bestLength = Infinity
 
   for (let right = 0; right < s.length; right++) {
-    const ch = s[right]
-    if (need.has(ch)) {
-      // A positive balance means this copy was still required.
-      if (need.get(ch)! > 0) missing--
-      need.set(ch, need.get(ch)! - 1)
+    const added = s.charCodeAt(right)
+    if (need[added] > 0) {
+      missing-- // this copy was still required
     }
+    need[added]--
+
     while (missing === 0) {
-      // Strictly shorter only, so ties keep the earlier (leftmost) window.
-      if (right - left + 1 < bestLen) {
-        bestLen = right - left + 1
+      // The window covers t. Record it, then try to make it shorter.
+      // Strictly shorter only, so a tie keeps the earlier (leftmost) window.
+      const length = right - left + 1
+      if (length < bestLength) {
+        bestLength = length
         bestStart = left
       }
-      const out = s[left++]
-      if (need.has(out)) {
-        need.set(out, need.get(out)! + 1)
-        if (need.get(out)! > 0) missing++
+      const removed = s.charCodeAt(left)
+      need[removed]++
+      if (need[removed] > 0) {
+        missing++ // we just dropped a copy the window needed
       }
+      left++
     }
   }
-  return bestLen === Infinity ? '' : s.slice(bestStart, bestStart + bestLen)
+
+  if (bestLength === Infinity) {
+    return ''
+  }
+  return s.substring(bestStart, bestStart + bestLength)
 }

@@ -1,18 +1,24 @@
 function minWindow(s: string, t: string): string {
+  const target = new Array(128).fill(0)
+  for (let i = 0; i < t.length; i++) {
+    target[t.charCodeAt(i)]++
+  }
   let best = ''
-  for (let i = 0; i < s.length; i++) {
-    // Extend from i until the window covers t; that's the shortest window starting at i.
-    const need = new Map<string, number>()
-    for (const ch of t) need.set(ch, (need.get(ch) ?? 0) + 1)
+  for (let start = 0; start < s.length; start++) {
+    // Extend from start until the window covers t: that is the shortest
+    // window beginning at start.
+    const need = target.slice()
     let missing = t.length
-    for (let j = i; j < s.length; j++) {
-      const c = need.get(s[j])
-      if (c !== undefined) {
-        if (c > 0) missing--
-        need.set(s[j], c - 1)
+    for (let end = start; end < s.length; end++) {
+      const code = s.charCodeAt(end)
+      if (need[code] > 0) {
+        missing--
       }
+      need[code]--
       if (missing === 0) {
-        if (best === '' || j - i + 1 < best.length) best = s.slice(i, j + 1)
+        if (best === '' || end - start + 1 < best.length) {
+          best = s.substring(start, end + 1)
+        }
         break
       }
     }
