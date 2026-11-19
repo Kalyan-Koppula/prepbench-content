@@ -1,6 +1,10 @@
+// Check all 32 bit positions one by one.
 function hammingWeight(n: number): number {
-  return n
-    .toString(2)
-    .split('')
-    .filter((b) => b === '1').length
+  let count = 0
+  for (let i = 0; i < 32; i++) {
+    if (((n >> i) & 1) === 1) {
+      count++
+    }
+  }
+  return count
 }

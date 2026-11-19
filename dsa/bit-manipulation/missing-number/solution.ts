@@ -1,5 +1,11 @@
 function missingNumber(nums: number[]): number {
-  let acc = nums.length // the index range is 0..n-1, so seed with n
-  for (let i = 0; i < nums.length; i++) acc ^= i ^ nums[i]
-  return acc
+  const n = nums.length
+  // XOR every index 0..n and every value: each present number appears twice
+  // and cancels, leaving only the missing one.
+  let result = n
+  for (let i = 0; i < n; i++) {
+    result ^= i
+    result ^= nums[i]
+  }
+  return result
 }

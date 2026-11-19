@@ -1,25 +1,56 @@
-**Key insight:** every number's bit count is a smaller number's count plus at most one, so fill the table in order — a tiny DP.
+**Key idea:** reuse answers you already have. Shifting `i` right by one (`i >> 1`) drops its lowest bit and gives a smaller number whose count is already computed. So `bits[i] = bits[i >> 1] + (i & 1)`: the count of `i` without its last bit, plus that last bit.
 
-## Approach
+## Recognising the pattern
 
-`bits[0] = 0`, then for `i = 1 … n`: `bits[i] = bits[i >> 1] + (i & 1)`.
+"An answer for every number from 0 to n" invites a DP where each number builds on a smaller one, from the [1-D Dynamic Programming](/problems/patterns/dp-1d) sheet, with the relation coming from the [Bit Manipulation](/problems/patterns/bit-manipulation) sheet.
 
-`i >> 1` drops the lowest bit (always smaller than `i`, so it's already filled), and `i & 1` adds that bit back if it was `1`.
+## Brute force
 
-Two other recurrences work just as well — know one, mention another:
+Count the bits of each number separately with the `x & (x − 1)` loop. That is the reference brute force below. `O(n log n)` time in the worst case (each number has up to `log n` set bits).
 
-- `bits[i] = bits[i & (i - 1)] + 1` — remove the lowest set bit.
-- `bits[i] = bits[i - offset] + 1` where `offset` is the largest power of two `<= i`.
+## DP on the shifted number
+
+1. `bits[0] = 0`.
+2. For `i` from 1 to `n`: `bits[i] = bits[i >> 1] + (i & 1)`.
+3. Return `bits`.
+
+**Another relation.** `bits[i] = bits[i & (i − 1)] + 1`: removing the lowest set bit gives a smaller number with one fewer set bit. Both relations are `O(1)` per number.
+
+## Walkthrough
+
+`n = 6`
+
+| i | binary | i >> 1 | i & 1 | bits[i] |
+| --- | --- | --- | --- | --- |
+| 0 | 0 | – | – | 0 |
+| 1 | 1 | 0 | 1 | 0 + 1 = 1 |
+| 2 | 10 | 1 | 0 | 1 + 0 = 1 |
+| 3 | 11 | 1 | 1 | 1 + 1 = 2 |
+| 4 | 100 | 2 | 0 | 1 + 0 = 1 |
+| 5 | 101 | 2 | 1 | 1 + 1 = 2 |
+| 6 | 110 | 3 | 0 | 2 + 0 = 2 |
+
+Answer `[0, 1, 1, 2, 1, 2, 2]`.
 
 ## Complexity
 
-- Time `O(n)` — constant work per entry.
-- Space `O(1)` beyond the output array.
+- Count each separately: `O(n log n)` time.
+- DP: `O(n)` time, `O(n)` space for the output (no extra space beyond it).
 
-## Alternatives to mention
+## Edge cases
 
-- Popcount each `i` independently (Kernighan loop): `O(n log n)` time — the baseline the follow-up asks you to beat.
+- `n = 0`: `[0]`.
+- Powers of two: always 1.
+- `2^k − 1`: always `k`.
 
-## Pitfalls
+## Common mistakes
 
-- The output has `n + 1` entries, including `0`.
+- Using `i / 2` without integer division in languages where `/` is floating point; `i >> 1` avoids it.
+- Allocating `n` instead of `n + 1` entries.
+
+## In the interview
+
+- Give the relation, then justify it with binary: shifting right removes exactly the last bit.
+- Likely follow-ups:
+  - *Without the DP?* Mention a built-in population count; interviewers usually want the relation.
+  - *Total number of set bits from 1 to n, for huge n?* Count per bit position with a formula based on cycles of length `2^(k+1)`.
