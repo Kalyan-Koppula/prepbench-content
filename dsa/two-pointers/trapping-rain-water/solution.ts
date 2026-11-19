@@ -1,19 +1,25 @@
 function trap(height: number[]): number {
-  let l = 0
-  let r = height.length - 1
-  let leftMax = 0
-  let rightMax = 0
+  let left = 0
+  let right = height.length - 1
+  let leftMax = 0 // tallest bar in height[0 .. left]
+  let rightMax = 0 // tallest bar in height[right .. n - 1]
   let water = 0
-  while (l < r) {
-    // the lower side's water level is fixed by its own running max
-    if (height[l] < height[r]) {
-      leftMax = Math.max(leftMax, height[l])
-      water += leftMax - height[l]
-      l++
+
+  while (left < right) {
+    // Work on the lower side: the other side already has a bar at least as tall,
+    // so this side's water level is decided by its own running max.
+    if (height[left] < height[right]) {
+      if (height[left] > leftMax) {
+        leftMax = height[left]
+      }
+      water += leftMax - height[left]
+      left++
     } else {
-      rightMax = Math.max(rightMax, height[r])
-      water += rightMax - height[r]
-      r--
+      if (height[right] > rightMax) {
+        rightMax = height[right]
+      }
+      water += rightMax - height[right]
+      right--
     }
   }
   return water

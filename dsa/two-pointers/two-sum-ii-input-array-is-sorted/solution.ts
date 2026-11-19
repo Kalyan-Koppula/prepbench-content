@@ -1,11 +1,19 @@
 function twoSum(numbers: number[], target: number): number[] {
-  let l = 0
-  let r = numbers.length - 1
-  while (l < r) {
-    const sum = numbers[l] + numbers[r]
-    if (sum === target) return [l + 1, r + 1]
-    if (sum < target) l++
-    else r--
+  let left = 0
+  let right = numbers.length - 1
+  while (left < right) {
+    const sum = numbers[left] + numbers[right]
+    if (sum === target) {
+      return [left + 1, right + 1] // the answer is 1-based
+    }
+    if (sum < target) {
+      // numbers[left] is too small even with the largest partner left,
+      // so it cannot be in any pair.
+      left++
+    } else {
+      // numbers[right] is too big even with the smallest partner left.
+      right--
+    }
   }
-  return []
+  return [] // unreachable: the problem guarantees exactly one pair
 }

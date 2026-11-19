@@ -1,19 +1,35 @@
 function threeSum(nums: number[]): number[][] {
-  const a = [...nums].sort((x, y) => x - y)
+  const sorted = nums.slice()
+  sorted.sort((a, b) => a - b)
+  const n = sorted.length
   const result: number[][] = []
-  for (let i = 0; i < a.length - 2 && a[i] <= 0; i++) {
-    if (i > 0 && a[i] === a[i - 1]) continue // same anchor as before
-    let l = i + 1
-    let r = a.length - 1
-    while (l < r) {
-      const sum = a[i] + a[l] + a[r]
-      if (sum < 0) l++
-      else if (sum > 0) r--
-      else {
-        result.push([a[i], a[l], a[r]])
-        l++
-        r--
-        while (l < r && a[l] === a[l - 1]) l++ // skip duplicate second values
+
+  for (let i = 0; i < n - 2; i++) {
+    if (sorted[i] > 0) {
+      break // the two values to its right are at least as large, so the sum is positive
+    }
+    if (i > 0 && sorted[i] === sorted[i - 1]) {
+      continue // this first value was already tried
+    }
+    let left = i + 1
+    let right = n - 1
+    while (left < right) {
+      const sum = sorted[i] + sorted[left] + sorted[right]
+      if (sum < 0) {
+        left++
+      } else if (sum > 0) {
+        right--
+      } else {
+        result.push([sorted[i], sorted[left], sorted[right]])
+        left++
+        right--
+        // Step past equal values so the same triplet is not produced twice.
+        while (left < right && sorted[left] === sorted[left - 1]) {
+          left++
+        }
+        while (left < right && sorted[right] === sorted[right + 1]) {
+          right--
+        }
       }
     }
   }
