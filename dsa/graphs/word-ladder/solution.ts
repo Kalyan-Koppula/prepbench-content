@@ -1,34 +1,36 @@
 function ladderLength(beginWord: string, endWord: string, wordList: string[]): number {
-  if (!wordList.includes(endWord)) return 0
-  const L = beginWord.length
-  const patterns = (w: string) => Array.from({ length: L }, (_, i) => w.slice(0, i) + '*' + w.slice(i + 1))
-
-  const buckets = new Map<string, string[]>()
-  for (const w of wordList) {
-    for (const p of patterns(w)) {
-      if (!buckets.has(p)) buckets.set(p, [])
-      buckets.get(p)!.push(w)
-    }
+  const dictionary = new Set<string>()
+  for (let i = 0; i < wordList.length; i++) {
+    dictionary.add(wordList[i])
   }
-
-  const visited = new Set([beginWord])
-  let frontier = [beginWord]
-  let steps = 1
-  while (frontier.length) {
+  if (!dictionary.has(endWord)) {
+    return 0
+  }
+  // BFS over words; neighbours differ in exactly one letter.
+  let level: string[] = [beginWord]
+  dictionary.delete(beginWord) // removing a word from the set marks it visited
+  let words = 1
+  while (level.length > 0) {
     const next: string[] = []
-    for (const word of frontier) {
-      for (const p of patterns(word)) {
-        for (const nb of buckets.get(p) ?? []) {
-          if (nb === endWord) return steps + 1
-          if (visited.has(nb)) continue
-          visited.add(nb)
-          next.push(nb)
+    for (let i = 0; i < level.length; i++) {
+      const word = level[i]
+      // Try every single-letter change: L positions x 26 letters.
+      for (let p = 0; p < word.length; p++) {
+        for (let code = 97; code <= 122; code++) {
+          const candidate = word.substring(0, p) + String.fromCharCode(code) + word.substring(p + 1)
+          if (!dictionary.has(candidate)) {
+            continue
+          }
+          if (candidate === endWord) {
+            return words + 1
+          }
+          dictionary.delete(candidate)
+          next.push(candidate)
         }
-        buckets.delete(p) // all of its words are now visited
       }
     }
-    frontier = next
-    steps++
+    level = next
+    words++
   }
   return 0
 }

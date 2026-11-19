@@ -1,24 +1,57 @@
-**Key insight:** multi-source BFS from all gates at once. BFS reaches each room first along a shortest path from whichever gate is nearest, so one pass fills every room.
+**Key idea:** run one breadth-first search that starts from **every gate at once**. BFS reaches each room first from its nearest gate, so the distance stored at that moment is final. Walls are never entered, and rooms that are never reached keep `INF`.
 
-## Approach
+## Recognising the pattern
 
-1. Push every gate `(r, c)` into the queue.
-2. Pop a cell; for each neighbour that is still `INF`, set it to `rooms[r][c] + 1` and enqueue it.
-3. Walls (`-1`) and already-filled rooms are never `INF`, so the same check skips them.
+"Distance from each cell to the nearest of several sources, through a grid with obstacles" is multi-source BFS from the [Graphs](/problems/patterns/graphs) sheet. It is 01 Matrix with walls, which is why Manhattan distance no longer works.
 
-The `INF` value is the visited marker: a room is written exactly once, with its final answer.
+## Brute force
+
+Run a separate BFS from each gate and keep, for every room, the smallest distance found by any of them. That is the reference brute force below. Correct, but with `g` gates it costs `O(g · m · n)`, and the number of gates can be large.
+
+## Multi-source BFS
+
+1. Add every gate (value 0) to the queue.
+2. While the queue isn't empty: dequeue a cell and, for each neighbour that is still `INF` (an unvisited empty room), set it to the cell's distance plus 1 and enqueue it.
+
+Gates (0), walls (−1) and rooms already assigned all fail the `== INF` test, so the single comparison covers bounds of the search, obstacles and the visited check.
+
+## Walkthrough
+
+```
+INF  -1   0  INF        3  -1   0   1
+INF INF INF  -1    →    2   2   1  -1
+INF  -1 INF  -1         1  -1   2  -1
+  0  -1 INF INF         0  -1   3   4
+```
+
+| BFS level | rooms assigned |
+| --- | --- |
+| 0 | the gates at (0, 2) and (3, 0) |
+| 1 | (0, 3), (1, 2), (2, 0) |
+| 2 | (1, 1), (2, 2), (1, 0) |
+| 3 | (0, 0), (3, 2) |
+| 4 | (3, 3) |
 
 ## Complexity
 
-- Time `O(m · n)` — every room is enqueued at most once.
-- Space `O(m · n)` — the queue.
+- One BFS per gate: time `O(g · m · n)`, space `O(m · n)`.
+- Multi-source BFS: time `O(m · n)`, space `O(m · n)` for the queue.
 
-## Alternatives to mention
+## Edge cases
 
-- BFS from each gate separately, keeping the minimum: `O(g · m · n)` for `g` gates.
-- DFS from each gate with "only overwrite if smaller" pruning works but can revisit cells many times.
+- No gates: every room keeps `INF`.
+- A room fully enclosed by walls: never reached, keeps `INF`.
+- Gates next to each other: their neighbours get distance 1 from whichever is dequeued first, which is correct either way.
 
-## Pitfalls
+## Common mistakes
 
-- Don't BFS from each empty room — that's `O((m · n)²)`.
-- Leave unreachable rooms as `INF`; don't turn them into `-1` or `0`.
+- BFS from each empty room toward gates, which is `O((m · n)²)`.
+- Overwriting a room that already has a distance.
+- Using DFS, which doesn't produce shortest distances without extra work.
+
+## In the interview
+
+- Mention 01 Matrix and Rotting Oranges as the same pattern.
+- Likely follow-ups:
+  - *Which gate is nearest?* Carry the gate's id along with the distance.
+  - *Different costs per cell?* Dijkstra with a priority queue.

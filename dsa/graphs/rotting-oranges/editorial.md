@@ -1,25 +1,61 @@
-**Key insight:** multi-source BFS. Enqueue every rotten orange at minute 0; each BFS level is one minute of spreading. The answer is the depth of the last level that rotted something.
+**Key idea:** rot spreads one step per minute from **every** rotten orange at once, which is a breadth-first search that starts from all rotten oranges together. Each BFS wave is one minute. When the waves stop, either every fresh orange has rotted (answer: the number of waves) or some are unreachable (answer: −1).
 
-## Approach
+## Recognising the pattern
 
-1. Scan the grid: push every `2` into the queue and count the `1`s as `fresh`.
-2. While the queue is non-empty and `fresh > 0`, process exactly the current level (`queue.length` at the start of the minute). For each orange, rot its fresh neighbours, decrement `fresh`, and enqueue them. Increment `minutes` after the level.
-3. Return `fresh === 0 ? minutes : -1`.
+"Spreads to neighbours every time step" plus "minimum time" is **multi-source BFS** from the [Graphs](/problems/patterns/graphs) sheet. BFS visits cells in order of distance, and putting all the sources in the first wave makes the distance "time since the nearest rotten orange".
 
-Stopping when `fresh` hits zero avoids counting an extra empty minute at the end.
+## Brute force
+
+Simulate minute by minute: scan the whole grid, find every fresh orange next to a rotten one, and rot them all at once. Stop when nothing is fresh, or when a minute passes with no change (return −1). That is the reference brute force below. Each minute costs `O(m · n)` and there can be up to `O(m · n)` minutes: `O((m · n)²)`.
+
+## Multi-source BFS
+
+1. Put every rotten orange in the first wave and count the fresh ones.
+2. While the wave is non-empty and fresh oranges remain:
+   1. Build the next wave: for each orange in the current wave, rot every fresh neighbour, decrement `fresh`, and add it to the next wave.
+   2. `minutes++`.
+3. Return `minutes` if `fresh == 0`, otherwise −1.
+
+Each orange enters a wave once, so the work is linear. Stopping when `fresh` reaches 0 avoids counting an extra, empty minute.
+
+## Walkthrough
+
+```
+2 1 1
+1 1 0
+0 1 1
+```
+
+| minute | newly rotten | fresh left |
+| --- | --- | --- |
+| 0 | start: (0,0) | 6 |
+| 1 | (0,1), (1,0) | 4 |
+| 2 | (0,2), (1,1) | 2 |
+| 3 | (2,1) | 1 |
+| 4 | (2,2) | 0 |
+
+Answer `4`.
 
 ## Complexity
 
-- Time `O(m · n)` — each cell enters the queue at most once.
-- Space `O(m · n)` — the queue.
+- Minute-by-minute scans: time `O((m · n)²)`, space `O(m · n)`.
+- Multi-source BFS: time `O(m · n)`, space `O(m · n)` for the waves.
 
-## Alternatives to mention
+## Edge cases
 
-- Simulate minute by minute, rescanning the whole grid each time: `O((m · n)²)` in the worst case (a long snake of oranges).
-- Running one BFS per rotten orange and taking minima is also slower and unnecessary — the multi-source queue already gives each cell its distance to the *nearest* rotten orange.
+- No fresh oranges at the start: 0, even if there are no rotten ones.
+- Fresh oranges but no rotten ones: −1.
+- A fresh orange walled off by empty cells: −1.
 
-## Pitfalls
+## Common mistakes
 
-- No fresh oranges → `0`, even when there are no rotten ones either.
-- Fresh oranges but no rotten ones → `-1`.
-- Rot the neighbour when enqueuing so it isn't enqueued twice in the same minute.
+- Running a separate BFS from each rotten orange and adding times, instead of one BFS from all of them.
+- Counting a final minute in which nothing rots.
+- Returning 0 instead of −1 when fresh oranges remain unreachable.
+
+## In the interview
+
+- Say "multi-source BFS, one wave per minute" and why the waves give the earliest time.
+- Likely follow-ups:
+  - *Distance from each cell to the nearest source?* The same BFS, storing distances (01 Matrix, Walls and Gates).
+  - *Different spreading speeds per cell?* Weighted times need Dijkstra.

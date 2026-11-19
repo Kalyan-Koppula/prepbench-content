@@ -1,26 +1,45 @@
 function pacificAtlantic(heights: number[][]): number[][] {
-  const m = heights.length
-  const n = heights[0].length
+  // From every cell, follow water downhill and see which oceans it reaches:
+  // O((m * n)^2).
+  const rows = heights.length
+  const cols = heights[0].length
+  const dr = [1, -1, 0, 0]
+  const dc = [0, 0, 1, -1]
   const result: number[][] = []
-  for (let sr = 0; sr < m; sr++)
-    for (let sc = 0; sc < n; sc++) {
-      // Follow the water downhill from this one cell.
-      const seen = heights.map((row) => row.map(() => false))
+  for (let sr = 0; sr < rows; sr++) {
+    for (let sc = 0; sc < cols; sc++) {
+      const seen: boolean[][] = []
+      for (let r = 0; r < rows; r++) {
+        seen.push(new Array(cols).fill(false))
+      }
       seen[sr][sc] = true
-      const stack = [[sr, sc]]
+      const stack: number[] = [sr * cols + sc]
       let pacific = false
       let atlantic = false
-      while (stack.length) {
-        const [r, c] = stack.pop()!
-        if (r === 0 || c === 0) pacific = true
-        if (r === m - 1 || c === n - 1) atlantic = true
-        for (const [nr, nc] of [[r + 1, c], [r - 1, c], [r, c + 1], [r, c - 1]]) {
-          if (nr < 0 || nc < 0 || nr >= m || nc >= n || seen[nr][nc] || heights[nr][nc] > heights[r][c]) continue
+      while (stack.length > 0 && !(pacific && atlantic)) {
+        const cell = stack.pop() as number
+        const r = Math.floor(cell / cols)
+        const c = cell % cols
+        if (r === 0 || c === 0) {
+          pacific = true
+        }
+        if (r === rows - 1 || c === cols - 1) {
+          atlantic = true
+        }
+        for (let d = 0; d < 4; d++) {
+          const nr = r + dr[d]
+          const nc = c + dc[d]
+          if (nr < 0 || nc < 0 || nr >= rows || nc >= cols || seen[nr][nc] || heights[nr][nc] > heights[r][c]) {
+            continue
+          }
           seen[nr][nc] = true
-          stack.push([nr, nc])
+          stack.push(nr * cols + nc)
         }
       }
-      if (pacific && atlantic) result.push([sr, sc])
+      if (pacific && atlantic) {
+        result.push([sr, sc])
+      }
     }
+  }
   return result
 }

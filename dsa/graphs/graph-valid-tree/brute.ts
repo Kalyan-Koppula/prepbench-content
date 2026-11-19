@@ -1,22 +1,34 @@
 function validTree(n: number, edges: number[][]): boolean {
-  const adj: number[][] = Array.from({ length: n }, () => [])
-  for (const [a, b] of edges) {
-    adj[a].push(b)
-    adj[b].push(a)
+  // DFS from node 0: no cycle (never reach a visited node except the parent)
+  // and every node reached.
+  const adj: number[][] = []
+  for (let i = 0; i < n; i++) {
+    adj.push([])
   }
-  const parentOf = new Array(n).fill(-2) // -2 = unvisited
-  parentOf[0] = -1
-  const stack = [0]
-  let visited = 1
-  while (stack.length) {
-    const u = stack.pop()!
-    for (const v of adj[u]) {
-      if (v === parentOf[u]) continue
-      if (parentOf[v] !== -2) return false // reached an already-visited node another way
-      parentOf[v] = u
-      visited++
+  for (let i = 0; i < edges.length; i++) {
+    adj[edges[i][0]].push(edges[i][1])
+    adj[edges[i][1]].push(edges[i][0])
+  }
+  const visited = new Array(n).fill(false)
+  const from = new Array(n).fill(-1)
+  visited[0] = true
+  const stack: number[] = [0]
+  let seen = 1
+  while (stack.length > 0) {
+    const u = stack.pop() as number
+    for (let j = 0; j < adj[u].length; j++) {
+      const v = adj[u][j]
+      if (v === from[u]) {
+        continue // the edge we came along
+      }
+      if (visited[v]) {
+        return false // a second way to reach v: a cycle
+      }
+      visited[v] = true
+      from[v] = u
+      seen++
       stack.push(v)
     }
   }
-  return visited === n
+  return seen === n
 }

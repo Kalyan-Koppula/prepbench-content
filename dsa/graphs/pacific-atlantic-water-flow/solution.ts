@@ -1,42 +1,65 @@
-function pacificAtlantic(heights: number[][]): number[][] {
-  const m = heights.length
-  const n = heights[0].length
-
-  // Every cell reachable by walking uphill from the given ocean-edge cells.
-  const climb = (starts: number[][]): boolean[][] => {
-    const seen = heights.map((row) => row.map(() => false))
-    const stack: number[][] = []
-    for (const [r, c] of starts) {
-      if (seen[r][c]) continue
+// All cells reachable by walking uphill (or level) from the given starting cells.
+function climbFrom(heights: number[][], starts: number[]): boolean[][] {
+  const rows = heights.length
+  const cols = heights[0].length
+  const dr = [1, -1, 0, 0]
+  const dc = [0, 0, 1, -1]
+  const seen: boolean[][] = []
+  for (let r = 0; r < rows; r++) {
+    seen.push(new Array(cols).fill(false))
+  }
+  const stack: number[] = []
+  for (let i = 0; i < starts.length; i++) {
+    const r = Math.floor(starts[i] / cols)
+    const c = starts[i] % cols
+    if (!seen[r][c]) {
       seen[r][c] = true
-      stack.push([r, c])
+      stack.push(starts[i])
     }
-    while (stack.length) {
-      const [r, c] = stack.pop()!
-      for (const [nr, nc] of [[r + 1, c], [r - 1, c], [r, c + 1], [r, c - 1]]) {
-        if (nr < 0 || nc < 0 || nr >= m || nc >= n || seen[nr][nc]) continue
-        if (heights[nr][nc] < heights[r][c]) continue
-        seen[nr][nc] = true
-        stack.push([nr, nc])
+  }
+  while (stack.length > 0) {
+    const cell = stack.pop() as number
+    const r = Math.floor(cell / cols)
+    const c = cell % cols
+    for (let d = 0; d < 4; d++) {
+      const nr = r + dr[d]
+      const nc = c + dc[d]
+      if (nr < 0 || nc < 0 || nr >= rows || nc >= cols || seen[nr][nc]) {
+        continue
+      }
+      // Water flows from the neighbour down to us only if it is at least as high.
+      if (heights[nr][nc] < heights[r][c]) {
+        continue
+      }
+      seen[nr][nc] = true
+      stack.push(nr * cols + nc)
+    }
+  }
+  return seen
+}
+
+function pacificAtlantic(heights: number[][]): number[][] {
+  const rows = heights.length
+  const cols = heights[0].length
+  const pacificEdge: number[] = []
+  const atlanticEdge: number[] = []
+  for (let r = 0; r < rows; r++) {
+    pacificEdge.push(r * cols) // left column
+    atlanticEdge.push(r * cols + cols - 1) // right column
+  }
+  for (let c = 0; c < cols; c++) {
+    pacificEdge.push(c) // top row
+    atlanticEdge.push((rows - 1) * cols + c) // bottom row
+  }
+  const pacific = climbFrom(heights, pacificEdge)
+  const atlantic = climbFrom(heights, atlanticEdge)
+  const result: number[][] = []
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (pacific[r][c] && atlantic[r][c]) {
+        result.push([r, c])
       }
     }
-    return seen
   }
-
-  const pacificEdge: number[][] = []
-  const atlanticEdge: number[][] = []
-  for (let r = 0; r < m; r++) {
-    pacificEdge.push([r, 0])
-    atlanticEdge.push([r, n - 1])
-  }
-  for (let c = 0; c < n; c++) {
-    pacificEdge.push([0, c])
-    atlanticEdge.push([m - 1, c])
-  }
-  const pac = climb(pacificEdge)
-  const atl = climb(atlanticEdge)
-
-  const result: number[][] = []
-  for (let r = 0; r < m; r++) for (let c = 0; c < n; c++) if (pac[r][c] && atl[r][c]) result.push([r, c])
   return result
 }

@@ -1,20 +1,32 @@
 function countComponents(n: number, edges: number[][]): number {
-  const adj: number[][] = Array.from({ length: n }, () => [])
-  for (const [a, b] of edges) {
-    adj[a].push(b)
-    adj[b].push(a)
+  // Adjacency lists plus DFS from every unvisited node.
+  const adj: number[][] = []
+  for (let i = 0; i < n; i++) {
+    adj.push([])
   }
-  const seen = new Array(n).fill(false)
-  let count = 0
-  for (let s = 0; s < n; s++) {
-    if (seen[s]) continue
-    count++
-    seen[s] = true
-    const stack = [s]
-    while (stack.length) {
-      const u = stack.pop()!
-      for (const v of adj[u]) if (!seen[v]) (seen[v] = true), stack.push(v)
+  for (let i = 0; i < edges.length; i++) {
+    adj[edges[i][0]].push(edges[i][1])
+    adj[edges[i][1]].push(edges[i][0])
+  }
+  const visited = new Array(n).fill(false)
+  let components = 0
+  for (let start = 0; start < n; start++) {
+    if (visited[start]) {
+      continue
+    }
+    components++
+    visited[start] = true
+    const stack: number[] = [start]
+    while (stack.length > 0) {
+      const u = stack.pop() as number
+      for (let j = 0; j < adj[u].length; j++) {
+        const v = adj[u][j]
+        if (!visited[v]) {
+          visited[v] = true
+          stack.push(v)
+        }
+      }
     }
   }
-  return count
+  return components
 }

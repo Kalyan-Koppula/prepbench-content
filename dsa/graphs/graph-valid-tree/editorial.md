@@ -1,22 +1,54 @@
-**Key insight:** a graph on `n` nodes is a tree ⇔ it has exactly `n - 1` edges **and** is connected (⇔ `n - 1` edges and acyclic). Check the edge count first, then any one of the other two.
+**Key idea:** a graph on `n` nodes is a tree exactly when it has `n − 1` edges and no cycle (equivalently, `n − 1` edges and connected). Check the edge count first, then add edges with union-find: if an edge joins two nodes that are already connected, it creates a cycle.
 
-## Approach (union-find)
+## Recognising the pattern
 
-1. If `edges.length !== n - 1`, return `false` — too few edges can't connect everything; too many must create a cycle.
-2. Union the endpoints of each edge. If an edge's endpoints already share a root, it closes a cycle → `false`.
-3. Otherwise return `true`: `n - 1` edges with no cycle form a single tree.
+"Is it a tree?" combines two graph facts from the [Graphs](/problems/patterns/graphs) sheet: trees have exactly `n − 1` edges, and union-find detects cycles in undirected graphs as edges arrive.
+
+## Alternative: DFS from one node (shown below)
+
+DFS from node 0, remembering the node each one was reached from. Meeting an already-visited node other than the one you came from means a cycle. At the end, every node must have been visited. That is the reference brute force below. Same `O(V + E)`.
+
+## Union-find with an edge count
+
+1. If the number of edges isn't `n − 1`, return `false`.
+2. For each edge, find both roots. If they are equal, the edge closes a cycle: return `false`. Otherwise union them.
+3. Return `true`.
+
+**Why no connectivity check is needed.** Starting from `n` separate nodes, each edge that doesn't close a cycle merges two components. After `n − 1` such edges there is exactly one component left.
+
+## Walkthrough
+
+`n = 5`, `edges = [[0, 1], [0, 2], [0, 3], [1, 4]]`: 4 edges, which is `n − 1`.
+
+| edge | roots before | result |
+| --- | --- | --- |
+| [0, 1] | 0, 1 | merge |
+| [0, 2] | 1, 2 | merge |
+| [0, 3] | 2, 3 | merge |
+| [1, 4] | 3, 4 | merge |
+
+No cycle, so `true`. With `[[0,1],[1,2],[2,3],[1,3],[1,4]]` there are 5 edges, already too many: `false`.
 
 ## Complexity
 
-- Time `O(V + E · α(V))`.
-- Space `O(V)`.
+- Union-find: time `O(V + E · α(V))`, space `O(V)`.
+- DFS: time `O(V + E)`, space `O(V + E)`.
 
-## Alternatives to mention
+## Edge cases
 
-- **DFS/BFS from node 0** tracking each node's parent: seeing a visited node that isn't your parent is a cycle; afterwards check that all `n` nodes were visited. `O(V + E)`.
+- `n = 1` with no edges: a tree.
+- `n − 1` edges but disconnected: impossible without a cycle somewhere, which union-find catches.
+- Duplicate edges: they form a cycle of length 2.
 
-## Pitfalls
+## Common mistakes
 
-- Checking only "no cycle" accepts a forest, e.g. `n = 4` with edges `[[0,1],[2,3]]`. Checking only the edge count accepts a triangle plus an isolated node.
-- In undirected DFS, the edge back to your parent is not a cycle.
-- `n = 1` with no edges is a valid tree.
+- Checking only for cycles, so a forest of separate trees passes.
+- Checking only connectivity, so extra edges pass.
+- In DFS, treating the edge back to the parent as a cycle.
+
+## In the interview
+
+- State the two conditions first; the edge-count shortcut impresses.
+- Likely follow-ups:
+  - *Which edge to remove to make a tree?* The edge that closes the cycle (Redundant Connection).
+  - *Directed version (a rooted tree)?* Every node but the root has in-degree 1, and there is no cycle.

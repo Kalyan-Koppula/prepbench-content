@@ -1,18 +1,24 @@
 function isBipartite(graph: number[][]): boolean {
   const n = graph.length
-  const color = new Array(n).fill(-1)
+  const side = new Array(n).fill(-1) // -1 = not coloured yet, otherwise 0 or 1
+  // The graph may be disconnected, so start a BFS from every uncoloured node.
   for (let start = 0; start < n; start++) {
-    if (color[start] !== -1) continue
-    color[start] = 0
-    const queue = [start]
-    for (let head = 0; head < queue.length; head++) {
+    if (side[start] !== -1) {
+      continue
+    }
+    side[start] = 0
+    const queue: number[] = [start]
+    let head = 0
+    while (head < queue.length) {
       const u = queue[head]
-      for (const v of graph[u]) {
-        if (color[v] === -1) {
-          color[v] = 1 - color[u]
+      head++
+      for (let j = 0; j < graph[u].length; j++) {
+        const v = graph[u][j]
+        if (side[v] === -1) {
+          side[v] = 1 - side[u] // neighbours go on the other side
           queue.push(v)
-        } else if (color[v] === color[u]) {
-          return false
+        } else if (side[v] === side[u]) {
+          return false // an edge inside one side: an odd cycle
         }
       }
     }

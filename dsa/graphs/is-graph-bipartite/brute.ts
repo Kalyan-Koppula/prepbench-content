@@ -1,14 +1,30 @@
-function isBipartite(graph: number[][]): boolean {
-  // All neighbours of u must land on the same side, opposite to u.
-  const parent = graph.map((_, i) => i)
-  const find = (x: number): number => {
-    while (parent[x] !== x) x = parent[x] = parent[parent[x]]
-    return x
+function findRoot(parent: number[], x: number): number {
+  while (parent[x] !== x) {
+    parent[x] = parent[parent[x]]
+    x = parent[x]
   }
-  for (let u = 0; u < graph.length; u++) {
-    for (const v of graph[u]) {
-      if (find(u) === find(v)) return false
-      parent[find(v)] = find(graph[u][0])
+  return x
+}
+
+function isBipartite(graph: number[][]): boolean {
+  // Union-find: all neighbours of u must end up on one side together,
+  // and u must never share a set with any of them.
+  const n = graph.length
+  const parent: number[] = []
+  for (let i = 0; i < n; i++) {
+    parent.push(i)
+  }
+  for (let u = 0; u < n; u++) {
+    for (let j = 0; j < graph[u].length; j++) {
+      const v = graph[u][j]
+      if (findRoot(parent, u) === findRoot(parent, v)) {
+        return false
+      }
+      const a = findRoot(parent, graph[u][0])
+      const b = findRoot(parent, v)
+      if (a !== b) {
+        parent[b] = a
+      }
     }
   }
   return true

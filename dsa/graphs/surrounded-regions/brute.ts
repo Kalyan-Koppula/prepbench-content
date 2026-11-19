@@ -1,23 +1,43 @@
 function solve(board: string[][]): void {
-  const m = board.length
-  const n = board[0].length
-  const seen = board.map((row) => row.map(() => false))
-  for (let r = 0; r < m; r++)
-    for (let c = 0; c < n; c++) {
-      if (board[r][c] !== 'O' || seen[r][c]) continue
-      // Collect the whole region, noting whether any cell is on the border.
-      const region: number[][] = [[r, c]]
+  // Find each region of 'O's from the inside, note whether it touches the
+  // border, and capture it if it doesn't.
+  const rows = board.length
+  const cols = board[0].length
+  const dr = [1, -1, 0, 0]
+  const dc = [0, 0, 1, -1]
+  const seen: boolean[][] = []
+  for (let r = 0; r < rows; r++) {
+    seen.push(new Array(cols).fill(false))
+  }
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (board[r][c] !== 'O' || seen[r][c]) {
+        continue
+      }
+      const region: number[] = [r * cols + c]
       seen[r][c] = true
-      let escapes = false
+      let touchesBorder = false
       for (let i = 0; i < region.length; i++) {
-        const [cr, cc] = region[i]
-        if (cr === 0 || cc === 0 || cr === m - 1 || cc === n - 1) escapes = true
-        for (const [nr, nc] of [[cr + 1, cc], [cr - 1, cc], [cr, cc + 1], [cr, cc - 1]]) {
-          if (nr < 0 || nc < 0 || nr >= m || nc >= n || seen[nr][nc] || board[nr][nc] !== 'O') continue
+        const cr = Math.floor(region[i] / cols)
+        const cc = region[i] % cols
+        if (cr === 0 || cc === 0 || cr === rows - 1 || cc === cols - 1) {
+          touchesBorder = true
+        }
+        for (let d = 0; d < 4; d++) {
+          const nr = cr + dr[d]
+          const nc = cc + dc[d]
+          if (nr < 0 || nc < 0 || nr >= rows || nc >= cols || seen[nr][nc] || board[nr][nc] !== 'O') {
+            continue
+          }
           seen[nr][nc] = true
-          region.push([nr, nc])
+          region.push(nr * cols + nc)
         }
       }
-      if (!escapes) for (const [cr, cc] of region) board[cr][cc] = 'X'
+      if (!touchesBorder) {
+        for (let i = 0; i < region.length; i++) {
+          board[Math.floor(region[i] / cols)][region[i] % cols] = 'X'
+        }
+      }
     }
+  }
 }

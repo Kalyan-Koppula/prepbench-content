@@ -1,19 +1,36 @@
-function ladderLength(beginWord: string, endWord: string, wordList: string[]): number {
-  const oneApart = (a: string, b: string) => {
-    let diff = 0
-    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) diff++
-    return diff === 1
-  }
-  const dist = new Map<string, number>([[beginWord, 1]])
-  const queue = [beginWord]
-  for (let h = 0; h < queue.length; h++) {
-    const w = queue[h]
-    if (w === endWord) return dist.get(w)!
-    for (const v of wordList) {
-      if (dist.has(v) || !oneApart(w, v)) continue
-      dist.set(v, dist.get(w)! + 1)
-      queue.push(v)
+function differsByOne(a: string, b: string): boolean {
+  let diff = 0
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
+      diff++
+      if (diff > 1) {
+        return false
+      }
     }
+  }
+  return diff === 1
+}
+
+function ladderLength(beginWord: string, endWord: string, wordList: string[]): number {
+  // BFS where each step compares the word with every dictionary word: O(N^2 * L).
+  const used = new Array(wordList.length).fill(false)
+  let level: string[] = [beginWord]
+  let words = 1
+  while (level.length > 0) {
+    const next: string[] = []
+    for (let i = 0; i < level.length; i++) {
+      if (level[i] === endWord) {
+        return words
+      }
+      for (let j = 0; j < wordList.length; j++) {
+        if (!used[j] && differsByOne(level[i], wordList[j])) {
+          used[j] = true
+          next.push(wordList[j])
+        }
+      }
+    }
+    level = next
+    words++
   }
   return 0
 }

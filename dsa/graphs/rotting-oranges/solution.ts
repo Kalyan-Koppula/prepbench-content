@@ -1,27 +1,39 @@
 function orangesRotting(grid: number[][]): number {
-  const m = grid.length
-  const n = grid[0].length
-  let queue: number[][] = []
+  const rows = grid.length
+  const cols = grid[0].length
+  const dr = [1, -1, 0, 0]
+  const dc = [0, 0, 1, -1]
+  // Multi-source BFS: every rotten orange starts in the first wave.
+  let wave: number[] = []
   let fresh = 0
-  for (let r = 0; r < m; r++)
-    for (let c = 0; c < n; c++) {
-      if (grid[r][c] === 2) queue.push([r, c])
-      else if (grid[r][c] === 1) fresh++
-    }
-
-  let minutes = 0
-  while (queue.length && fresh > 0) {
-    const next: number[][] = []
-    for (const [r, c] of queue) {
-      for (const [nr, nc] of [[r + 1, c], [r - 1, c], [r, c + 1], [r, c - 1]]) {
-        if (nr < 0 || nc < 0 || nr >= m || nc >= n || grid[nr][nc] !== 1) continue
-        grid[nr][nc] = 2
-        fresh--
-        next.push([nr, nc])
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c] === 2) {
+        wave.push(r * cols + c)
+      } else if (grid[r][c] === 1) {
+        fresh++
       }
     }
-    queue = next
-    minutes++
+  }
+  let minutes = 0
+  while (wave.length > 0 && fresh > 0) {
+    const next: number[] = []
+    for (let i = 0; i < wave.length; i++) {
+      const r = Math.floor(wave[i] / cols)
+      const c = wave[i] % cols
+      for (let d = 0; d < 4; d++) {
+        const nr = r + dr[d]
+        const nc = c + dc[d]
+        if (nr < 0 || nc < 0 || nr >= rows || nc >= cols || grid[nr][nc] !== 1) {
+          continue
+        }
+        grid[nr][nc] = 2
+        fresh--
+        next.push(nr * cols + nc)
+      }
+    }
+    wave = next
+    minutes++ // one wave = one minute
   }
   return fresh === 0 ? minutes : -1
 }

@@ -1,20 +1,38 @@
 function orangesRotting(grid: number[][]): number {
-  const m = grid.length
-  const n = grid[0].length
+  // Simulate minute by minute, rescanning the whole grid each minute.
+  const rows = grid.length
+  const cols = grid[0].length
   let minutes = 0
-  for (;;) {
-    const toRot: number[][] = []
-    for (let r = 0; r < m; r++)
-      for (let c = 0; c < n; c++) {
-        if (grid[r][c] !== 1) continue
-        const near = [[r + 1, c], [r - 1, c], [r, c + 1], [r, c - 1]].some(
-          ([nr, nc]) => nr >= 0 && nc >= 0 && nr < m && nc < n && grid[nr][nc] === 2,
-        )
-        if (near) toRot.push([r, c])
+  while (true) {
+    const toRotRows: number[] = []
+    const toRotCols: number[] = []
+    let fresh = 0
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (grid[r][c] !== 1) {
+          continue
+        }
+        fresh++
+        const nearRotten =
+          (r > 0 && grid[r - 1][c] === 2) ||
+          (r < rows - 1 && grid[r + 1][c] === 2) ||
+          (c > 0 && grid[r][c - 1] === 2) ||
+          (c < cols - 1 && grid[r][c + 1] === 2)
+        if (nearRotten) {
+          toRotRows.push(r)
+          toRotCols.push(c)
+        }
       }
-    if (toRot.length === 0) break
-    for (const [r, c] of toRot) grid[r][c] = 2
+    }
+    if (fresh === 0) {
+      return minutes
+    }
+    if (toRotRows.length === 0) {
+      return -1 // fresh oranges remain but none can rot
+    }
+    for (let i = 0; i < toRotRows.length; i++) {
+      grid[toRotRows[i]][toRotCols[i]] = 2
+    }
     minutes++
   }
-  return grid.some((row) => row.includes(1)) ? -1 : minutes
 }

@@ -1,22 +1,33 @@
-function countComponents(n: number, edges: number[][]): number {
-  const parent = Array.from({ length: n }, (_, i) => i)
-  const size = new Array(n).fill(1)
-  const find = (x: number): number => {
-    while (parent[x] !== x) {
-      parent[x] = parent[parent[x]] // path halving
-      x = parent[x]
-    }
-    return x
+function findRoot(parent: number[], x: number): number {
+  while (parent[x] !== x) {
+    parent[x] = parent[parent[x]] // path halving keeps the trees shallow
+    x = parent[x]
   }
+  return x
+}
 
+function countComponents(n: number, edges: number[][]): number {
+  // Union-find: start with n separate components; each merging edge removes one.
+  const parent: number[] = []
+  const size: number[] = []
+  for (let i = 0; i < n; i++) {
+    parent.push(i)
+    size.push(1)
+  }
   let components = n
-  for (const [a, b] of edges) {
-    let ra = find(a)
-    let rb = find(b)
-    if (ra === rb) continue
-    if (size[ra] < size[rb]) [ra, rb] = [rb, ra]
-    parent[rb] = ra
-    size[ra] += size[rb]
+  for (let i = 0; i < edges.length; i++) {
+    let a = findRoot(parent, edges[i][0])
+    let b = findRoot(parent, edges[i][1])
+    if (a === b) {
+      continue // already connected
+    }
+    if (size[a] < size[b]) {
+      const temp = a // attach the smaller tree under the larger one
+      a = b
+      b = temp
+    }
+    parent[b] = a
+    size[a] += size[b]
     components--
   }
   return components

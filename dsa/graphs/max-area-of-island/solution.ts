@@ -1,23 +1,36 @@
 function maxAreaOfIsland(grid: number[][]): number {
-  const m = grid.length
-  const n = grid[0].length
+  const rows = grid.length
+  const cols = grid[0].length
+  const dr = [1, -1, 0, 0]
+  const dc = [0, 0, 1, -1]
   let best = 0
-  for (let r = 0; r < m; r++) {
-    for (let c = 0; c < n; c++) {
-      if (grid[r][c] !== 1) continue
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c] !== 1) {
+        continue
+      }
+      // Flood the island, counting its cells and sinking them as we go.
       grid[r][c] = 0
-      const stack: number[][] = [[r, c]]
+      const stack: number[] = [r * cols + c]
       let area = 0
-      while (stack.length) {
-        const [cr, cc] = stack.pop()!
+      while (stack.length > 0) {
+        const cell = stack.pop() as number
         area++
-        for (const [nr, nc] of [[cr + 1, cc], [cr - 1, cc], [cr, cc + 1], [cr, cc - 1]]) {
-          if (nr < 0 || nc < 0 || nr >= m || nc >= n || grid[nr][nc] !== 1) continue
+        const cr = Math.floor(cell / cols)
+        const cc = cell % cols
+        for (let d = 0; d < 4; d++) {
+          const nr = cr + dr[d]
+          const nc = cc + dc[d]
+          if (nr < 0 || nc < 0 || nr >= rows || nc >= cols || grid[nr][nc] !== 1) {
+            continue
+          }
           grid[nr][nc] = 0
-          stack.push([nr, nc])
+          stack.push(nr * cols + nc)
         }
       }
-      best = Math.max(best, area)
+      if (area > best) {
+        best = area
+      }
     }
   }
   return best

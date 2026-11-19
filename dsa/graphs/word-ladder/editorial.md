@@ -1,26 +1,60 @@
-**Key insight:** shortest path in an unweighted graph of words → BFS. The trick is finding neighbours fast: a word's one-letter neighbours are exactly the words sharing one of its wildcard patterns (`cold` → `*old`, `c*ld`, `co*d`, `col*`).
+**Key idea:** treat every word as a node, with an edge between words that differ in one letter. The shortest ladder is a shortest path, so use BFS from `beginWord`. To find a word's neighbours quickly, try every single-letter change (word length × 26 candidates) and look each one up in a set, rather than comparing against every dictionary word.
 
-## Approach
+## Recognising the pattern
 
-1. If `endWord` isn't in `wordList`, return `0`.
-2. Build `pattern → words` buckets for every word in the list (`L` patterns per word).
-3. BFS from `beginWord` with `steps = 1`. For each word popped, generate its patterns; every unvisited word in those buckets is enqueued at `steps + 1`. Return `steps + 1` when you reach `endWord`.
-4. After expanding a bucket, clear it — every word in it is now visited, so scanning it again is wasted work.
-5. Queue empties → `0`.
+"Fewest transformation steps" in an unweighted graph is BFS, the core of the [Graphs](/problems/patterns/graphs) sheet. The graph is never built explicitly; neighbours are generated on demand.
+
+## Brute force
+
+BFS where, to expand a word, you compare it with every dictionary word to see whether they differ by one letter. That is the reference brute force below. Each expansion is `O(N · L)`, so the whole search is `O(N² · L)` for `N` words of length `L`. With 5,000 words, that is over 100 million comparisons.
+
+## BFS with generated neighbours
+
+1. Put the dictionary in a set. If `endWord` isn't in it, return 0.
+2. BFS by levels, starting from `[beginWord]` with `words = 1`.
+3. For each word in the current level, for each position and each letter `a`–`z`, build the candidate word. If it is in the set:
+   - If it is `endWord`, return `words + 1`.
+   - Otherwise remove it from the set (marking it visited) and add it to the next level.
+4. After each level, `words++`. If the levels run out, return 0.
+
+Removing visited words from the set means each word is expanded at most once and keeps later lookups from finding it again.
+
+**Pattern buckets** are an alternative: map patterns like `h*t` to the words that match them, so neighbours share a bucket. Same idea, different bookkeeping.
+
+## Walkthrough
+
+`beginWord = "hit"`, `endWord = "cog"`, `wordList = ["hot", "dot", "dog", "lot", "log", "cog"]`
+
+| words so far | level | next level |
+| --- | --- | --- |
+| 1 | hit | hot |
+| 2 | hot | dot, lot |
+| 3 | dot, lot | dog, log |
+| 4 | dog, log | cog found |
+
+Answer `5`: `hit → hot → dot → dog → cog`.
 
 ## Complexity
 
-- Time `O(n · L²)` — `n · L` patterns, each built in `O(L)`.
-- Space `O(n · L²)` — the buckets.
+- Compare with every word: time `O(N² · L)`, space `O(N)`.
+- Generated neighbours: time `O(N · L · 26 · L)`: each word is expanded once, producing `26L` candidates that each cost `O(L)` to build and hash. Space `O(N · L)` for the set and the queue.
 
-## Alternatives to mention
+## Edge cases
 
-- **Try all 26 letters** at each position and look the result up in a `Set`: `O(n · 26 · L²)`, no buckets needed. Often what interviewers expect.
-- **Bidirectional BFS:** expand from both ends, always growing the smaller frontier. Same worst case but much faster in practice.
-- Pairwise comparison to build edges: `O(n² · L)` — too slow at `n = 5000`.
+- `endWord` not in the list: 0 immediately.
+- `beginWord` equal to `endWord`: by the statement's counting, a ladder needs at least one step; check the problem's convention.
+- No path: the BFS runs out, return 0.
 
-## Pitfalls
+## Common mistakes
 
-- The answer counts **words**, not transformations — `hot → dot` is length `2`.
-- Mark words visited when enqueuing, not when dequeuing.
-- `beginWord` may or may not be in the list; it must not be returned to later either way.
+- Marking words visited when dequeued instead of when enqueued, which adds duplicates to the queue.
+- Counting steps instead of words (off by one).
+- DFS, which finds a ladder but not the shortest.
+
+## In the interview
+
+- Say it's a shortest path in an implicit graph, then discuss how to generate neighbours efficiently.
+- Mention bidirectional BFS: search from both ends and stop when they meet, which explores far fewer words.
+- Likely follow-ups:
+  - *Return all shortest ladders (Word Ladder II)?* BFS to build parent links per level, then DFS back from the end.
+  - *Minimum genetic mutation?* The same BFS over a 4-letter alphabet.
