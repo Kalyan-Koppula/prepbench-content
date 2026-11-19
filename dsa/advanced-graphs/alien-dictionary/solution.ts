@@ -1,34 +1,69 @@
 function alienOrder(words: string[]): string {
-  const after = new Map<string, Set<string>>() // letter -> letters that must come after it
-  const indegree = new Map<string, number>()
-  for (const w of words)
-    for (const ch of w) {
-      if (!after.has(ch)) after.set(ch, new Set())
-      indegree.set(ch, 0)
+  // Letters are indices 0..25. after[a][b]: a must come before b.
+  const present = new Array(26).fill(false)
+  for (let i = 0; i < words.length; i++) {
+    for (let j = 0; j < words[i].length; j++) {
+      present[words[i].charCodeAt(j) - 97] = true
     }
+  }
+  const after: boolean[][] = []
+  for (let a = 0; a < 26; a++) {
+    after.push(new Array(26).fill(false))
+  }
+  const incoming = new Array(26).fill(0)
 
+  // Each adjacent pair of words gives at most one rule: their first difference.
   for (let i = 0; i + 1 < words.length; i++) {
     const a = words[i]
     const b = words[i + 1]
     let j = 0
-    while (j < a.length && j < b.length && a[j] === b[j]) j++
+    while (j < a.length && j < b.length && a[j] === b[j]) {
+      j++
+    }
     if (j === a.length || j === b.length) {
-      if (a.length > b.length) return '' // a longer word sits before its own prefix
+      if (a.length > b.length) {
+        return '' // a longer word listed before its own prefix: impossible
+      }
       continue
     }
-    if (!after.get(a[j])!.has(b[j])) {
-      after.get(a[j])!.add(b[j])
-      indegree.set(b[j], indegree.get(b[j])! + 1)
+    const x = a.charCodeAt(j) - 97
+    const y = b.charCodeAt(j) - 97
+    if (!after[x][y]) {
+      after[x][y] = true
+      incoming[y]++
     }
   }
 
-  const order: string[] = []
-  for (const [ch, deg] of indegree) if (deg === 0) order.push(ch)
-  for (let head = 0; head < order.length; head++) {
-    for (const next of after.get(order[head])!) {
-      indegree.set(next, indegree.get(next)! - 1)
-      if (indegree.get(next) === 0) order.push(next)
+  // Kahn's topological sort over the letters that appear.
+  const order: number[] = []
+  let letters = 0
+  for (let c = 0; c < 26; c++) {
+    if (present[c]) {
+      letters++
+      if (incoming[c] === 0) {
+        order.push(c)
+      }
     }
   }
-  return order.length === indegree.size ? order.join('') : ''
+  let head = 0
+  while (head < order.length) {
+    const c = order[head]
+    head++
+    for (let d = 0; d < 26; d++) {
+      if (after[c][d]) {
+        incoming[d]--
+        if (incoming[d] === 0) {
+          order.push(d)
+        }
+      }
+    }
+  }
+  if (order.length < letters) {
+    return '' // a cycle: the rules contradict each other
+  }
+  let result = ''
+  for (let i = 0; i < order.length; i++) {
+    result += String.fromCharCode(97 + order[i])
+  }
+  return result
 }

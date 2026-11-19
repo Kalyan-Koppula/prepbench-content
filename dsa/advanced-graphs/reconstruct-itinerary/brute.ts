@@ -1,23 +1,37 @@
 function findItinerary(tickets: string[][]): string[] {
-  const sorted = tickets.slice().sort((a, b) => (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0))
-  const used = new Array(sorted.length).fill(false)
-  const route = ['JFK']
-  // Try destinations in alphabetical order; the first full route found is the smallest.
-  const dfs = (): boolean => {
-    if (route.length === sorted.length + 1) return true
-    const at = route[route.length - 1]
-    let tried = ''
-    for (let i = 0; i < sorted.length; i++) {
-      if (used[i] || sorted[i][0] !== at || sorted[i][1] === tried) continue
-      tried = sorted[i][1]
-      used[i] = true
-      route.push(sorted[i][1])
-      if (dfs()) return true
+  // Backtracking: try destinations in alphabetical order, each ticket once.
+  // The first complete route found is the smallest. Exponential in the worst case.
+  const order: number[] = []
+  for (let i = 0; i < tickets.length; i++) {
+    order.push(i)
+  }
+  order.sort((a, b) => (tickets[a][1] < tickets[b][1] ? -1 : tickets[a][1] > tickets[b][1] ? 1 : 0))
+  const used = new Array(tickets.length).fill(false)
+  const route: string[] = ['JFK']
+
+  function explore(): boolean {
+    if (route.length === tickets.length + 1) {
+      return true
+    }
+    const here = route[route.length - 1]
+    let previous = ''
+    for (let k = 0; k < order.length; k++) {
+      const t = order[k]
+      if (used[t] || tickets[t][0] !== here || tickets[t][1] === previous) {
+        continue // skip identical duplicate tickets at this step
+      }
+      previous = tickets[t][1]
+      used[t] = true
+      route.push(tickets[t][1])
+      if (explore()) {
+        return true
+      }
       route.pop()
-      used[i] = false
+      used[t] = false
     }
     return false
   }
-  dfs()
+
+  explore()
   return route
 }

@@ -1,22 +1,59 @@
-**Key insight:** the sorted list encodes "letter `a` comes before letter `b`" facts — one per adjacent pair of words, at their first difference. Collect those edges and topologically sort the letters; a cycle means the list is inconsistent.
+**Key idea:** a sorted word list reveals letter order through **adjacent pairs**: the first position where two neighbouring words differ says that letter comes before the other. Collect those rules as edges between letters, then topologically sort the letters. A cycle, or a longer word listed before its own prefix, means no order exists.
 
-## Approach
+## Recognising the pattern
 
-1. Register every letter that appears anywhere (indegree `0`), so letters with no constraints still appear in the output.
-2. For each adjacent pair `w1, w2`: find the first index where they differ and add edge `w1[i] → w2[i]` (skip if that edge already exists, so indegrees aren't double counted). If there's no difference and `w1` is longer than `w2`, the list is invalid → `""`.
-3. Kahn's algorithm over the letters. If fewer letters are output than exist, there's a cycle → `""`.
+Deriving an order from comparisons is building a dependency graph and topologically sorting it, from the [Advanced Graphs](/problems/patterns/advanced-graphs) sheet. The graph has at most 26 nodes; the work is extracting the edges correctly.
+
+## Alternative: DFS topological sort (shown below)
+
+Build the same edges, then DFS with three colours: finding a letter already on the current path means a cycle. Letters in reverse finishing order form a valid alphabet. That is the reference brute force below; it is equally efficient.
+
+## Building rules, then Kahn's algorithm
+
+1. Mark every letter that appears in any word.
+2. For each adjacent pair `a`, `b`:
+   1. Find the first index `j` where they differ.
+   2. If there is none and `a` is longer than `b`, the list is invalid (a word can't come before its own prefix): return `""`.
+   3. Otherwise add the rule `a[j] → b[j]` (once).
+3. Kahn's algorithm over the present letters: start with letters that have no incoming rules; taking a letter releases letters whose last incoming rule it was.
+4. If not every letter was taken, the rules contain a cycle: return `""`.
+
+**Only adjacent pairs and only the first difference.** Letters after the first difference say nothing: `"abz"` before `"acb"` tells you `b < c`, but nothing about `z` and `b`. Non-adjacent pairs add no information that the adjacent ones don't already imply.
+
+## Walkthrough
+
+`words = ["wrt", "wrf", "er", "ett", "rftt"]`
+
+| pair | first difference | rule |
+| --- | --- | --- |
+| wrt, wrf | t vs f | t → f |
+| wrf, er | w vs e | w → e |
+| er, ett | r vs t | r → t |
+| ett, rftt | e vs r | e → r |
+
+Rules form the chain `w → e → r → t → f`. Answer `"wertf"`.
 
 ## Complexity
 
-With `C` total characters across all words:
+- Time `O(C)` where `C` is the total number of characters in all words (to extract rules), plus `O(26²)` for the sort. Space `O(26²)`.
 
-- Time `O(C)` — one scan for letters, one comparison per adjacent pair, and a topological sort over at most 26 letters and 26² edges.
-- Space `O(1)` — bounded by the alphabet size (26 nodes, ≤ 676 edges).
+## Edge cases
 
-## Pitfalls
+- One word: any order of its letters is valid.
+- A word followed by its own prefix, like `["abc", "ab"]`: invalid, `""`.
+- Letters that appear but are never compared: they can go anywhere, typically first.
+- Contradictory rules (`a → b` and `b → a`): a cycle, `""`.
 
-- Comparing letters **after** the first difference — they carry no information.
-- The prefix case: `["abc", "ab"]` is impossible, not "no constraints".
-- Forgetting letters that never appear in any constraint.
-- Duplicate edges inflate indegrees and make Kahn's algorithm report a false cycle — dedupe them.
-- Comparing every pair of words (not just adjacent ones) is redundant: the adjacent constraints imply the rest.
+## Common mistakes
+
+- Adding rules from every pair of positions instead of only the first difference.
+- Forgetting letters that never appear in a rule.
+- Missing the prefix check.
+- Counting a repeated rule twice in the in-degree.
+
+## In the interview
+
+- Explain what one adjacent pair tells you and why later positions don't matter.
+- Likely follow-ups:
+  - *Verify a given order (Verifying an Alien Dictionary)?* Map letters to ranks and compare adjacent words.
+  - *Is the order unique?* It is unique exactly when Kahn's ready list never holds more than one letter.

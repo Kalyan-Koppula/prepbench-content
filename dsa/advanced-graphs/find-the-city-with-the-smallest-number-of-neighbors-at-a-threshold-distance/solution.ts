@@ -1,22 +1,41 @@
 function findTheCity(n: number, edges: number[][], distanceThreshold: number): number {
-  const dist = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 0 : Infinity)))
-  for (const [u, v, w] of edges) {
+  // dist[i][j]: shortest known distance between cities i and j.
+  const dist: number[][] = []
+  for (let i = 0; i < n; i++) {
+    const row = new Array(n).fill(Infinity)
+    row[i] = 0
+    dist.push(row)
+  }
+  for (let e = 0; e < edges.length; e++) {
+    const u = edges[e][0]
+    const v = edges[e][1]
+    const w = edges[e][2]
     dist[u][v] = w
     dist[v][u] = w
   }
-  // Floyd–Warshall: allow cities 0..k as intermediate stops.
-  for (let k = 0; k < n; k++)
-    for (let i = 0; i < n; i++)
-      for (let j = 0; j < n; j++) if (dist[i][k] + dist[k][j] < dist[i][j]) dist[i][j] = dist[i][k] + dist[k][j]
-
+  // Floyd-Warshall: after step k, paths may pass through cities 0..k.
+  for (let k = 0; k < n; k++) {
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        if (dist[i][k] + dist[k][j] < dist[i][j]) {
+          dist[i][j] = dist[i][k] + dist[k][j]
+        }
+      }
+    }
+  }
   let bestCity = -1
   let bestCount = Infinity
   for (let i = 0; i < n; i++) {
     let count = 0
-    for (let j = 0; j < n; j++) if (j !== i && dist[i][j] <= distanceThreshold) count++
+    for (let j = 0; j < n; j++) {
+      if (j !== i && dist[i][j] <= distanceThreshold) {
+        count++
+      }
+    }
     if (count <= bestCount) {
+      // <= lets a later (larger) label win ties.
       bestCount = count
-      bestCity = i // `<=` lets a later (larger) label win ties
+      bestCity = i
     }
   }
   return bestCity

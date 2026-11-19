@@ -1,25 +1,58 @@
-**Key insight:** each node hears the signal at its shortest-path distance from `k`. Run Dijkstra from `k`; the answer is the maximum distance, or `-1` if any node is unreachable.
+**Key idea:** the time a node receives the signal is its shortest-path distance from `k`, with link times as edge weights. Run Dijkstra from `k`. Everyone has the signal when the farthest node gets it, so the answer is the largest distance, or −1 if some node is unreachable.
 
-## Approach
+## Recognising the pattern
 
-1. Build adjacency lists `u → [v, w]`.
-2. `dist[k] = 0`, others `Infinity`. Push `[0, k]` into a min-heap.
-3. Pop the closest `[d, u]`; skip it if `d > dist[u]` (a stale entry). Relax every edge `u → v`: if `d + w < dist[v]`, update and push.
-4. Answer `max(dist[1..n])`; if that is `Infinity`, return `-1`.
+Non-negative edge weights and "earliest time" from a single source: Dijkstra, the first tool in the [Advanced Graphs](/problems/patterns/advanced-graphs) sheet. Plain BFS doesn't work because links take different amounts of time.
+
+## Brute force
+
+Bellman-Ford: relax every link `n − 1` times (a shortest path uses at most `n − 1` links), stopping early if a round changes nothing. That is the reference brute force below. Time `O(n · E)`. Correct, and it would also handle negative weights, but it is slower than needed here.
+
+## Dijkstra
+
+1. Build adjacency lists of `[v, w]` pairs.
+2. `dist` = all ∞, `dist[k] = 0`. Push `[0, k]` into a min-heap.
+3. While the heap isn't empty:
+   1. Pop `[d, u]`. If `d > dist[u]`, it is a stale entry: skip it.
+   2. For each `[v, w]`: if `d + w < dist[v]`, update `dist[v]` and push `[dist[v], v]`.
+4. Answer: the maximum of `dist[1..n]`, or −1 if any is still ∞.
+
+**Why the first pop is final.** All weights are non-negative, so any other route to `u` passes through a node whose distance is at least `d` and can only add more. Nothing found later can beat `d`.
+
+## Walkthrough
+
+`times = [[2, 1, 1], [2, 3, 1], [3, 4, 1]]`, `n = 4`, `k = 2`
+
+| pop | relax | dist (1, 2, 3, 4) |
+| --- | --- | --- |
+| (0, 2) | 1 → 1, 3 → 1 | 1, 0, 1, ∞ |
+| (1, 1) | – | 1, 0, 1, ∞ |
+| (1, 3) | 4 → 2 | 1, 0, 1, 2 |
+| (2, 4) | – | 1, 0, 1, 2 |
+
+Largest distance `2`.
 
 ## Complexity
 
-- Time `O(E log V)` — each successful relaxation pushes one heap entry.
-- Space `O(V + E)` — graph plus heap.
+- Bellman-Ford: time `O(n · E)`, space `O(n)`.
+- Dijkstra with a binary heap: time `O((n + E) log n)`, space `O(n + E)`.
 
-## Alternatives to mention
+## Edge cases
 
-- **Bellman-Ford:** `n - 1` rounds relaxing every edge. `O(V · E)`; simpler and fine at these limits, and it handles negative weights.
-- **Floyd–Warshall:** overkill (all pairs) at `O(V³)`.
-- With `n ≤ 100`, an `O(V²)` array-based Dijkstra (scan for the closest unvisited node) is also acceptable and avoids a heap.
+- A node with no incoming links (other than `k`): unreachable, return −1.
+- `n = 1`: the answer is 0.
+- Zero-time links: allowed, and Dijkstra handles them.
 
-## Pitfalls
+## Common mistakes
 
-- Nodes are 1-indexed; size arrays `n + 1` and ignore index `0` when taking the max.
-- Links are directed — don't add the reverse edge.
-- `0`-weight edges are allowed; Dijkstra handles them as long as nothing is negative.
+- Treating links as undirected.
+- Not skipping stale heap entries, which repeats work.
+- Returning the sum of distances instead of the maximum.
+
+## In the interview
+
+- Name Dijkstra and explain why the weights must be non-negative.
+- Likely follow-ups:
+  - *Negative link times?* Bellman-Ford (and it detects negative cycles).
+  - *Many sources?* Push all of them at distance 0.
+  - *Dense graph, small `n`?* Dijkstra with an array instead of a heap, `O(n²)`.

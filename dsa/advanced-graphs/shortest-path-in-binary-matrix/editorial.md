@@ -1,24 +1,62 @@
-**Key insight:** unit-cost moves → BFS. The only twists are 8-directional neighbours and counting cells, not moves.
+**Key idea:** every move costs the same, so the shortest path is found by **BFS**. Moves go to any of the 8 surrounding open cells. BFS explores cells level by level; the level at which the bottom-right corner is first reached is the answer.
 
-## Approach
+## Recognising the pattern
 
-1. If `grid[0][0]` or `grid[n-1][n-1]` is blocked, return `-1`.
-2. BFS from `(0, 0)` with distance `1`. Mark cells visited when enqueuing (overwriting the grid cell with `1` works).
-3. For each popped cell, try all 8 offsets `dr, dc ∈ {-1, 0, 1}` except `(0, 0)`.
-4. Return the distance when the target is popped (or pushed); `-1` if the queue empties.
+Unweighted shortest path on a grid is the BFS template from the [Graphs](/problems/patterns/graphs) sheet. It sits in the [Advanced Graphs](/problems/patterns/advanced-graphs) ladder as the contrast case: no heap is needed when all edges cost 1.
+
+## Brute force
+
+Relax every open cell from its 8 neighbours repeatedly until no distance improves (Bellman-Ford on the grid). That is the reference brute force below. Correct, but each pass is `O(n²)` and many passes may be needed: up to `O(n⁴)`.
+
+## BFS by levels
+
+1. If the start or the end is blocked, return −1.
+2. Mark the start visited; `level = [start]`, `length = 1`.
+3. While the level isn't empty:
+   1. If the corner is in this level, return `length`.
+   2. Build the next level from every open, unvisited 8-neighbour, marking each when it is added.
+   3. `length++`.
+4. Return −1.
+
+Marking cells by setting them to 1 reuses the grid as the visited array; use a separate grid if the input must stay unchanged.
+
+## Walkthrough
+
+```
+0 0 0
+1 1 0
+1 1 0
+```
+
+| length | cells in level |
+| --- | --- |
+| 1 | (0,0) |
+| 2 | (0,1) |
+| 3 | (0,2), (1,2) |
+| 4 | (2,2) → reached |
+
+Answer `4`. The diagonal move from (0,1) to (1,2) gets there as fast as going right then down.
 
 ## Complexity
 
-- Time `O(n²)` — each cell enqueued once, 8 neighbours each.
-- Space `O(n²)` — the queue.
+- Repeated relaxation: up to `O(n⁴)`.
+- BFS: time `O(n²)`, each cell visited once with 8 checks. Space `O(n²)`.
 
-## Alternatives to mention
+## Edge cases
 
-- **A\*** with Chebyshev distance `max(|dr|, |dc|)` to the corner as the heuristic explores far fewer cells on open grids. Worth mentioning; same worst case.
-- DFS finds *a* path, not the shortest.
+- `n = 1` and the cell is open: answer 1.
+- Start or end blocked: −1.
+- No path around the walls: −1.
 
-## Pitfalls
+## Common mistakes
 
-- `n = 1` with an open cell: answer `1`.
-- Blocked start or end → `-1` before searching.
-- Counting moves instead of cells is off by one.
+- Only 4 directions instead of 8.
+- Counting moves instead of cells (off by one).
+- Forgetting to check whether the destination itself is blocked.
+
+## In the interview
+
+- Note that BFS is optimal because all moves cost the same; with weights you'd switch to Dijkstra.
+- Likely follow-ups:
+  - *Return the path?* Store each cell's parent and walk back from the end.
+  - *Faster in practice?* A* search with a distance heuristic, or bidirectional BFS.

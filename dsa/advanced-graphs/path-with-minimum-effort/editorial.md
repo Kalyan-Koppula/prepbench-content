@@ -1,23 +1,53 @@
-**Key insight:** this is a shortest-path problem where a route's cost is `max` of its steps instead of the sum. Because extending a route can never lower that max, Dijkstra still works — pop cells in order of their best-known effort.
+**Key idea:** a route's cost is its **largest** single step, not the sum. Dijkstra still works if you combine costs with `max` instead of `+`: the cost to reach a neighbour through `u` is `max(effort to u, step from u)`. The first time the target is popped from the heap, its effort is optimal.
 
-## Approach
+## Recognising the pattern
 
-1. `effort[r][c] = Infinity`, except `effort[0][0] = 0`. Push `[0, 0, 0]` (effort, row, col) into a min-heap.
-2. Pop the smallest; skip stale entries. If it's the target, return its effort — the first pop of the target is optimal.
-3. For each neighbour, `cand = max(effort, |h[next] - h[cur]|)`. If `cand` improves the neighbour, record it and push.
+"Minimise the maximum along a path" is a **bottleneck** shortest path, covered in the [Advanced Graphs](/problems/patterns/advanced-graphs) sheet. Two standard approaches: Dijkstra with `max`, or binary search on the answer with a reachability check.
+
+## Alternative: binary search on the effort (shown below)
+
+Guess an effort limit and ask: can you reach the target using only steps no larger than the limit? That is a BFS. If a limit works, every larger limit works too, so binary search the smallest working limit over `0 .. 10^6`. That is the reference brute force below. Time `O(m · n · log(max height))`.
+
+## Dijkstra with a max cost
+
+1. `best` = all ∞, `best[0][0] = 0`; push `[0, 0, 0]` (effort, row, column).
+2. While the heap isn't empty:
+   1. Pop the smallest effort. Skip stale entries.
+   2. If it is the target, return the effort.
+   3. For each neighbour: `candidate = max(effort, |height difference|)`. If smaller than its `best`, update and push.
+
+**Why `max` still allows Dijkstra.** Extending a path can never make its cost smaller (`max` never decreases), which is the same property non-negative weights give a sum. So the first time a cell is popped, no cheaper route to it can appear later.
+
+## Walkthrough
+
+```
+1 2 2
+3 8 2
+5 3 5
+```
+
+The route `1 → 3 → 5 → 3 → 5` (down the left column, then along the bottom) has steps 2, 2, 2, 2, so effort 2. Any route through the `8` has a step of at least 5, and the route along the top row reaches the last column with steps 1, 0, 0, then a step of 3 down to the corner. Dijkstra pops cells in order of effort 0, 1, 2 … and reaches the corner with effort `2`.
 
 ## Complexity
 
-- Time `O(m · n · log(m · n))` — up to 4 pushes per cell.
-- Space `O(m · n)`.
+- Binary search plus BFS: time `O(m · n · log H)` for heights up to `H`. Space `O(m · n)`.
+- Dijkstra: time `O(m · n · log(m · n))`, space `O(m · n)`.
 
-## Alternatives to mention
+## Edge cases
 
-- **Binary search + BFS:** search the effort `E` in `[0, 10^6]`; BFS using only steps `≤ E`. `O(m · n · log(maxH))`.
-- **Kruskal / union-find:** sort all neighbouring-cell edges by height difference and union them in order; the answer is the weight of the edge that first connects start and finish.
-- Plain BFS/DFS without a priority order doesn't work — the first path found isn't the one with the smallest maximum.
+- A single cell: effort 0.
+- All heights equal: effort 0.
+- One row or one column: the effort is the largest adjacent difference.
 
-## Pitfalls
+## Common mistakes
 
-- A `1 x 1` grid needs no moves: effort `0`.
-- Return on popping the target, not on pushing it; a later pop could be better at push time.
+- Summing the step differences.
+- Plain BFS by number of steps, which ignores the heights.
+- Returning when the target is first **pushed** rather than first **popped**.
+
+## In the interview
+
+- Explain why `max` keeps Dijkstra valid, or offer the binary search version, which many find easier to justify.
+- Likely follow-ups:
+  - *Swim in Rising Water?* The same bottleneck, with the cost being the largest height on the path.
+  - *Union-find approach?* Sort all edges by difference and add them until start and end connect; the last edge added is the answer.

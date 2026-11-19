@@ -1,25 +1,56 @@
-**Key insight:** a route becomes swimmable at the time equal to its highest cell, so the answer is the minimum, over all routes, of the route's maximum elevation. That's a minimax path — Dijkstra with `max` as the combine step.
+**Key idea:** you can reach the corner at time `t` exactly when some path from start to finish never goes above elevation `t`. So the answer is the smallest possible **maximum** elevation along a path, a bottleneck shortest path. Dijkstra with `max` instead of `+` finds it: always extend the frontier through the lowest available cell.
 
-## Approach
+## Recognising the pattern
 
-1. Min-heap of `[time, r, c]`, seeded with `[grid[0][0], 0, 0]`; a `seen` grid.
-2. Pop the lowest-time cell. If it's the target, return its time.
-3. For each unseen neighbour, push `[max(time, grid[nr][nc]), nr, nc]` and mark it seen.
+"Minimise the highest point on a path" is the bottleneck variant in the [Advanced Graphs](/problems/patterns/advanced-graphs) sheet, the same structure as Path With Minimum Effort with cell heights instead of step differences.
 
-Marking on push is safe here: the first time a cell is pushed it gets `max(currentLevel, its own height)`, and the current level never decreases as the heap is drained, so no later push could be smaller.
+## Alternative: binary search on the time (shown below)
+
+If you can reach the corner at time `t`, you can at any later time, so binary search the smallest `t` in `[0, n² − 1]`, checking each with a BFS that only enters cells with elevation `≤ t`. That is the reference brute force below. Time `O(n² log n)`.
+
+## Dijkstra with a max cost
+
+1. Push `[grid[0][0], 0, 0]` into a min-heap and mark the start seen.
+2. Repeatedly pop the entry with the smallest time. If it is the corner, return its time.
+3. For each unseen neighbour, mark it and push `[max(time, grid[nr][nc]), nr, nc]`.
+
+Because elevations only push the time up (never down), the first time the corner comes off the heap, no route can reach it sooner. Marking cells when they are pushed is safe here: the frontier always grows through the lowest cell first, so the first time a cell is reached is with its best time.
+
+## Walkthrough
+
+```
+0  2
+1  3
+```
+
+| pop | time | push |
+| --- | --- | --- |
+| (0, 0) | 0 | (0,1) at 2, (1,0) at 1 |
+| (1, 0) | 1 | (1,1) at 3 |
+| (0, 1) | 2 | – |
+| (1, 1) | 3 | corner reached |
+
+Answer `3`: the corner itself has elevation 3, so no earlier time works.
 
 ## Complexity
 
-- Time `O(n² log n)` — `n²` cells, each pushed once.
-- Space `O(n²)`.
+- Binary search plus BFS: time `O(n² log n)`, space `O(n²)`.
+- Dijkstra: time `O(n² log n)`, space `O(n²)`.
 
-## Alternatives to mention
+## Edge cases
 
-- **Binary search on `t` + BFS/DFS** restricted to cells `≤ t`: `O(n² log n)`.
-- **Union-find in elevation order:** add cells from lowest to highest, union with already-added neighbours, and stop when start and end connect — the current elevation is the answer. Same bound plus sorting.
-- Same structure as *Path With Minimum Effort*, with node weights instead of edge weights.
+- `n = 1`: the answer is `grid[0][0]`.
+- The start or the corner being the highest cell: the answer is at least that elevation.
 
-## Pitfalls
+## Common mistakes
 
-- The start cell's own elevation counts — you can't leave before `t = grid[0][0]`.
-- `n = 1`: answer is `grid[0][0]`.
+- Summing elevations along the path.
+- Forgetting that the start cell's own elevation counts.
+- Plain BFS by number of moves.
+
+## In the interview
+
+- Explain the reformulation: "earliest time = smallest possible maximum on a path."
+- Mention the union-find alternative: add cells in order of elevation and stop when start and corner are connected; the last elevation added is the answer.
+- Likely follow-ups:
+  - *Minimum effort (largest step difference)?* The same Dijkstra with a different cost (Path With Minimum Effort).

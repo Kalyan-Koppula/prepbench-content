@@ -1,19 +1,39 @@
 function findTheCity(n: number, edges: number[][], distanceThreshold: number): number {
-  const counts: number[] = []
+  // Bellman-Ford from every city: O(n^2 * E).
+  let bestCity = -1
+  let bestCount = Infinity
   for (let s = 0; s < n; s++) {
-    // Bellman-Ford from s over the undirected roads.
     const dist = new Array(n).fill(Infinity)
     dist[s] = 0
-    let changed = true
-    while (changed) {
-      changed = false
-      for (const [u, v, w] of edges) {
-        if (dist[u] + w < dist[v]) (dist[v] = dist[u] + w), (changed = true)
-        if (dist[v] + w < dist[u]) (dist[u] = dist[v] + w), (changed = true)
+    for (let round = 1; round < n; round++) {
+      let changed = false
+      for (let e = 0; e < edges.length; e++) {
+        const u = edges[e][0]
+        const v = edges[e][1]
+        const w = edges[e][2]
+        if (dist[u] + w < dist[v]) {
+          dist[v] = dist[u] + w
+          changed = true
+        }
+        if (dist[v] + w < dist[u]) {
+          dist[u] = dist[v] + w
+          changed = true
+        }
+      }
+      if (!changed) {
+        break
       }
     }
-    counts.push(dist.filter((d, j) => j !== s && d <= distanceThreshold).length)
+    let count = 0
+    for (let j = 0; j < n; j++) {
+      if (j !== s && dist[j] <= distanceThreshold) {
+        count++
+      }
+    }
+    if (count <= bestCount) {
+      bestCount = count
+      bestCity = s
+    }
   }
-  const min = Math.min(...counts)
-  return counts.lastIndexOf(min)
+  return bestCity
 }
