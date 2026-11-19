@@ -10,7 +10,7 @@ The answer for a range depends on how you split it, which is interval DP from th
 
 ## Interval table
 
-1. `val = [1, ...nums, 1]`; `size = n + 2`.
+1. `val` = a 1, then `nums`, then another 1; `size = n + 2`.
 2. `best[l][r] = 0` when `r − l < 2` (nothing strictly between).
 3. For `gap` from 2 to `size − 1`, for each `l`, with `r = l + gap`:
    - For every `k` strictly between `l` and `r`: `best[l][r] = max(best[l][r], best[l][k] + val[l] · val[k] · val[r] + best[k][r])`.

@@ -11,7 +11,7 @@ params:
 returns: number
 hints:
   - Peel bits off the low end of `n` and push them onto the low end of the result — 32 times.
-  - "In JS, finish with `result >>> 0`: bitwise operators produce signed 32-bit values, so a result with the top bit set would otherwise come out negative."
+  - "Append each bit with `result * 2 + bit` so the result stays unsigned. (In JS, `<<` and `|` produce signed 32-bit values; `result >>> 0` converts such a value back to unsigned.)"
 complexity: { time: "O(1) (32 iterations)", space: "O(1)" }
 ---
 

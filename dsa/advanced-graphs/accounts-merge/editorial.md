@@ -13,7 +13,7 @@ Repeatedly look for two groups that share any email and merge them, until no pai
 1. `parent[i] = i` for each account.
 2. For each account `i` and each of its emails: if the email has no owner yet, set `owner[email] = i`; otherwise union `i` with `owner[email]`.
 3. For each email, find the root of its owner and add the email to that root's group.
-4. For each group: sort the emails and output `[name of the root account, ...emails]`.
+4. For each group: sort the emails and output the root account's name followed by the sorted emails.
 
 Each email is stored once, so duplicates within and across accounts disappear automatically.
 
