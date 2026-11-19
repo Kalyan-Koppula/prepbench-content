@@ -1,17 +1,35 @@
 function isNStraightHand(hand: number[], groupSize: number): boolean {
-  if (hand.length % groupSize !== 0) return false
+  if (hand.length % groupSize !== 0) {
+    return false
+  }
   const count = new Map<number, number>()
-  for (const card of hand) count.set(card, (count.get(card) ?? 0) + 1)
+  for (let i = 0; i < hand.length; i++) {
+    const card = hand[i]
+    if (count.has(card)) {
+      count.set(card, (count.get(card) as number) + 1)
+    } else {
+      count.set(card, 1)
+    }
+  }
+  const sorted: number[] = []
+  for (let i = 0; i < hand.length; i++) {
+    sorted.push(hand[i])
+  }
+  sorted.sort((a, b) => a - b)
 
-  const values = [...count.keys()].sort((a, b) => a - b)
-  for (const start of values) {
-    const need = count.get(start)!
-    if (need === 0) continue
-    // Every remaining copy of `start` must open its own run.
+  for (let i = 0; i < sorted.length; i++) {
+    const start = sorted[i]
+    const copies = count.get(start) as number
+    if (copies === 0) {
+      continue // already used up by earlier groups
+    }
+    // The smallest card left must start a group; every copy of it starts its own.
     for (let v = start; v < start + groupSize; v++) {
-      const have = count.get(v) ?? 0
-      if (have < need) return false
-      count.set(v, have - need)
+      const have = count.has(v) ? (count.get(v) as number) : 0
+      if (have < copies) {
+        return false
+      }
+      count.set(v, have - copies)
     }
   }
   return true

@@ -1,7 +1,7 @@
+// Start everyone at 1 and keep fixing violations until none remain.
 function candy(ratings: number[]): number {
-  // Keep fixing violations until none remain.
   const n = ratings.length
-  const given: number[] = new Array(n).fill(1)
+  const given = new Array(n).fill(1)
   let changed = true
   while (changed) {
     changed = false
@@ -16,5 +16,9 @@ function candy(ratings: number[]): number {
       }
     }
   }
-  return given.reduce((sum, c) => sum + c, 0)
+  let total = 0
+  for (let i = 0; i < n; i++) {
+    total += given[i]
+  }
+  return total
 }

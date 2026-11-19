@@ -1,23 +1,57 @@
-**Key insight:** every index up to the farthest reachable point is itself reachable, so a single number — `reach` — captures the whole state.
+**Key idea:** walk left to right and keep `reach`, the farthest index you can get to from any index seen so far. If you ever stand on an index beyond `reach`, you can't have arrived there, so the answer is false. If `reach` gets to the last index, it is true.
 
-## Approach
+## Recognising the pattern
 
-1. `reach = 0`. Walk `i` from left to right.
-2. If `i > reach`, index `i` can't be reached and neither can anything after it: return `false`.
-3. Otherwise extend `reach = max(reach, i + nums[i])`; once it covers the last index, return `true`.
+"Can you get to the end?" where each position offers a range of next positions is a reachability question. A BFS or a DP would work, but because the reachable set is always a **prefix** of the array (if you can reach index `k`, you can reach every index before it), one number describes it. That makes it a one-pass greedy from the [Greedy](/problems/patterns/greedy) sheet.
 
-Why it's safe: reachability is contiguous — if you can get to `j`, you can stop at any index before `j` on the way. So tracking only the max loses nothing.
+## Brute force
+
+DP from the right: `ok[i]` is true if some jump from `i` lands on an index with `ok` true. `ok[n − 1]` is true. That is the reference brute force below. `O(n · max jump)` time, up to `O(n²)`.
+
+## Greedy reach
+
+1. `reach = 0`.
+2. For each `i`:
+   1. If `i > reach`, return false.
+   2. `reach = max(reach, i + nums[i])`.
+   3. If `reach ≥ n − 1`, return true.
+
+**Why the reachable set is a prefix.** You reach index `k` from some `j < k` with `j + nums[j] ≥ k`. Every index between `j` and `k` is also within that jump. So "the farthest reachable index" tells you everything.
+
+## Walkthrough
+
+`nums = [2, 0, 1, 0, 3]`
+
+| i | nums[i] | i ≤ reach? | reach after |
+| --- | --- | --- | --- |
+| 0 | 2 | yes | 2 |
+| 1 | 0 | yes | 2 |
+| 2 | 1 | yes | 3 |
+| 3 | 0 | yes | 3 |
+| 4 | 3 | **no** (4 > 3) | – |
+
+Answer `false`: the zero at index 3 is a wall. For `[1, 2, 0, 1, 4]`, `reach` goes 1, 3, 3, 4, and 4 is the last index, so `true`.
 
 ## Complexity
 
-- Time `O(n)`, space `O(1)`.
+- DP from the right: `O(n²)` worst case, `O(n)` space.
+- Greedy reach: `O(n)` time, `O(1)` space.
 
-## Alternatives to mention
+## Edge cases
 
-- DP from the right (`ok[i]` = any of the next `nums[i]` cells is good): `O(n · max(nums))` worst case.
-- Backwards greedy: keep `goal = n - 1`; scanning right to left, if `i + nums[i] >= goal`, move `goal = i`. Answer is `goal === 0`. Equally valid and nice to mention.
+- One element: already at the end, true even if it is 0.
+- A zero at index 0 with more elements: false.
+- Zeros that can be jumped over: harmless.
 
-## Pitfalls
+## Common mistakes
 
-- Zeros are the only obstacle; the trap is an input where every route funnels onto the same zero.
-- A single-element array is already at the end: `true`.
+- Checking only whether `nums[i] = 0`; a zero is fatal only when nothing jumps past it.
+- Off-by-one: the goal is index `n − 1`, not `n`.
+- BFS with a queue of indices, which is correct but `O(n²)` in the worst case.
+
+## In the interview
+
+- State the prefix property in one sentence; it is the whole proof.
+- Likely follow-ups:
+  - *Fewest jumps?* [Jump Game II](/problems/jump-game-ii): the same reach idea, grouped into levels.
+  - *Jumps in both directions, landing on index with value 0 (Jump Game III)?* BFS or DFS with a visited set; the prefix property no longer holds.

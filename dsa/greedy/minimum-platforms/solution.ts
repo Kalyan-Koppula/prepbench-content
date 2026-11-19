@@ -1,17 +1,27 @@
 function findPlatform(arrival: number[], departure: number[]): number {
-  const arr = [...arrival].sort((a, b) => a - b)
-  const dep = [...departure].sort((a, b) => a - b)
+  const n = arrival.length
+  const arr: number[] = []
+  const dep: number[] = []
+  for (let i = 0; i < n; i++) {
+    arr.push(arrival[i])
+    dep.push(departure[i])
+  }
+  arr.sort((a, b) => a - b)
+  dep.sort((a, b) => a - b)
+
   let inStation = 0
   let best = 0
-  let j = 0
-  for (const time of arr) {
-    // Free platforms whose train left strictly before this arrival.
-    while (dep[j] < time) {
+  let j = 0 // next departure to process
+  for (let i = 0; i < n; i++) {
+    // Trains that left strictly before this arrival free their platforms.
+    while (dep[j] < arr[i]) {
       inStation--
       j++
     }
     inStation++
-    best = Math.max(best, inStation)
+    if (inStation > best) {
+      best = inStation
+    }
   }
   return best
 }

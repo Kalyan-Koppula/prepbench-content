@@ -1,15 +1,24 @@
 function fractionalKnapsack(values: number[], weights: number[], capacity: number): number {
-  const order = [...values.keys()]
-  // Sort by value density, descending; cross-multiply to stay in exact integers.
+  const n = values.length
+  const order: number[] = []
+  for (let i = 0; i < n; i++) {
+    order.push(i)
+  }
+  // Highest value per unit of weight first. Compare a/b against c/d as a*d against c*b
+  // to avoid division.
   order.sort((a, b) => values[b] * weights[a] - values[a] * weights[b])
 
   let room = capacity
   let total = 0
-  for (const i of order) {
-    if (room === 0) break
-    const take = Math.min(weights[i], room)
-    total += (values[i] * take) / weights[i]
-    room -= take
+  for (let k = 0; k < n && room > 0; k++) {
+    const i = order[k]
+    if (weights[i] <= room) {
+      total += values[i] // the whole item fits
+      room -= weights[i]
+    } else {
+      total += (values[i] * room) / weights[i] // take the fraction that fits
+      room = 0
+    }
   }
   return total
 }

@@ -1,14 +1,27 @@
+// Track every possible number of unmatched '(' after each character.
+// possible[k] = true if some choice of the '*'s so far leaves k open. O(n^2).
 function checkValidString(s: string): boolean {
-  // Set of every reachable open-count.
-  let states = new Set<number>([0])
-  for (const ch of s) {
-    const next = new Set<number>()
-    for (const open of states) {
-      if (ch === '(' || ch === '*') next.add(open + 1)
-      if ((ch === ')' || ch === '*') && open > 0) next.add(open - 1)
-      if (ch === '*') next.add(open)
+  const n = s.length
+  let possible = new Array(n + 2).fill(false)
+  possible[0] = true
+  for (let i = 0; i < n; i++) {
+    const ch = s[i]
+    const next = new Array(n + 2).fill(false)
+    for (let open = 0; open <= n; open++) {
+      if (!possible[open]) {
+        continue
+      }
+      if (ch === '(' || ch === '*') {
+        next[open + 1] = true
+      }
+      if ((ch === ')' || ch === '*') && open > 0) {
+        next[open - 1] = true
+      }
+      if (ch === '*') {
+        next[open] = true // '*' as the empty string
+      }
     }
-    states = next
+    possible = next
   }
-  return states.has(0)
+  return possible[0]
 }

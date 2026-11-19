@@ -1,25 +1,28 @@
 function jobSequencing(deadline: number[], profit: number[]): number[] {
   const n = deadline.length
-  const order = [...Array(n).keys()].sort((a, b) => profit[b] - profit[a])
-
-  // freeSlot[t] points toward the latest free slot <= t; slot 0 means "none left".
-  const freeSlot = Array.from({ length: n + 1 }, (_, t) => t)
-  const find = (t: number): number => {
-    while (freeSlot[t] !== t) {
-      freeSlot[t] = freeSlot[freeSlot[t]] // path halving
-      t = freeSlot[t]
-    }
-    return t
+  // Job indices, most profitable first.
+  const order: number[] = []
+  for (let i = 0; i < n; i++) {
+    order.push(i)
   }
+  order.sort((a, b) => profit[b] - profit[a])
 
+  // taken[t] = true if time slot t (1..n) already has a job.
+  const taken = new Array(n + 1).fill(false)
   let jobsDone = 0
-  let maxProfit = 0
-  for (const j of order) {
-    const slot = find(deadline[j])
-    if (slot === 0) continue
-    freeSlot[slot] = slot - 1 // occupied: future lookups fall through to earlier slots
-    jobsDone++
-    maxProfit += profit[j]
+  let totalProfit = 0
+  for (let k = 0; k < n; k++) {
+    const job = order[k]
+    // Place it as LATE as possible, leaving earlier slots for tighter deadlines.
+    let slot = Math.min(deadline[job], n)
+    while (slot >= 1 && taken[slot]) {
+      slot--
+    }
+    if (slot >= 1) {
+      taken[slot] = true
+      jobsDone++
+      totalProfit += profit[job]
+    }
   }
-  return [jobsDone, maxProfit]
+  return [jobsDone, totalProfit]
 }

@@ -1,25 +1,57 @@
-**Key insight:** each child's minimum is the length of the strictly increasing run that ends at them from the left, or from the right — whichever is longer. Two passes compute both.
+**Key idea:** split the rule into its two directions. A left-to-right pass makes every child rated higher than their **left** neighbour get one more candy than that neighbour. A right-to-left pass does the same for the **right** neighbour, taking the larger of the two requirements so the first pass's work isn't undone. Each child ends up with the minimum that satisfies both sides.
 
-## Approach
+## Recognising the pattern
 
-1. Start everyone at `1`.
-2. Left to right: if `ratings[i] > ratings[i - 1]`, set `given[i] = given[i - 1] + 1`. Now every left-neighbour rule holds.
-3. Right to left: if `ratings[i] > ratings[i + 1]`, set `given[i] = max(given[i], given[i + 1] + 1)`. Taking the `max` keeps the left rule satisfied while adding the right one.
-4. Sum the array.
+A constraint between neighbours in both directions is hard to satisfy in one sweep, but easy as two one-directional sweeps. That is a two-pass greedy from the [Greedy](/problems/patterns/greedy) sheet, the same structure as Product of Array Except Self or Trapping Rain Water's left and right maxima.
 
-Why it's minimal: after pass 2, `given[i]` equals `max(L[i], R[i])`, where `L[i]` / `R[i]` are the lengths of the increasing runs ending at `i` from each side. Any valid assignment must give child `i` at least that many — the run forces `1, 2, 3, …` up to `i`.
+## Brute force
+
+Give everyone one candy, then repeatedly scan and fix any child who needs more than a neighbour, until nothing changes. That is the reference brute force below. Each pass is `O(n)`, and up to `n` passes may be needed, so `O(n²)`.
+
+## Two passes
+
+1. `given[i] = 1` for everyone.
+2. Left to right: if `ratings[i] > ratings[i − 1]`, `given[i] = given[i − 1] + 1`.
+3. Right to left: if `ratings[i] > ratings[i + 1]` and `given[i] ≤ given[i + 1]`, `given[i] = given[i + 1] + 1`.
+4. Return the sum.
+
+**Why each count is the minimum.** After the left pass, `given[i]` is the length of the increasing run ending at `i`, which any valid answer must give at least. The right pass raises it to the length of the decreasing run starting at `i` when that is larger. Both are lower bounds, and their maximum satisfies both rules, so it is optimal.
+
+## Walkthrough
+
+`ratings = [1, 2, 3, 1, 0]`
+
+| i | rating | after left pass | after right pass |
+| --- | --- | --- | --- |
+| 0 | 1 | 1 | 1 |
+| 1 | 2 | 2 | 2 |
+| 2 | 3 | 3 | 3 (already more than 2) |
+| 3 | 1 | 1 | 2 (must beat the 0) |
+| 4 | 0 | 1 | 1 |
+
+Total `1 + 2 + 3 + 2 + 1 = 9`.
 
 ## Complexity
 
-- Time `O(n)` — two passes.
-- Space `O(n)` for the candy array.
+- Repeat until stable: `O(n²)` time.
+- Two passes: `O(n)` time, `O(n)` space.
+- A one-pass `O(1)`-space method counts the lengths of rising and falling slopes; worth mentioning, rarely required.
 
-## Alternatives to mention
+## Edge cases
 
-- `O(1)` space: walk once, counting lengths of the current up-slope and down-slope; when a down-slope grows longer than the preceding up-slope, the peak gains one more candy. Fiddly — mention it, write it only if asked.
-- Repeatedly fixing violations until stable: correct but `O(n²)`.
+- One child: 1.
+- Equal neighbours: no constraint between them; either can have fewer.
+- Strictly decreasing ratings: `n, n − 1, …, 1`, total `n(n + 1)/2`.
 
-## Pitfalls
+## Common mistakes
 
-- Equal neighbours impose **no** constraint — `[2, 2, 2]` needs only 3 candies.
-- In pass 2, overwriting with `given[i + 1] + 1` instead of taking the `max` breaks peaks whose left slope was longer.
+- Giving equal-rated neighbours equal candy (not required, and it costs extra).
+- In the right pass, overwriting with `given[i + 1] + 1` without taking the maximum, which breaks the left rule.
+- Trying to satisfy both neighbours in one pass.
+
+## In the interview
+
+- Explain the two lower bounds (increasing run, decreasing run); the code then follows.
+- Likely follow-ups:
+  - *`O(1)` space?* Track the current up-slope and down-slope lengths and add their contributions as you go.
+  - *Return the distribution itself?* Return `given` instead of its sum.
