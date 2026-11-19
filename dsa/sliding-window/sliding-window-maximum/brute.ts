@@ -1,5 +1,13 @@
 function maxSlidingWindow(nums: number[], k: number): number[] {
   const result: number[] = []
-  for (let i = 0; i + k <= nums.length; i++) result.push(Math.max(...nums.slice(i, i + k)))
+  for (let start = 0; start + k <= nums.length; start++) {
+    let max = nums[start]
+    for (let i = start + 1; i < start + k; i++) {
+      if (nums[i] > max) {
+        max = nums[i]
+      }
+    }
+    result.push(max)
+  }
   return result
 }
