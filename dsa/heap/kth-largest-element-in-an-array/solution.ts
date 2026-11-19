@@ -1,8 +1,11 @@
 function findKthLargest(nums: number[], k: number): number {
-  const heap = new PriorityQueue<number>() // min-heap of the k largest so far
-  for (const x of nums) {
-    heap.push(x)
-    if (heap.size() > k) heap.pop()
+  // Min-heap of the k largest values seen so far.
+  const heap = new PriorityQueue<number>((a, b) => a - b)
+  for (let i = 0; i < nums.length; i++) {
+    heap.push(nums[i])
+    if (heap.size() > k) {
+      heap.pop()
+    }
   }
-  return heap.peek()!
+  return heap.peek() as number
 }

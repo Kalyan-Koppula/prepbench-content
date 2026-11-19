@@ -1,22 +1,38 @@
 function leastInterval(tasks: string[], n: number): number {
-  const counts = new Map<string, number>()
-  for (const t of tasks) counts.set(t, (counts.get(t) ?? 0) + 1)
-
-  const ready = new PriorityQueue<number>((a, b) => b - a) // remaining counts, max first
-  for (const c of counts.values()) ready.push(c)
-  const cooling: [number, number][] = [] // [remaining count, time it becomes available]
+  // How many copies of each label are left.
+  const counts = new Array(26).fill(0)
+  for (let i = 0; i < tasks.length; i++) {
+    counts[tasks[i].charCodeAt(0) - 65]++
+  }
+  // Runnable labels, by remaining copies (most first).
+  const ready = new PriorityQueue<number>((a, b) => b - a)
+  for (let c = 0; c < 26; c++) {
+    if (counts[c] > 0) {
+      ready.push(counts[c])
+    }
+  }
+  // Labels cooling down, in the order they become available again.
+  const coolingCounts: number[] = []
+  const coolingUntil: number[] = []
   let head = 0
 
   let time = 0
-  while (!ready.isEmpty() || head < cooling.length) {
-    // Nothing runnable: skip straight to the next task coming off cooldown.
-    if (ready.isEmpty()) time = cooling[head][1]
-    else {
+  while (!ready.isEmpty() || head < coolingCounts.length) {
+    if (ready.isEmpty()) {
+      time = coolingUntil[head] // nothing can run: jump to the next release
+    } else {
       time++
-      const left = ready.pop()! - 1
-      if (left > 0) cooling.push([left, time + n])
+      const left = (ready.pop() as number) - 1 // run the most frequent runnable label
+      if (left > 0) {
+        coolingCounts.push(left)
+        coolingUntil.push(time + n)
+      }
     }
-    if (head < cooling.length && cooling[head][1] === time) ready.push(cooling[head++][0])
+    // A label whose cooldown just ended can run again.
+    if (head < coolingCounts.length && coolingUntil[head] === time) {
+      ready.push(coolingCounts[head])
+      head++
+    }
   }
   return time
 }

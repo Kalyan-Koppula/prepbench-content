@@ -1,13 +1,27 @@
 class MedianFinder {
-  values: number[] = []
+  // Keep the values sorted with insertion: addNum O(n), findMedian O(1).
+  values: number[]
+
+  constructor() {
+    this.values = []
+  }
 
   addNum(num: number): void {
+    let i = this.values.length
     this.values.push(num)
+    while (i > 0 && this.values[i - 1] > num) {
+      this.values[i] = this.values[i - 1]
+      i--
+    }
+    this.values[i] = num
   }
 
   findMedian(): number {
-    const s = [...this.values].sort((a, b) => a - b)
-    const mid = s.length >> 1
-    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2
+    const n = this.values.length
+    const mid = Math.floor(n / 2)
+    if (n % 2 === 1) {
+      return this.values[mid]
+    }
+    return (this.values[mid - 1] + this.values[mid]) / 2
   }
 }

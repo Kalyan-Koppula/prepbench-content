@@ -1,31 +1,65 @@
-**Key insight:** split the stream into a lower half (max-heap) and an upper half (min-heap) of nearly equal size. The median is always at the top of one or both heaps.
+**Key idea:** split the numbers into a smaller half and a larger half. Keep the smaller half in a max-heap and the larger half in a min-heap, with the sizes equal or the smaller half one bigger. The median is then right at the tops: the smaller half's maximum, or the average of both tops.
 
-## Approach
+## Recognising the pattern
 
-Invariants: every value in `low` is `<=` every value in `high`, and `low.size()` is equal to `high.size()` or one more.
+A running order statistic over a stream is the two-heap template from the [Heap](/problems/patterns/heap) sheet. Each heap gives fast access to the boundary value on its side of the median, and inserts stay `O(log n)`.
 
-1. `addNum(x)`: push `x` into `low`, then move `low`'s max into `high`. This guarantees the ordering invariant no matter where `x` belongs.
-2. If `high` is now bigger than `low`, move `high`'s min back to `low` to restore the size invariant.
-3. `findMedian`: odd count → `low.peek()`; even count → average of both tops.
+## Brute force
+
+Keep the numbers in a sorted array, inserting each new number in place. `findMedian` reads the middle in `O(1)`, but each insert shifts elements, `O(n)`. That is the reference brute force below. (Appending and sorting on every query is worse: `O(n log n)` per median.)
+
+## Optimal: two heaps
+
+- `low`: max-heap with the smaller half.
+- `high`: min-heap with the larger half.
+- Invariants: every value in `low` ≤ every value in `high`, and `low.size()` equals `high.size()` or is one larger.
+
+`addNum(num)`:
+
+1. Push `num` into `low`.
+2. Move `low`'s maximum into `high`. This keeps the ordering invariant: the largest of the lower half (including the new number) goes up.
+3. If `high` is now bigger than `low`, move `high`'s minimum back into `low`.
+
+`findMedian()`:
+
+- Odd count (`low` bigger): `low.peek()`.
+- Even count: `(low.peek() + high.peek()) / 2`.
+
+Routing every number through both heaps costs a few extra operations but avoids special cases about which side a number belongs on.
+
+## Walkthrough
+
+Add 5, 15, 1, 3:
+
+| add | low (max-heap) | high (min-heap) | median |
+| --- | --- | --- | --- |
+| 5 | 5 | – | 5 |
+| 15 | 5 | 15 | 10 |
+| 1 | 1, 5 | 15 | 5 |
+| 3 | 1, 3 | 5, 15 | 4 |
 
 ## Complexity
 
-- `addNum`: `O(log n)` — a constant number of heap operations.
-- `findMedian`: `O(1)`.
-- Space `O(n)`.
+- Sorted array: `addNum` `O(n)`, `findMedian` `O(1)`.
+- Two heaps: `addNum` `O(log n)`, `findMedian` `O(1)`. Space `O(n)`.
 
-## Alternatives to mention
+## Edge cases
 
-- Sorted array with binary-search insertion: `O(log n)` to find the spot but `O(n)` to shift — fine for small streams.
-- Re-sorting on every query: `O(n log n)` per `findMedian`.
-- A balanced BST / order-statistics tree gives `O(log n)` for both, and supports deletions (needed for a *sliding-window* median).
+- One number: it is the median.
+- Duplicates: the ordering invariant uses `≤`, so equal values can sit in either heap.
+- Negative numbers: no special handling.
+- Even counts produce fractional medians: return a floating-point average.
 
-## Follow-ups
+## Common mistakes
 
-- **Values in `[0, 100]`:** keep a count array of 101 buckets; `addNum` is `O(1)`, `findMedian` walks at most 101 buckets.
-- **Mostly in range:** buckets for the common range plus two heaps (or counters) for outliers on either side.
+- Letting the heaps' sizes drift apart by more than one.
+- Putting a number directly into the heap that "looks right" without rebalancing, which breaks the ordering invariant.
+- Integer division for the average in typed languages.
 
-## Pitfalls
+## In the interview
 
-- Checking only sizes and forgetting the ordering invariant (e.g. pushing straight into the smaller heap).
-- Integer division: in JS `/` already gives a fraction — don't wrap it in `Math.floor`.
+- Draw the two halves around the median before coding.
+- Likely follow-ups:
+  - *All numbers in `[0, 100]`?* Keep a count per value and walk the counts to the middle: `O(1)` insert, `O(101)` median.
+  - *99% of numbers in `[0, 100]`?* Counts for the range plus two small heaps or lists for the outliers.
+  - *Median of a sliding window?* Two heaps with lazy deletion, or a balanced BST.

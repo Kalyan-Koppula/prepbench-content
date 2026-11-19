@@ -1,28 +1,64 @@
-**Key insight:** each user's posts are already sorted by time, so the feed is the top 10 of a **k-way merge** over the user and everyone they follow. A max-heap seeded with each source's newest post produces them in order.
+**Key idea:** store each user's posts in their own list in posting order, with a global counter as the timestamp. A news feed is a merge of several time-sorted lists, of which you only need the 10 newest items: put each source's newest post in a max-heap by time, pop the newest, and push that source's next older post. Stop after 10.
 
-## Approach
+## Recognising the pattern
 
-1. Keep a global counter `time`; `postTweet` appends `[time++, tweetId]` to the author's list.
-2. `following: Map<user, Set<user>>` makes `follow`/`unfollow` O(1).
-3. `getNewsFeed(u)`:
-   - Sources are `u` plus everyone `u` follows (a set, so self-follow doesn't double count).
-   - Push each source's **latest** post with a pointer to its index.
-   - Pop up to 10 times; after popping a post from user `v` at index `i`, push `v`'s post at `i - 1`.
+Combining several sorted sequences and taking the top few is the k-way merge from the [Heap](/problems/patterns/heap) sheet, the same mechanism as Merge k Sorted Lists, read from the newest end. Follow relationships are a simple map of sets.
+
+## Simple version (shown below as the alternative)
+
+Keep one global list of all posts. For a feed, scan it from the newest end and collect posts by the user or by someone they follow, until 10 are found. That is the reference brute force below. Posting is `O(1)`, but a feed can scan every post ever made when the user follows quiet accounts.
+
+## Heap version
+
+State:
+
+- `time`: incremented on every post.
+- For each user: their post times and tweet ids, oldest first.
+- `following`: user → set of followees.
+
+Operations:
+
+1. **`postTweet`:** append `(time, tweetId)` to the user's lists and increment `time`.
+2. **`follow` / `unfollow`:** add to or remove from the follower's set.
+3. **`getNewsFeed(user)`:**
+   1. Sources are the user and everyone they follow.
+   2. For each source with posts, push `[time, tweetId, source, index]` for its newest post into a max-heap by time.
+   3. While fewer than 10 posts are collected and the heap isn't empty: pop the newest, record its tweet id, and if that source has an older post, push it.
+
+Each source contributes at most one entry at a time, so the heap holds at most `F + 1` entries for `F` followees.
+
+## Walkthrough
+
+| call | effect | feed |
+| --- | --- | --- |
+| postTweet(1, 5) | user 1 posts 5 at time 0 | |
+| getNewsFeed(1) | heap: [0, 5] | [5] |
+| follow(1, 2) | | |
+| postTweet(2, 6) | user 2 posts 6 at time 1 | |
+| getNewsFeed(1) | heap: user 1's [0, 5], user 2's [1, 6] → pop 6, then 5 | [6, 5] |
+| unfollow(1, 2) | | |
+| getNewsFeed(1) | only user 1's posts | [5] |
 
 ## Complexity
 
-- `postTweet`, `follow`, `unfollow`: `O(1)`.
-- `getNewsFeed`: `O(F + 10 log F)` for `F` followed users — `O(F)` to seed the heap (or `O(F log F)` pushing one by one), then at most 10 pops.
-- Space `O(users + posts + follows)`.
+- Global list: post `O(1)`; feed `O(P)` for `P` total posts in the worst case.
+- Heap merge: post `O(1)`; follow/unfollow `O(1)`; feed `O(F + 10 log F)` to seed the heap and pop up to 10 times.
 
-## Alternatives to mention
+## Edge cases
 
-- Scan a single global list of posts backwards, filtering by author: simple, but `O(total posts)` per feed in the worst case.
-- Gather every followed user's last 10 posts, sort, take 10: `O(10F log(10F))` — fine in practice and easy to code.
-- Production systems precompute feeds on write ("fan-out on write") for normal users and merge on read for celebrities — a good talking point if the interviewer steers toward system design.
+- Following yourself: your posts must not appear twice; skip yourself when adding followees.
+- Unfollowing someone not followed: no effect.
+- Fewer than 10 posts available: return what exists.
 
-## Pitfalls
+## Common mistakes
 
-- Including the user's own posts even when they follow nobody.
-- Following yourself, then unfollowing yourself, must not hide your own posts — always add `u` to the sources separately.
-- Unfollowing someone you never followed must not throw.
+- Sorting all posts from all sources for each feed.
+- Using tweet ids as timestamps; ids aren't ordered by time.
+- Letting a user unfollow themselves and lose their own posts.
+
+## In the interview
+
+- Mention it is a k-way merge, then discuss scale: fan-out on write (push posts to followers' feeds) versus fan-out on read (merge at read time, as here), and the hybrid used for accounts with many followers.
+- Likely follow-ups:
+  - *Millions of followers?* Precompute feeds for most users, merge celebrities' posts at read time.
+  - *Pagination?* Remember each source's index and continue the merge.
