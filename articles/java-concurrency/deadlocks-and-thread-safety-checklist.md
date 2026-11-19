@@ -145,6 +145,87 @@ The rule: a thread-safe class guarantees each *method* is atomic. Any sequence o
 - Make the thread-safety contract part of the type: `Collections.unmodifiableX` for views, `List.copyOf` for snapshots, `final` everywhere it compiles.
 - Test with `jcstress` for real races; unit tests rarely catch them, and a test that passes a thousand times proves nothing about a race.
 
+## Worked example: the bank transfer deadlock
+
+```java
+class Account {
+    final long id;
+    private long balance;
+    Account(long id, long balance) { this.id = id; this.balance = balance; }
+
+    // Deadlock-prone
+    static void transfer(Account from, Account to, long amount) {
+        synchronized (from) {
+            synchronized (to) {
+                from.balance -= amount;
+                to.balance += amount;
+            }
+        }
+    }
+}
+```
+
+Thread 1 runs `transfer(a, b, 10)` and locks `a`. At the same moment thread 2 runs `transfer(b, a, 5)` and locks `b`. Thread 1 now waits for `b`, thread 2 waits for `a`: neither can proceed. All four deadlock conditions hold (mutual exclusion, hold and wait, no preemption, circular wait).
+
+**Fix 1: a global lock order.** Always lock the account with the smaller id first, so a cycle is impossible:
+
+```java
+static void transfer(Account from, Account to, long amount) {
+    Account first = from.id < to.id ? from : to;
+    Account second = from.id < to.id ? to : from;
+    synchronized (first) {
+        synchronized (second) {
+            from.balance -= amount;
+            to.balance += amount;
+        }
+    }
+}
+```
+
+**Fix 2: `tryLock` with a timeout** (each account now holds a `final ReentrantLock lock`), backing off and retrying when the second lock isn't available, which breaks "hold and wait":
+
+```java
+static boolean transfer(Account from, Account to, long amount) throws InterruptedException {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+    while (System.nanoTime() < deadline) {
+        if (from.lock.tryLock()) {
+            try {
+                if (to.lock.tryLock()) {
+                    try {
+                        from.balance -= amount;
+                        to.balance += amount;
+                        return true;
+                    } finally {
+                        to.lock.unlock();
+                    }
+                }
+            } finally {
+                from.lock.unlock();
+            }
+        }
+        Thread.sleep(ThreadLocalRandom.current().nextInt(1, 10)); // random back-off avoids livelock
+    }
+    return false;
+}
+```
+
+## Finding a deadlock in production
+
+Take a thread dump (`jstack <pid>`, `jcmd <pid> Thread.print`, or from your monitoring tool). The JVM detects monitor and `ReentrantLock` deadlocks and prints them at the end:
+
+```text
+Found one Java-level deadlock:
+=============================
+"transfer-2":
+  waiting to lock monitor 0x00007f8c (object 0x000000076ab0, a Account),
+  which is held by "transfer-1"
+"transfer-1":
+  waiting to lock monitor 0x00007f9d (object 0x000000076ac8, a Account),
+  which is held by "transfer-2"
+```
+
+Each thread's stack shows the exact lines where it holds and waits for locks. For hangs without a reported deadlock, take three dumps a few seconds apart and look for threads stuck in the same place: waiting on a pool that's exhausted, on a remote call without a timeout, or on a lock held by a thread that is itself blocked.
+
 ## Common interview questions
 
 **What is a deadlock and how do you prevent it?** Two or more threads block forever, each waiting on a lock the other holds; it requires mutual exclusion, hold-and-wait, no preemption and a circular wait. Prevent it by acquiring locks in a global order, using `tryLock` with timeouts and backoff, or avoiding nested locks altogether.
@@ -162,3 +243,19 @@ The rule: a thread-safe class guarantees each *method* is atomic. Any sequence o
 **What is check-then-act and how do you fix it?** Reading state, deciding based on it, then writing, where the state can change in between: `if (!exists) create`. Fix with an atomic primitive (`putIfAbsent`, `compareAndSet`) or by holding a lock across both steps.
 
 **Why is calling a listener while holding a lock dangerous?** The listener is unknown code; it may block, take its own locks, or call back into your class, creating a lock-order cycle you cannot see. Copy the listener list, release the lock, then invoke ("open call").
+
+## Pitfalls
+
+- Acquiring locks in different orders in different code paths.
+- Calling external code (callbacks, listeners, other services) while holding a lock.
+- Blocking calls without timeouts inside synchronised sections.
+- Tasks in a bounded pool waiting for other tasks in the same pool (thread-starvation deadlock).
+- Assuming a deadlock-free design is also livelock-free; add randomised back-off to retries.
+
+## Key takeaways
+
+- Deadlock needs mutual exclusion, hold-and-wait, no preemption and circular wait; break any one.
+- A global lock order is the simplest prevention; `tryLock` with timeouts is the fallback.
+- Keep critical sections small and never call unknown code inside them.
+- Thread dumps reveal deadlocks and hangs; take several to spot stuck threads.
+- Prefer immutability, confinement and concurrent collections over hand-written locking.

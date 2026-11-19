@@ -122,6 +122,46 @@ client.send(request, new Callback() {
 
 `CompletableFuture` implements `CompletionStage`, which is the interface to expose from APIs so callers cannot call `complete` on your future. `toCompletableFuture()` converts back.
 
+## Worked example: a product page from three services
+
+The page needs product details (required), reviews (optional) and recommendations (optional). Calls should run in parallel, optional parts should fall back on failure, and the whole thing must finish within 800 ms.
+
+```java
+ExecutorService io = Executors.newVirtualThreadPerTaskExecutor(); // or a bounded pool for blocking clients
+
+CompletableFuture<Product> product = CompletableFuture
+    .supplyAsync(() -> catalog.getProduct(id), io)
+    .orTimeout(500, TimeUnit.MILLISECONDS); // required: fail the page if it's slow
+
+CompletableFuture<List<Review>> reviews = CompletableFuture
+    .supplyAsync(() -> reviewService.forProduct(id), io)
+    .completeOnTimeout(List.of(), 300, TimeUnit.MILLISECONDS) // optional: empty after 300 ms
+    .exceptionally(e -> {
+        log.warn("reviews failed for {}", id, e);
+        return List.of();
+    });
+
+CompletableFuture<List<Product>> recommendations = CompletableFuture
+    .supplyAsync(() -> recommender.similarTo(id), io)
+    .completeOnTimeout(List.of(), 300, TimeUnit.MILLISECONDS)
+    .exceptionally(e -> List.of());
+
+ProductPage page = CompletableFuture.allOf(product, reviews, recommendations)
+    .thenApply(ignored -> new ProductPage(product.join(), reviews.join(), recommendations.join()))
+    .get(800, TimeUnit.MILLISECONDS); // overall deadline for the caller
+```
+
+How it behaves:
+
+| Scenario | Result |
+| --- | --- |
+| All three respond in 200 ms | Full page in about 200 ms (parallel, not 600 ms sequential) |
+| Reviews service is down | Page with no reviews; a warning in the logs |
+| Recommendations take 2 s | Page after 300 ms with no recommendations |
+| Catalog takes 600 ms | `TimeoutException` from `product`, so the page fails, as intended for a required part |
+
+`join()` inside `thenApply` doesn't block, because `allOf` guarantees all three are complete by then. Note that `orTimeout` and `completeOnTimeout` complete the **future**; they don't cancel the underlying HTTP call. Give the clients their own timeouts too.
+
 ## Spring and `@Async`
 
 `@Async` on a bean method returning `CompletableFuture<T>` runs it on the configured `TaskExecutor`. Plain Spring defaults to `SimpleAsyncTaskExecutor` (a new thread per call); Boot auto-configures a bounded `ThreadPoolTaskExecutor`, and with `spring.threads.virtual.enabled=true` (3.2+) a virtual-thread-per-task executor. Self-invocation bypasses the proxy, so `@Async` on a method called from the same class does nothing: a classic interview gotcha.
@@ -143,3 +183,19 @@ client.send(request, new Callback() {
 **How does `CompletableFuture` compare to a JS Promise?** Same composition model (`thenApply` is `then`, `thenCompose` is `then` returning a promise, `allOf` is `Promise.all`). Differences: no implicit scheduler, so callbacks run on the completing thread unless you say `Async`; `thenCompose` is explicit; failures are silent if unobserved; `join` really blocks a thread rather than suspending.
 
 **What does `cancel` do on a `CompletableFuture`?** It completes the future with `CancellationException` so dependents fail, but it does not interrupt the thread executing the supplier. To actually stop work, propagate a flag or cancel the executor-level `Future`.
+
+## Pitfalls
+
+- Calling `get()` or `join()` immediately after `supplyAsync`, which makes the code synchronous with extra steps.
+- Running blocking calls on the common `ForkJoinPool` (the default executor), starving parallel streams and other async work.
+- Forgetting that exceptions are wrapped in `CompletionException`; unwrap the cause when inspecting.
+- Losing exceptions by never attaching `exceptionally`, `handle` or a final `join`.
+- Assuming timeouts cancel the underlying work.
+
+## Key takeaways
+
+- `CompletableFuture` is Java's promise: compose with `thenApply`, `thenCompose`, `thenCombine`, `allOf`, `anyOf`.
+- Pass an explicit executor for blocking work.
+- Handle failures per branch with `exceptionally` or `handle`; use `completeOnTimeout` for optional parts and `orTimeout` for required ones.
+- Fan out in parallel, then fan in with `allOf` and `join`.
+- With virtual threads, plain blocking code in parallel tasks is often simpler than long async chains.

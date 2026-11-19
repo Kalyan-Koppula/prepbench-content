@@ -270,3 +270,19 @@ Follow-ups: generalise to N threads printing in round-robin (an index modulo N a
 **How would you shut down a producer/consumer system cleanly?** Stop producers, then enqueue one poison-pill sentinel per consumer so each `take()` returns and the consumer exits; or interrupt the consumers and have them exit on `InterruptedException`. Then `shutdown` and `awaitTermination` the executor.
 
 **What changes in these solutions on virtual threads?** The logic is identical, but on Java 21 long waits inside `synchronized` pin the carrier, so prefer the `ReentrantLock`/`Condition` versions or `BlockingQueue`, and never pool the threads themselves.
+
+## Pitfalls
+
+- Using `if` instead of `while` around `wait()`; spurious wake-ups and competing consumers require re-checking the condition.
+- `notify` where several kinds of waiters share a monitor; use `notifyAll` or separate `Condition`s.
+- Testing concurrent code with one run; repeat under load, and use tools like jcstress for memory-model questions.
+- Forgetting to make shared counters atomic in the "simple" parts of an exercise.
+- Leaving executors running at the end of an exercise.
+
+## Key takeaways
+
+- Start every exercise by naming the shared state and the invariant that must hold.
+- Prefer high-level tools (`BlockingQueue`, atomics, `ConcurrentHashMap`, `Semaphore`) before `wait`/`notify`.
+- Guard waits with `while` loops on the condition.
+- Explain happens-before for each hand-off between threads.
+- Test with many threads and repetitions, and shut everything down cleanly.

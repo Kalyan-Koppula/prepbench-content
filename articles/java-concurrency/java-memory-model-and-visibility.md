@@ -152,6 +152,76 @@ When reasoning about any shared variable, ask:
 
 `volatile` solves 2 and 3. Locks and atomics solve all three. Immutability sidesteps all three.
 
+## Worked example: a stop flag that never stops
+
+```java
+class Worker implements Runnable {
+    private boolean running = true; // not volatile
+
+    public void run() {
+        long count = 0;
+        while (running) {
+            count++;
+        }
+        System.out.println("stopped after " + count);
+    }
+
+    void stop() { running = false; }
+}
+
+Worker w = new Worker();
+new Thread(w).start();
+Thread.sleep(1000);
+w.stop(); // the worker may loop forever
+```
+
+Without `volatile`, nothing creates a happens-before edge between the write in `stop()` and the reads in the loop. The JIT is allowed to hoist the read out of the loop (`if (running) while (true) count++;`), because, from a single thread's point of view, nothing in the loop changes `running`. On a real JVM this program often never terminates.
+
+Declaring the field `volatile` fixes it: every read sees the most recent write, and the JIT can't hoist the read. An `AtomicBoolean` works the same way, and interrupting the thread (`while (!Thread.currentThread().isInterrupted())`) is the idiomatic alternative for stopping tasks.
+
+## The happens-before edges you actually use
+
+| Action A | happens-before action B when… |
+| --- | --- |
+| Any action in a thread | B comes later in the same thread (program order) |
+| Unlocking a monitor or `Lock` | B is a later lock of the same monitor or `Lock` |
+| Writing a `volatile` field | B is a later read of the same field |
+| `Thread.start()` | B is any action in the started thread |
+| Any action in a thread | B is a successful `join()` on that thread |
+| Submitting a task to an executor | B is any action in the task |
+| Completing a `Future` | B follows `get()` returning |
+| Putting into a `BlockingQueue` / `ConcurrentHashMap` | B is the `take` or `get` that sees it |
+| Writing `final` fields in a constructor | B is any read through a properly published reference |
+
+And it's **transitive**: if A happens-before B and B happens-before C, then A happens-before C. That's how a `volatile` flag can safely publish a whole object graph:
+
+```java
+private Config config;            // plain field
+private volatile boolean ready;   // the "publication" flag
+
+void publish() {                  // writer thread
+    config = loadConfig();        // 1
+    ready = true;                 // 2: volatile write
+}
+
+void use() {                      // reader thread
+    if (ready) {                  // 3: volatile read that sees 2
+        apply(config);            // 4: guaranteed to see the fully built config from 1
+    }
+}
+```
+
+## Atomicity is a separate question
+
+`volatile` gives visibility and ordering, not atomicity:
+
+```java
+private volatile int counter;
+void increment() { counter++; } // read, add, write: two threads can both read 5 and both write 6
+```
+
+Use `AtomicInteger.incrementAndGet()`, a `LongAdder`, or a lock for compound actions.
+
 ## Common interview questions
 
 **What is happens-before?** The JMM's ordering relation: if action A happens-before B, A's effects are visible to B. Program order within a thread, unlock-then-lock on a monitor, volatile write-then-read, thread start/join and executor hand-offs all create it, and it is transitive.
@@ -169,3 +239,19 @@ When reasoning about any shared variable, ask:
 **Why are immutable objects thread-safe?** Their state never changes after construction, and the `final` field guarantee ensures every thread sees that state once it has the reference. No locking is needed to share them, and no caller can corrupt them.
 
 **Can a `synchronized` getter and a non-synchronised setter be correct?** No. Both sides need to synchronise (or the field needs to be `volatile`) for the JMM to guarantee the getter sees the setter's write; a one-sided lock establishes no happens-before edge.
+
+## Pitfalls
+
+- Assuming a write made by one thread is visible to others without synchronisation.
+- Using `volatile` for compound actions like `count++` or check-then-act.
+- Double-checked locking without `volatile` on the instance field.
+- Leaking `this` from a constructor (registering listeners, starting threads), which can expose a half-built object.
+- Reasoning about concurrency from "it worked on my machine": weaker hardware memory models and the JIT expose bugs later.
+
+## Key takeaways
+
+- Without a happens-before edge, a thread may never see another thread's writes, or see them out of order.
+- Locks, `volatile`, thread start/join, executors and concurrent collections create those edges.
+- Happens-before is transitive, so one `volatile` write can publish a whole object graph.
+- `volatile` provides visibility and ordering, not atomicity.
+- Prefer immutable objects and safe publication through concurrent structures.

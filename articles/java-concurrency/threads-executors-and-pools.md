@@ -124,6 +124,57 @@ void handle(Request r) {
 
 Pitfalls: values do not propagate to child threads (`InheritableThreadLocal` copies at creation only), to pool threads, or across `CompletableFuture` stages; forgetting `remove()` leaks and, worse, leaks *another request's* context into yours. Java 21 previews `ScopedValue` as the immutable, structured replacement.
 
+## Worked example: sizing and configuring a pool
+
+A service calls a downstream API that takes about 200 ms per call. It must handle 500 requests per second, and each request makes one call.
+
+**Little's law**: concurrency = throughput × latency = 500/s × 0.2 s = **100** calls in flight on average. With platform threads, a pool of around 100–150 threads (headroom for latency spikes) is needed; with a CPU-bound task the answer would instead be close to the number of cores.
+
+```java
+ThreadFactory named = Thread.ofPlatform().name("pricing-client-", 0).factory();
+
+ThreadPoolExecutor pool = new ThreadPoolExecutor(
+    120,                                   // core threads
+    120,                                   // max threads (fixed size)
+    60, TimeUnit.SECONDS,                  // keep-alive for threads above core (unused here)
+    new ArrayBlockingQueue<>(200),         // bounded queue: absorbs short bursts
+    named,                                 // readable names in thread dumps
+    new ThreadPoolExecutor.CallerRunsPolicy()); // when full, the caller runs the task: natural backpressure
+```
+
+Why each choice:
+
+| Setting | Reason |
+| --- | --- |
+| Fixed size 120 | From Little's law plus headroom; more threads would only add context switching |
+| Bounded queue | An unbounded queue hides overload until memory runs out |
+| `CallerRunsPolicy` | Slows the submitting thread instead of dropping work or growing without bound |
+| Named threads | Thread dumps and logs show which pool a thread belongs to |
+
+Measure and adjust: expose pool metrics (active count, queue size, rejected count) and watch them under load. With virtual threads, the same workload needs no pool sizing at all, only a limit on concurrent calls to the downstream service (a semaphore).
+
+## Worked example: shutting down cleanly
+
+```java
+void shutdown(ExecutorService pool) {
+    pool.shutdown(); // stop accepting new tasks; let running and queued tasks finish
+    try {
+        if (!pool.awaitTermination(30, TimeUnit.SECONDS)) {
+            List<Runnable> dropped = pool.shutdownNow(); // interrupt running tasks
+            log.warn("Forced shutdown, {} tasks never started", dropped.size());
+            if (!pool.awaitTermination(10, TimeUnit.SECONDS)) {
+                log.error("Pool did not terminate");
+            }
+        }
+    } catch (InterruptedException e) {
+        pool.shutdownNow();
+        Thread.currentThread().interrupt(); // preserve the interrupt status
+    }
+}
+```
+
+Since Java 19, `ExecutorService` is `AutoCloseable`: `try (var pool = Executors.newFixedThreadPool(8)) { … }` waits for submitted tasks when the block ends. Tasks should respond to interruption (check `Thread.interrupted()` in loops, let `InterruptedException` end blocking calls) so `shutdownNow` can actually stop them.
+
 ## Common interview questions
 
 **What is the difference between `start()` and `run()`?** `start()` asks the JVM to create a new OS thread that calls `run()`; calling `run()` directly just executes the method on the current thread. Calling `start()` twice throws `IllegalThreadStateException`.
@@ -141,3 +192,20 @@ Pitfalls: values do not propagate to child threads (`InheritableThreadLocal` cop
 **How do you stop a running thread?** You cannot kill it; you interrupt it. The task must check `isInterrupted()` or respond to `InterruptedException` from blocking calls, clean up, and exit. `shutdownNow()` on an executor interrupts its workers.
 
 **When should a thread be a daemon?** Only when its work can be abandoned mid-way at JVM exit, such as background cleanup. Anything that writes data or holds resources must be non-daemon and shut down explicitly.
+
+## Pitfalls
+
+- `Executors.newFixedThreadPool` and `newSingleThreadExecutor` use **unbounded** queues; under overload they grow until memory runs out.
+- `newCachedThreadPool` creates unbounded threads under load.
+- Swallowing `InterruptedException` without restoring the interrupt flag.
+- Submitting tasks that wait on other tasks in the same bounded pool (starvation deadlock).
+- Never shutting pools down, which keeps the JVM alive and leaks threads.
+- `ThreadLocal` values left in pooled threads, leaking data between requests.
+
+## Key takeaways
+
+- Use executors, not raw threads; configure pools explicitly with bounded queues and a rejection policy.
+- Size CPU-bound pools near the core count; size I/O-bound pools with Little's law.
+- Name threads and expose pool metrics.
+- Shut down with `shutdown`, `awaitTermination`, then `shutdownNow`, and handle interruption properly.
+- For blocking I/O at scale, virtual threads remove pool sizing; limit downstream concurrency with semaphores.

@@ -152,6 +152,89 @@ if (slots.tryAcquire()) { ... }
 
 Contrast to recite: a latch counts down and cannot be reset; a barrier waits for a fixed number of threads to arrive and resets for the next round; a semaphore limits how many are inside at once and does not care which thread releases.
 
+## Worked example: a read-mostly cache, three ways
+
+A cache of exchange rates is read thousands of times per second and refreshed once a minute.
+
+**1. `ReentrantReadWriteLock`**: many readers at once, writers exclusive.
+
+```java
+class RateCache {
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    private Map<String, BigDecimal> rates = Map.of();
+
+    BigDecimal get(String currency) {
+        lock.readLock().lock();
+        try {
+            return rates.get(currency);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    void refresh(Map<String, BigDecimal> latest) {
+        lock.writeLock().lock();
+        try {
+            rates = Map.copyOf(latest);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+}
+```
+
+**2. An immutable snapshot behind a `volatile` reference**: even simpler, since the whole map is replaced at once.
+
+```java
+class RateCache {
+    private volatile Map<String, BigDecimal> rates = Map.of();
+
+    BigDecimal get(String currency) { return rates.get(currency); } // no lock at all
+    void refresh(Map<String, BigDecimal> latest) { rates = Map.copyOf(latest); } // atomic swap
+}
+```
+
+**3. `ConcurrentHashMap` with per-key loading**: when entries are loaded lazily and independently.
+
+```java
+class RateCache {
+    private final ConcurrentHashMap<String, BigDecimal> rates = new ConcurrentHashMap<>();
+
+    BigDecimal get(String currency) {
+        return rates.computeIfAbsent(currency, c -> rateClient.fetch(c)); // loads each key once
+    }
+}
+```
+
+| Approach | Best when |
+| --- | --- |
+| Read-write lock | Readers need a consistent view across several fields, and updates are partial |
+| Volatile immutable snapshot | The whole data set is replaced at once (configs, rate tables, feature flags) |
+| `ConcurrentHashMap.computeIfAbsent` | Keys are independent and loaded on demand |
+
+Option 2 is often the best answer in an interview: no locks, no contention, trivially correct. Note that `computeIfAbsent` blocks other updates to the same bin while the loader runs, so keep loaders fast or load outside and use `putIfAbsent`.
+
+## Worked example: limiting concurrency with a `Semaphore`
+
+```java
+class ReportService {
+    private final Semaphore slots = new Semaphore(4); // at most 4 heavy reports at once
+
+    Report generate(ReportRequest request) throws InterruptedException {
+        if (!slots.tryAcquire(2, TimeUnit.SECONDS)) {
+            throw new RejectedExecutionException("Too many reports in progress");
+        }
+        try {
+            return buildReport(request); // CPU- and memory-heavy
+        } finally {
+            slots.release();
+        }
+    }
+}
+```
+
+A semaphore limits how many threads are inside a section, without tying the limit to a thread pool. It is the standard backpressure tool with virtual threads, where you can't rely on pool size for limits.
+
 ## Choosing, quickly
 
 | Problem | Reach for |
@@ -185,3 +268,19 @@ Contrast to recite: a latch counts down and cannot be reset; a barrier waits for
 **What is `LongAdder` and why not just `AtomicLong`?** `LongAdder` spreads increments across per-thread cells to avoid contention on a single CAS and sums them on read. Use it for hot write-heavy counters; use `AtomicLong` when you need compare-and-set or a precise instantaneous value.
 
 **What is the ABA problem?** A CAS checks that a value still equals `A`, but it may have changed to `B` and back to `A` in between, so the check passes while state has moved. `AtomicStampedReference` pairs the value with a version stamp to detect it; it mostly matters in lock-free data structures.
+
+## Pitfalls
+
+- Forgetting `unlock()` in a `finally` block.
+- Upgrading a read lock to a write lock in `ReentrantReadWriteLock` (it deadlocks; release the read lock first).
+- Long-running or blocking loaders inside `computeIfAbsent`.
+- `CopyOnWriteArrayList` for write-heavy lists (every write copies the array).
+- Using an `AtomicInteger` per field when several fields must change together; use a lock or an immutable snapshot.
+
+## Key takeaways
+
+- `synchronized` is simple and sufficient for most locking; `ReentrantLock` adds `tryLock`, timeouts, fairness and conditions.
+- Atomics use compare-and-swap for lock-free single-variable updates; `LongAdder` scales for hot counters.
+- `ConcurrentHashMap` provides atomic per-key operations; use them instead of check-then-act.
+- Immutable snapshots behind a `volatile` reference are the simplest thread-safe cache for whole-data refreshes.
+- Use `BlockingQueue` for producer-consumer and `Semaphore` to bound concurrency.

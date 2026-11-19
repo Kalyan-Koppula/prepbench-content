@@ -114,6 +114,58 @@ The interview answer, in order:
 3. Reactive still earns its place for *streaming* semantics: backpressure over unbounded streams, event-driven pipelines, server-sent events, composing many signals with time-based operators. The Flow API and Reactive Streams interfaces are not going away.
 4. Caveat: virtual threads need the libraries beneath you to block cooperatively (JDBC drivers, HTTP clients are fine; `synchronized`-heavy code on JDK 21 is not), and backpressure must be made explicit with semaphores or bounded queues rather than coming for free.
 
+## Worked example: migrating a fan-out endpoint
+
+A dashboard endpoint calls five services. The original version used a fixed pool of 50 threads and `CompletableFuture` chains; under load, requests queued behind the pool.
+
+```java
+// After: one virtual thread per subtask, plain blocking code
+DashboardData load(String userId) throws Exception {
+    try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+        Future<Profile> profile = executor.submit(() -> profiles.get(userId));
+        Future<List<Order>> orders = executor.submit(() -> orderService.recent(userId));
+        Future<Balance> balance = executor.submit(() -> billing.balance(userId));
+        Future<List<Alert>> alerts = executor.submit(() -> alertsFor(userId));
+        Future<Usage> usage = executor.submit(() -> metering.usage(userId));
+        return new DashboardData(profile.get(), orders.get(), balance.get(), alerts.get(), usage.get());
+    } // close() waits for all subtasks
+}
+
+// Backpressure for a fragile downstream: at most 20 concurrent calls, across all requests
+private final Semaphore billingLimit = new Semaphore(20);
+
+Balance balanceWithLimit(String userId) throws InterruptedException {
+    billingLimit.acquire();
+    try {
+        return billing.balance(userId);
+    } finally {
+        billingLimit.release();
+    }
+}
+```
+
+What changed: each request's five calls run concurrently on cheap virtual threads; the code reads top to bottom; stack traces show the real call chain; and limits that used to be implied by pool size are now explicit semaphores where they matter.
+
+What didn't change: if one call fails, the others keep running until `close()` waits for them. Structured concurrency addresses exactly that.
+
+## Structured concurrency, concretely
+
+`StructuredTaskScope` (a preview API in recent JDKs; check your version's exact form) treats a group of subtasks as one unit: they start together, finish together, and failure or cancellation propagates.
+
+```java
+DashboardData load(String userId) throws Exception {
+    try (var scope = StructuredTaskScope.open()) { // default policy: fail fast if any subtask fails
+        var profile = scope.fork(() -> profiles.get(userId));
+        var orders = scope.fork(() -> orderService.recent(userId));
+        var balance = scope.fork(() -> billing.balance(userId));
+        scope.join(); // waits for all; if one failed, the others are cancelled and join throws
+        return new DashboardData(profile.get(), orders.get(), balance.get(), List.of(), null);
+    }
+}
+```
+
+Benefits over loose futures: no orphaned subtasks after a failure, cancellation of the parent cancels the children, and thread dumps show the task hierarchy. Scoped values (`ScopedValue`) complement it as an immutable, inheritable replacement for `ThreadLocal` in these trees.
+
 ## Common interview questions
 
 **What is a virtual thread and how is it different from a platform thread?** A virtual thread is a JDK-managed thread whose stack lives on the heap and which is mounted on a small pool of carrier OS threads only while running. Blocking unmounts it so the carrier can run another. Platform threads map one-to-one to OS threads with a fixed large stack and are expensive to create and keep.
@@ -131,3 +183,19 @@ The interview answer, in order:
 **Is reactive programming obsolete with virtual threads?** For typical request/response services, blocking code on virtual threads is now simpler and scales similarly. Reactive remains the right tool for streaming data with backpressure and event-driven composition. Choose per workload, not per fashion.
 
 **Why is `synchronized` a problem with virtual threads on Java 21?** The monitor implementation pinned the carrier, so a virtual thread blocking inside `synchronized` could not unmount. Heavy use could exhaust carriers or deadlock. JDK 24 reimplemented monitors to unmount correctly.
+
+## Pitfalls
+
+- Pooling virtual threads; create one per task instead.
+- Using virtual threads for CPU-bound work, where they bring no benefit.
+- Large or numerous `ThreadLocal` values, multiplied by millions of threads.
+- Pinning: long blocking operations inside `synchronized` blocks on older JDKs (fixed for most cases in JDK 24+) and inside native calls.
+- Removing all limits: downstream services and databases still need concurrency caps.
+
+## Key takeaways
+
+- Virtual threads make thread-per-task cheap, so blocking code scales for I/O-heavy workloads.
+- They don't speed up CPU-bound work and must not be pooled.
+- Replace pool-size limits with explicit semaphores or connection pool limits.
+- Watch for pinning and heavy thread-locals.
+- Structured concurrency groups subtasks so failures and cancellation propagate cleanly.
