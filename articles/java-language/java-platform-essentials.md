@@ -128,6 +128,61 @@ Caused by: org.postgresql.util.PSQLException: ERROR: duplicate key value violate
 5. Suppressed exceptions (from try-with-resources) print as `Suppressed:` blocks.
 6. A trace with no frames at all is usually the JIT's fast-throw optimisation; rerun with `-XX:-OmitStackTraceInFastThrow`.
 
+## What happens when you run a Java program
+
+```
+Main.java ──javac──▶ Main.class (bytecode) ──java──▶ JVM
+                                                     ├─ class loading (bootstrap → platform → application loaders)
+                                                     ├─ verification (bytecode is type-safe)
+                                                     ├─ interpretation, profiling
+                                                     └─ JIT compilation of hot methods (C1, then C2) to machine code
+```
+
+1. **Compilation.** `javac` turns source into platform-independent bytecode.
+2. **Class loading.** Classes are loaded lazily, the first time they're used, through a hierarchy of class loaders that delegate to their parent first.
+3. **Verification and linking.** The JVM checks the bytecode can't break type safety, then resolves references and runs static initialisers.
+4. **Execution.** The interpreter starts running bytecode immediately while profiling which methods are hot.
+5. **JIT compilation.** Hot methods are compiled to native code, first quickly (C1), then with aggressive optimisations based on the profile (C2): inlining, escape analysis, loop unrolling.
+
+This is why Java services "warm up": the first requests run interpreted code, and performance improves as the JIT compiles hot paths. Techniques to reduce warm-up include class data sharing (CDS), ahead-of-time caches (Project Leyden work in recent JDKs) and GraalVM native images (compiled ahead of time, fast start-up, some reflection limits).
+
+## Memory areas
+
+| Area | Holds | Shared? |
+| --- | --- | --- |
+| Heap | All objects and arrays | Shared by all threads, managed by the garbage collector |
+| Stack (one per thread) | Frames with local variables and partial results | Private to the thread |
+| Metaspace | Class metadata | Shared; outside the heap |
+| Code cache | JIT-compiled native code | Shared |
+
+A `StackOverflowError` means one thread's stack is exhausted (usually runaway recursion). An `OutOfMemoryError: Java heap space` means live objects don't fit in the heap; `Metaspace` variants point at class-loading leaks.
+
+## Garbage collectors in one table
+
+| Collector | Goal | Typical use |
+| --- | --- | --- |
+| G1 (default) | Balance throughput and pause times | General-purpose services |
+| ZGC | Pauses under a millisecond, very large heaps | Latency-sensitive services |
+| Shenandoah | Low pauses, concurrent compaction | Similar to ZGC |
+| Parallel | Maximum throughput, longer pauses | Batch jobs |
+| Serial | Small heaps, single core | Tiny containers, tools |
+
+Container-aware defaults matter: the JVM reads the container's memory and CPU limits; set `-XX:MaxRAMPercentage` rather than a fixed `-Xmx` so heap size scales with the container.
+
+## Virtual threads in brief
+
+Since Java 21, virtual threads are cheap threads scheduled by the JVM on a small pool of carrier threads. A blocking call (I/O, `sleep`, a lock wait) unmounts the virtual thread instead of blocking an OS thread, so a server can run one thread per request even with hundreds of thousands of concurrent requests:
+
+```java
+try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+    for (Request r : requests) {
+        executor.submit(() -> handle(r)); // blocking code, written simply, scales
+    }
+}
+```
+
+They make thread-per-request code scale without reactive frameworks. They don't make CPU-bound work faster. See the concurrency track for details.
+
 ## Common interview questions
 
 **What is the difference between JDK, JRE and JVM?**
@@ -153,3 +208,19 @@ It starts interpreting bytecode, profiles hot methods, and the JIT (C1 quickly, 
 
 **What is Metaspace?**
 The native-memory area that holds class metadata since Java 8, replacing PermGen. It grows dynamically and is bounded by `-XX:MaxMetaspaceSize`; leaks there come from class loaders that are never unloaded, typical of hot redeploys.
+
+## Pitfalls
+
+- Confusing JDK (tools plus runtime), JRE (runtime) and JVM (the virtual machine).
+- Benchmarking without warm-up; use JMH for micro-benchmarks.
+- Fixed heap sizes in containers that ignore the container limit.
+- Using `java.util.Date` and `Calendar` in new code instead of `java.time`.
+- Ignoring LTS versions when choosing a production JDK.
+
+## Key takeaways
+
+- Source compiles to bytecode; the JVM loads, verifies, interprets and JIT-compiles it.
+- Java services warm up as hot code gets compiled; native images and caches trade flexibility for start-up speed.
+- Objects live on the shared heap; each thread has its own stack.
+- G1 is the default collector; ZGC targets very low pauses.
+- Use LTS releases, `java.time` for dates, and virtual threads for high-concurrency blocking I/O.

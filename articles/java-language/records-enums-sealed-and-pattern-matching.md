@@ -178,6 +178,88 @@ static String describe(Object o) {
 
 Record patterns work in `instanceof` too. Unnamed pattern variables `_` arrive in Java 22.
 
+## Worked example: modelling payment results
+
+Together, sealed types, records and pattern matching model "one of these cases, each with its own data", and let the compiler check that every case is handled:
+
+```java
+sealed interface PaymentResult permits Approved, Declined, NeedsAction {}
+
+record Approved(String transactionId, BigDecimal amount) implements PaymentResult {}
+record Declined(String reason, boolean retryable) implements PaymentResult {}
+record NeedsAction(URI redirectUrl) implements PaymentResult {}
+
+static String describe(PaymentResult result) {
+    return switch (result) {
+        case Approved(String id, BigDecimal amount) -> "Paid " + amount + " (" + id + ")";
+        case Declined(String reason, boolean retryable) when retryable -> "Declined, try again: " + reason;
+        case Declined(String reason, boolean retryable) -> "Declined: " + reason;
+        case NeedsAction(URI url) -> "Complete verification at " + url;
+    }; // no default: the compiler knows these are all the cases
+}
+```
+
+What each feature contributes:
+
+| Feature | Contribution |
+| --- | --- |
+| `sealed … permits` | The set of cases is closed and known to the compiler |
+| Records | Each case is an immutable data carrier with `equals`, `hashCode` and `toString` |
+| Record patterns | `case Approved(String id, BigDecimal amount)` tests the type and extracts fields in one step |
+| Guards (`when`) | Refine a case with a condition; order matters, more specific first |
+| Exhaustive `switch` | Adding a fourth result type turns every unhandled `switch` into a compile error |
+
+Before these features, the same design needed a class hierarchy with a visitor, or an enum plus nullable fields and `instanceof` chains that the compiler couldn't check.
+
+## Records in more depth
+
+```java
+public record Money(BigDecimal amount, Currency currency) {
+    public Money { // compact constructor: validate and normalise
+        Objects.requireNonNull(amount);
+        Objects.requireNonNull(currency);
+        if (amount.scale() > currency.getDefaultFractionDigits()) {
+            throw new IllegalArgumentException("too many decimals for " + currency);
+        }
+    }
+
+    public static Money of(String amount, String currencyCode) { // static factory
+        return new Money(new BigDecimal(amount), Currency.getInstance(currencyCode));
+    }
+
+    public Money plus(Money other) { // "withers" return new instances
+        if (!currency.equals(other.currency)) throw new IllegalArgumentException("currency mismatch");
+        return new Money(amount.add(other.amount), currency);
+    }
+}
+```
+
+- Fields are `private final`; there are no setters, so "changing" a record means creating a new one.
+- Records are **shallowly** immutable: a `record Team(List<String> members)` can still have its list mutated. Copy defensively in the compact constructor (`members = List.copyOf(members);`).
+- Records can implement interfaces and have static and instance methods, but can't extend classes (they implicitly extend `java.lang.Record`).
+- Good uses: DTOs, value objects, map keys, multiple return values, events. Not a fit for JPA entities, which need mutability and a no-argument constructor.
+
+## Enums with behaviour
+
+Enums are full classes with a fixed set of instances, which makes them good for small state machines:
+
+```java
+enum OrderStatus {
+    PLACED { Set<OrderStatus> next() { return EnumSet.of(PAID, CANCELLED); } },
+    PAID { Set<OrderStatus> next() { return EnumSet.of(SHIPPED, REFUNDED); } },
+    SHIPPED { Set<OrderStatus> next() { return EnumSet.of(DELIVERED); } },
+    DELIVERED { Set<OrderStatus> next() { return EnumSet.noneOf(OrderStatus.class); } },
+    CANCELLED { Set<OrderStatus> next() { return EnumSet.noneOf(OrderStatus.class); } },
+    REFUNDED { Set<OrderStatus> next() { return EnumSet.noneOf(OrderStatus.class); } };
+
+    abstract Set<OrderStatus> next();
+
+    boolean canMoveTo(OrderStatus target) { return next().contains(target); }
+}
+```
+
+Use `EnumMap` and `EnumSet` for enum keys: they are backed by arrays and bit vectors and are much faster than hash-based collections. Persist enums by name (not `ordinal()`), since reordering the constants changes ordinals.
+
 ## The TypeScript mapping
 
 | TypeScript | Java 21 |
@@ -214,3 +296,19 @@ When the selector type is not sealed (or is an enum but you want to survive new 
 
 **What happens if you switch on `null`?**
 A `NullPointerException` unless the switch has a `case null` (or `case null, default`). This applies to all switches, including the old string and enum forms.
+
+## Pitfalls
+
+- Assuming records are deeply immutable when they hold mutable collections.
+- Using records for JPA entities.
+- Storing `ordinal()` values in databases or APIs.
+- Putting a broad pattern before a more specific one in a `switch` (the compiler reports it as dominated).
+- Adding a `default` branch to a switch over a sealed type, which hides missing cases when new types are added.
+
+## Key takeaways
+
+- Records are concise immutable data carriers; validate in the compact constructor and copy mutable inputs.
+- Enums are classes with a fixed set of instances; they can carry fields and behaviour.
+- Sealed interfaces close a hierarchy so the compiler knows every subtype.
+- Pattern matching for `instanceof` and `switch`, with record patterns and guards, replaces casts and visitor boilerplate.
+- Sealed types plus exhaustive switches turn "forgot a case" into a compile error.

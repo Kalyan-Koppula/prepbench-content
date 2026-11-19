@@ -140,6 +140,89 @@ public static <T extends Comparable<? super T>> T maxOf(Collection<? extends T> 
 
 `Comparable<? super T>` admits a type that inherits its comparison from a parent (`java.sql.Timestamp` implements `Comparable<Date>`, not `Comparable<Timestamp>`); `Collection<? extends T>` admits any collection of subtypes. Drop either wildcard and real call sites stop compiling. That is the signature of `Collections.max`.
 
+## Worked example: a type-safe repository
+
+Generics shine when one implementation serves many types while keeping each use type-safe:
+
+```java
+interface Entity<ID> {
+    ID id();
+}
+
+interface Repository<T extends Entity<ID>, ID> {
+    Optional<T> findById(ID id);
+    List<T> findAll(Predicate<? super T> filter);
+    T save(T entity);
+}
+
+class InMemoryRepository<T extends Entity<ID>, ID> implements Repository<T, ID> {
+    private final Map<ID, T> store = new ConcurrentHashMap<>();
+
+    public Optional<T> findById(ID id) {
+        return Optional.ofNullable(store.get(id));
+    }
+
+    public List<T> findAll(Predicate<? super T> filter) {
+        return store.values().stream().filter(filter).toList();
+    }
+
+    public T save(T entity) {
+        store.put(entity.id(), entity);
+        return entity;
+    }
+}
+
+record Customer(UUID id, String name) implements Entity<UUID> {}
+
+Repository<Customer, UUID> customers = new InMemoryRepository<>();
+customers.save(new Customer(UUID.randomUUID(), "Ana"));
+Predicate<Object> any = o -> true;
+customers.findAll(any); // allowed: Predicate<? super Customer> accepts a Predicate<Object>
+```
+
+Reading the signatures:
+
+| Piece | Meaning |
+| --- | --- |
+| `T extends Entity<ID>` | Only entities can be stored, and the compiler knows `T` has an `id()` returning `ID` |
+| `Predicate<? super T>` | A filter that can handle `T` or any supertype: consumers use `super` (PECS) |
+| `Optional<T>` | The caller gets back exactly the type it stored, no casts |
+
+This is the shape Spring Data's `CrudRepository<T, ID>` uses.
+
+## Worked example: a generic method with bounds
+
+```java
+static <T extends Comparable<? super T>> T max(Collection<? extends T> items) {
+    Iterator<? extends T> it = items.iterator();
+    T best = it.next();
+    while (it.hasNext()) {
+        T next = it.next();
+        if (next.compareTo(best) > 0) best = next;
+    }
+    return best;
+}
+```
+
+- `T extends Comparable<? super T>` allows types whose `compareTo` is inherited from a supertype (for example, `java.sql.Timestamp` extends `Date`, which implements `Comparable<Date>`).
+- `Collection<? extends T>` accepts a collection of `T` or any subtype of `T`. The method only reads from it, so it's a producer (`extends`).
+
+This is essentially the signature of `Collections.max`.
+
+## What erasure means in practice
+
+After compilation, `List<String>` and `List<Integer>` are both just `List`. The compiler inserts casts where you read elements and checks types where you write them. That has visible consequences:
+
+| You can't… | Because… | Workaround |
+| --- | --- | --- |
+| `new T()` | `T` is unknown at runtime | Pass a `Supplier<T>` or a `Class<T>` |
+| `new T[10]` | Arrays need their runtime element type | Use a `List<T>`, or `Array.newInstance(type, n)` |
+| `x instanceof List<String>` | Type arguments are gone | Check `instanceof List<?>`, then the elements |
+| Overload `f(List<String>)` and `f(List<Integer>)` | Both erase to `f(List)` | Use different method names |
+| Use primitives as type arguments | Type arguments must be reference types | Boxed types or primitive specialisations (`IntStream`) |
+
+Erasure was chosen for backward compatibility: generic code could interoperate with pre-Java-5 libraries without changing the JVM.
+
 ## Common interview questions
 
 **Why is `List<Integer>` not a `List<Number>`?**
@@ -165,3 +248,19 @@ You pass a `TypeReference<List<User>>() {}`, an anonymous subclass whose generic
 
 **When would you write a generic method instead of a generic class?**
 When only one operation is parameterised, or when the method is static (which cannot use a class type parameter). Utility methods like `Collections.sort` and `List.of` are the pattern.
+
+## Pitfalls
+
+- Raw types (`List` instead of `List<String>`), which switch off type checking.
+- Expecting `List<Integer>` to be a `List<Number>`: generics are invariant.
+- Writing into a `List<? extends T>` (not allowed) or reading a specific type from `List<? super T>` (you get `Object`).
+- Ignoring unchecked warnings; suppress them only where you've proved safety, with a comment.
+- Mixing arrays and generics.
+
+## Key takeaways
+
+- Generics give compile-time type safety and remove casts; they are erased at runtime.
+- Generics are invariant: use wildcards to accept families of types.
+- PECS: producers `extends`, consumers `super`.
+- Bounded type parameters (`T extends Comparable<? super T>`) express what a type must support.
+- Erasure explains why you can't create `T` instances or generic arrays; pass a `Supplier` or `Class` instead.

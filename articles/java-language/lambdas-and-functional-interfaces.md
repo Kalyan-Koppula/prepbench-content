@@ -144,6 +144,83 @@ It works but the types are noisy, which is why Java code tends to use small clas
 
 Use an anonymous class when you need an abstract class, state, or more than one method; otherwise a lambda.
 
+## Worked example: a validation pipeline
+
+Functional interfaces compose small rules into bigger ones without new classes:
+
+```java
+record User(String email, String name, int age) {}
+
+Predicate<User> hasEmail = u -> u.email() != null && u.email().contains("@");
+Predicate<User> hasName = u -> u.name() != null && !u.name().isBlank();
+Predicate<User> isAdult = u -> u.age() >= 18;
+
+Predicate<User> canRegister = hasEmail.and(hasName).and(isAdult);
+
+// Validation with messages: a list of (rule, message) pairs
+record Rule<T>(Predicate<T> check, String message) {}
+
+List<Rule<User>> rules = List.of(
+    new Rule<>(hasEmail, "email is invalid"),
+    new Rule<>(hasName, "name is required"),
+    new Rule<>(isAdult, "must be 18 or older"));
+
+Function<User, List<String>> validate = user -> rules.stream()
+    .filter(rule -> !rule.check().test(user))
+    .map(Rule::message)
+    .toList();
+
+validate.apply(new User("ana@example.com", "", 17)); // [name is required, must be 18 or older]
+```
+
+New rules are data, not code changes in a validator class. This is the strategy pattern without the boilerplate: each lambda is a strategy object implementing a one-method interface.
+
+## How lambdas are compiled
+
+A lambda is not an anonymous inner class, even though it can often replace one:
+
+- The compiler moves the lambda body into a private method of the enclosing class.
+- At the call site it emits an `invokedynamic` instruction. The first time it runs, the JVM uses `LambdaMetafactory` to generate a small class implementing the functional interface, and links the call site to it.
+- Non-capturing lambdas are typically created once and reused (effectively a singleton); capturing lambdas create a small object holding the captured values.
+
+Consequences: no extra `.class` file per lambda, cheaper start-up than anonymous classes, and `this` inside a lambda refers to the enclosing instance, not to the lambda.
+
+## Checked exceptions and lambdas
+
+The standard functional interfaces don't declare checked exceptions, so this doesn't compile:
+
+```java
+List<Path> files = ...;
+files.stream().map(Files::readString).toList(); // readString throws IOException
+```
+
+Options, from simplest:
+
+1. Use a loop where the checked exception can propagate normally.
+2. Wrap and rethrow as unchecked inside the lambda: `catch (IOException e) { throw new UncheckedIOException(e); }`.
+3. Define your own functional interface that declares the exception, with an adapter:
+
+```java
+@FunctionalInterface
+interface ThrowingFunction<T, R> {
+    R apply(T t) throws Exception;
+
+    static <T, R> Function<T, R> unchecked(ThrowingFunction<T, R> f) {
+        return t -> {
+            try {
+                return f.apply(t);
+            } catch (RuntimeException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+    }
+}
+
+files.stream().map(ThrowingFunction.unchecked(Files::readString)).toList();
+```
+
 ## Common interview questions
 
 **What is a functional interface?**
@@ -169,3 +246,19 @@ They are equivalent. `identity()` reads as intent in `Collectors.toMap(Function.
 
 **What does `invokedynamic` have to do with lambdas?**
 Each lambda expression compiles to a private synthetic method plus an `invokedynamic` call site that, on first execution, asks `LambdaMetafactory` to spin up a class implementing the target interface. That is why lambdas do not produce `Outer$1.class` files and why non-capturing lambdas can be cached as singletons.
+
+## Pitfalls
+
+- Mutating captured local variables (not allowed) or shared collections from inside lambdas (allowed but unsafe with parallel streams).
+- Overloaded methods taking different functional interfaces, which make lambdas ambiguous to the compiler.
+- Long multi-line lambdas: extract a named method and use a method reference.
+- Expecting `this` inside a lambda to mean the lambda.
+- Swallowing checked exceptions inside lambdas instead of wrapping them.
+
+## Key takeaways
+
+- A functional interface has one abstract method; lambdas and method references implement it.
+- Learn the core vocabulary: `Function`, `Predicate`, `Supplier`, `Consumer`, their `Bi` and primitive variants.
+- Captured locals must be effectively final; captured fields and objects can still change.
+- Compose with `andThen`, `compose`, `and`, `or`, `negate`.
+- Lambdas compile to `invokedynamic` and private methods, not inner classes.

@@ -196,3 +196,19 @@ They are part of a method's signature so callers are forced to acknowledge recov
 
 **What is `NullPointerException` and how do you avoid it?**
 Dereferencing a `null` reference. Avoid it by not returning `null` (empty collections, `Optional`), validating inputs with `Objects.requireNonNull`, using records with non-null invariants, and reading the helpful NPE messages Java 14+ prints that name the exact variable.
+
+## Pitfalls
+
+- Comparing strings with `==` out of JavaScript habit.
+- Expecting closures to capture mutable locals: Java lambdas only capture effectively final variables.
+- Treating `null` like `undefined`: there is one "no value", and calling a method on it throws `NullPointerException`.
+- Assuming integer division behaves like JavaScript numbers: `7 / 2` is `3` for `int`s.
+- Writing everything as static utility methods instead of small classes with clear responsibilities.
+
+## Key takeaways
+
+- Java is compiled to bytecode and statically typed; most JavaScript runtime errors become compile errors.
+- Everything lives in classes; use records for data, interfaces for behaviour, and composition over inheritance.
+- `equals`/`hashCode` replace JavaScript's reference-or-value intuitions for objects.
+- Checked exceptions are part of method signatures.
+- Collections, streams and `Optional` map closely to JavaScript arrays, iterator helpers and `?.`/`??`, with types.

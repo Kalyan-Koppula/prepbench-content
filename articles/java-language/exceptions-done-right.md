@@ -181,6 +181,93 @@ Caused by: java.sql.SQLException: connection refused                <- the real 
 
 Read the first frame for where it was thrown, scan down for the first frame in your package for where it matters, and read the last `Caused by:` for the root cause. Frames marked `... n more` repeat the enclosing trace.
 
+## Worked example: exceptions across layers
+
+A REST endpoint creates an order. Each layer has a different job with exceptions:
+
+```java
+// Repository layer: translate infrastructure failures, keep the cause
+public Order insert(Order order) {
+    try {
+        return jdbc.insert(order);
+    } catch (SQLException e) {
+        throw new DataAccessException("Failed to insert order " + order.id(), e);
+    }
+}
+
+// Domain/service layer: express business rules as specific exceptions
+public Order placeOrder(PlaceOrder command) {
+    Product product = products.findById(command.productId())
+        .orElseThrow(() -> new NotFoundException("Product " + command.productId()));
+    if (product.stock() < command.quantity()) {
+        throw new InsufficientStockException(product.id(), product.stock(), command.quantity());
+    }
+    return orders.insert(Order.from(command, product));
+}
+
+// Web layer: map exceptions to HTTP responses in one place
+@RestControllerAdvice
+class ApiErrors {
+    @ExceptionHandler(NotFoundException.class)
+    ProblemDetail notFound(NotFoundException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+
+    @ExceptionHandler(InsufficientStockException.class)
+    ProblemDetail conflict(InsufficientStockException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+    }
+
+    @ExceptionHandler(Exception.class)
+    ProblemDetail unexpected(Exception e) {
+        log.error("Unhandled error", e); // full stack trace in logs
+        return ProblemDetail.forStatus(HttpStatus.INTERNAL_SERVER_ERROR); // no internals to clients
+    }
+}
+```
+
+The principles at work:
+
+- **Throw at the point of failure** with a specific type and a message that includes the identifying values.
+- **Translate at boundaries** (SQL to data-access, data-access to domain), always passing the original as the **cause**.
+- **Catch where you can act**: retry, fall back, or convert to a response. Everywhere else, let it propagate.
+- **Log once**, at the place that handles the exception; logging and rethrowing at every layer duplicates stack traces.
+
+## Designing custom exceptions
+
+```java
+public class InsufficientStockException extends RuntimeException {
+    private final String productId;
+    private final int available;
+    private final int requested;
+
+    public InsufficientStockException(String productId, int available, int requested) {
+        super("Product %s: requested %d, only %d available".formatted(productId, requested, available));
+        this.productId = productId;
+        this.available = available;
+        this.requested = requested;
+    }
+
+    public String productId() { return productId; }
+    public int available() { return available; }
+    public int requested() { return requested; }
+}
+```
+
+Structured fields let handlers build precise responses (for example, telling the client how many are available) without parsing the message. Keep the hierarchy shallow: a base exception per module and a few specific subclasses is usually enough.
+
+## Exceptions versus result types
+
+Not every failure is exceptional. Validation errors that users trigger routinely, or "not found" lookups, can be modelled as values:
+
+```java
+sealed interface ParseResult permits Parsed, Invalid {}
+record Parsed(LocalDate date) implements ParseResult {}
+record Invalid(String input, String reason) implements ParseResult {}
+```
+
+Return types like this (or `Optional` for simple absence) make the failure path visible in the signature and cheap to handle. Use exceptions for conditions the immediate caller usually can't handle, and result types for expected outcomes the caller must handle.
+
 ## Common interview questions
 
 **What is the difference between checked and unchecked exceptions, and which should you use?**
@@ -206,3 +293,20 @@ Throw domain exceptions from services, never catch in controllers, map them cent
 
 **What is `Error` and should you catch it?**
 A subclass of `Throwable` for conditions the application cannot recover from: `OutOfMemoryError`, `StackOverflowError`, `NoClassDefFoundError`. Do not catch it except at a top-level handler that logs and exits.
+
+## Pitfalls
+
+- Catching `Exception` or `Throwable` broadly and continuing as if nothing happened.
+- Empty `catch` blocks; at minimum, log with context or rethrow.
+- Losing the cause when wrapping (`new MyException(e.getMessage())` instead of passing `e`).
+- Logging and rethrowing at every layer.
+- Using exceptions for normal control flow in hot paths.
+- Returning from `finally`, which silently discards exceptions.
+
+## Key takeaways
+
+- `Error` signals JVM problems; checked exceptions are for recoverable conditions the caller must address; unchecked for programming errors and most application failures.
+- Throw specific exceptions with identifying details; wrap with the cause when crossing layers.
+- Handle exceptions where you can act, and map them to responses in one central place.
+- `try`-with-resources closes resources reliably and keeps suppressed exceptions.
+- Consider result types or `Optional` for expected, routine failures.

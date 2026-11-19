@@ -182,6 +182,85 @@ Never write `return this.x - o.x` for ints: it overflows for large values of opp
 | Enum values | `==` is safe and null-safe; `equals` also fine |
 | `BigDecimal` by value ignoring scale | `compareTo(x) == 0` (`equals` treats `2.0` and `2.00` as different) |
 
+## Worked example: a correct value class
+
+```java
+public final class EmailAddress implements Comparable<EmailAddress> {
+    private final String value; // normalised, immutable
+
+    public EmailAddress(String raw) {
+        Objects.requireNonNull(raw, "email");
+        String trimmed = raw.strip().toLowerCase(Locale.ROOT);
+        if (!trimmed.contains("@")) throw new IllegalArgumentException("Invalid email: " + raw);
+        this.value = trimmed;
+    }
+
+    public String value() { return value; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof EmailAddress other)) return false;
+        return value.equals(other.value);
+    }
+
+    @Override
+    public int hashCode() { return value.hashCode(); }
+
+    @Override
+    public int compareTo(EmailAddress other) { return value.compareTo(other.value); }
+
+    @Override
+    public String toString() { return value; }
+}
+```
+
+Why each part matters:
+
+- `final` class and `final` field: the object can't change after construction, so its hash code stays valid while it sits in a `HashSet` or is a `HashMap` key.
+- Normalising in the constructor (`strip`, lower case with `Locale.ROOT`) means `"Ana@Example.com "` and `"ana@example.com"` are equal.
+- `equals` and `hashCode` use the same field, keeping the contract: equal objects have equal hash codes.
+- `compareTo` is **consistent with equals** (returns 0 exactly when `equals` is true), so sorted collections like `TreeSet` agree with hash-based ones.
+- `Locale.ROOT` avoids the Turkish-locale bug where `"TITLE".toLowerCase()` produces a dotless ı.
+
+A record gives you the same `equals`/`hashCode`/`toString` with far less code: `record EmailAddress(String value)` with a compact constructor for the validation.
+
+## What goes wrong when the contract breaks
+
+```java
+class Point {
+    int x, y;
+    Point(int x, int y) { this.x = x; this.y = y; }
+    @Override public boolean equals(Object o) {
+        return o instanceof Point p && p.x == x && p.y == y;
+    }
+    // hashCode not overridden
+}
+
+Set<Point> points = new HashSet<>();
+points.add(new Point(1, 2));
+points.contains(new Point(1, 2)); // false: different identity hash codes, different buckets
+```
+
+And with a mutable key:
+
+```java
+Point p = new Point(1, 2); // assume hashCode is now correctly overridden
+points.add(p);
+p.x = 5; // the stored hash no longer matches
+points.contains(p); // false, though p is in the set: it's in the bucket for (1, 2)
+```
+
+Both bugs are silent. That is why value types should be immutable and always override both methods together.
+
+## Strings in memory
+
+- `String` is immutable, which makes it safe to share, cache its hash code, and use as a map key.
+- String **literals** are interned in the string pool, so `"a" == "a"` is `true`; strings built at runtime are separate objects, so `new String("a") == "a"` is `false`. Always compare with `equals`.
+- Since Java 9, strings store Latin-1 text in one byte per character (compact strings), halving memory for most text.
+- `+` in a loop creates a new string each iteration; the compiler optimises single expressions, but loops need a `StringBuilder`.
+- Text blocks (`"""`) handle multi-line strings with sensible indentation.
+
 ## Common interview questions
 
 **Why does `Integer a = 127, b = 127; a == b` print `true` but `128` prints `false`?**
@@ -207,3 +286,20 @@ Binary floating point cannot represent most decimal fractions exactly, so sums d
 
 **What is the difference between `equals` and `compareTo` returning 0?**
 Nothing requires them to agree, but sorted collections use `compareTo` for membership while hash collections use `equals`. If they disagree, a `TreeSet` can reject an element a `HashSet` would accept. `BigDecimal` is the standard example of an inconsistent pair.
+
+## Pitfalls
+
+- Comparing strings or boxed numbers with `==`.
+- Overriding `equals` without `hashCode`.
+- Mutating objects used as hash keys.
+- `Integer` caching: `Integer.valueOf(127) == Integer.valueOf(127)` is true but 128 isn't; never rely on it.
+- Unboxing `null` (`int n = map.get(key);`) throws `NullPointerException`.
+- Using `double` for money; use `BigDecimal` with an explicit scale and rounding mode.
+
+## Key takeaways
+
+- Primitives compare by value with `==`; objects need `equals`.
+- Override `equals` and `hashCode` together, based on the same immutable fields.
+- Keep `compareTo` consistent with `equals`.
+- Strings are immutable and pooled for literals; build them in loops with `StringBuilder`.
+- Records give correct value semantics for free.

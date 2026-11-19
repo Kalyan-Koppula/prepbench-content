@@ -145,6 +145,68 @@ String city = findUser(id)
 
 Streams win for declarative transformations, grouping and collecting; loops win for early exit with complex conditions, mutation of several accumulators, checked exceptions, and index access. Interviewers accept either; they reject a stream with side effects (`forEach(x -> map.put(...))`) when a collector exists.
 
+## Worked example: a sales report with streams
+
+```java
+record Sale(String region, String product, int quantity, BigDecimal unitPrice, LocalDate date) {
+    BigDecimal total() { return unitPrice.multiply(BigDecimal.valueOf(quantity)); }
+}
+
+// Revenue per region for 2025, highest first
+Map<String, BigDecimal> revenueByRegion = sales.stream()
+    .filter(s -> s.date().getYear() == 2025)
+    .collect(Collectors.groupingBy(
+        Sale::region,
+        Collectors.reducing(BigDecimal.ZERO, Sale::total, BigDecimal::add)));
+
+List<Map.Entry<String, BigDecimal>> ranked = revenueByRegion.entrySet().stream()
+    .sorted(Map.Entry.<String, BigDecimal>comparingByValue().reversed())
+    .toList();
+
+// Top three products by units sold
+List<String> topProducts = sales.stream()
+    .collect(Collectors.groupingBy(Sale::product, Collectors.summingInt(Sale::quantity)))
+    .entrySet().stream()
+    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+    .limit(3)
+    .map(Map.Entry::getKey)
+    .toList();
+
+// Several statistics in one pass
+IntSummaryStatistics stats = sales.stream().mapToInt(Sale::quantity).summaryStatistics();
+// stats.getMin(), getMax(), getAverage(), getSum(), getCount()
+```
+
+How the first pipeline executes: streams are **lazy** and process one element at a time through the whole chain. Nothing happens until `collect` (the terminal operation) pulls elements; each sale is tested by `filter` and, if it passes, immediately added to its region's running total. There is no intermediate list of filtered sales.
+
+The same report with a loop:
+
+```java
+Map<String, BigDecimal> revenue = new HashMap<>();
+for (Sale s : sales) {
+    if (s.date().getYear() != 2025) continue;
+    revenue.merge(s.region(), s.total(), BigDecimal::add);
+}
+```
+
+Both are fine. The stream version names each step; the loop is easier to debug with a breakpoint and to extend with early exits. Teams usually prefer streams for transformations and loops for complex control flow.
+
+## Laziness, short-circuiting and order
+
+```java
+Stream.of("a", "bb", "ccc", "dddd")
+    .peek(s -> System.out.println("saw " + s))
+    .filter(s -> s.length() > 1)
+    .findFirst();
+// saw a
+// saw bb   ← stops here: findFirst short-circuits
+```
+
+- Intermediate operations (`filter`, `map`, `sorted`) build the pipeline; terminal operations (`collect`, `forEach`, `findFirst`, `count`) run it.
+- Short-circuiting operations (`findFirst`, `anyMatch`, `limit`) stop pulling elements early, which also makes infinite streams usable: `Stream.iterate(1, n -> n * 2).limit(10)`.
+- `sorted` is a **stateful barrier**: it must see every element before passing any on.
+- A stream can be consumed only once; a second terminal operation throws `IllegalStateException`.
+
 ## Common interview questions
 
 **What is the difference between intermediate and terminal operations?**
@@ -170,3 +232,20 @@ It is an iterator-like pipeline over a source, not a collection. Once a terminal
 
 **What does `Stream.toList()` return and how does it differ from `collect(toList())`?**
 `toList()` returns an unmodifiable list that permits nulls. `collect(Collectors.toList())` returns an `ArrayList` in practice but the spec does not promise mutability; use `collect(toCollection(ArrayList::new))` when you need to mutate.
+
+## Pitfalls
+
+- Calling `.get()` on an `Optional` without checking; use `orElse`, `orElseThrow` or `map`.
+- Using `Optional` for fields or parameters; it is designed for return values.
+- Side effects inside `map` or `filter`, which make laziness and parallelism unpredictable.
+- `Collectors.toMap` without a merge function on keys that may repeat (`IllegalStateException`).
+- `parallel()` on small inputs or with shared mutable state.
+- Reusing a stream after a terminal operation.
+
+## Key takeaways
+
+- A stream is a lazy, single-use pipeline: a source, intermediate operations, one terminal operation.
+- `collect` with `groupingBy`, `toMap`, `partitioningBy` and downstream collectors covers most reporting.
+- Use primitive streams (`mapToInt`) to avoid boxing and to get `sum`, `average` and statistics.
+- `Optional` is for return values that may be absent; never call `get` blindly.
+- Prefer loops when control flow (early exits, checked exceptions, complex state) dominates.
