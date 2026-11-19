@@ -1,9 +1,16 @@
+// For each query, check every interval. O(n * q).
 function minInterval(intervals: number[][], queries: number[]): number[] {
-  return queries.map((q) => {
+  const answer: number[] = []
+  for (let k = 0; k < queries.length; k++) {
+    const q = queries[k]
     let best = -1
-    for (const [l, r] of intervals) {
-      if (l <= q && q <= r && (best === -1 || r - l + 1 < best)) best = r - l + 1
+    for (let i = 0; i < intervals.length; i++) {
+      const size = intervals[i][1] - intervals[i][0] + 1
+      if (intervals[i][0] <= q && q <= intervals[i][1] && (best === -1 || size < best)) {
+        best = size
+      }
     }
-    return best
-  })
+    answer.push(best)
+  }
+  return answer
 }

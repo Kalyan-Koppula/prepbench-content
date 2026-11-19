@@ -1,26 +1,57 @@
-**Key insight:** both lists are sorted and internally disjoint, so a two-pointer merge works: intersect the current pair, then discard whichever range ends first — nothing later in the other list can touch it.
+**Key idea:** both lists are sorted and internally disjoint, so walk them together with two pointers. At each step, the overlap of the two current intervals is `[max(starts), min(ends)]`, if that range is non-empty. Then advance whichever interval **ends first**: it can't meet anything later in the other list.
 
-## Approach
+## Recognising the pattern
 
-1. Pointers `i` and `j` at the start of each list.
-2. Intersection candidate: `lo = max(starts)`, `hi = min(ends)`. If `lo <= hi`, record `[lo, hi]`.
-3. Advance the pointer whose range has the smaller end (either one on a tie).
-4. Stop when either list runs out.
+Two sorted lists processed together is the merge step from merge sort, and with intervals it is a standard move in the [Intervals](/problems/patterns/intervals) sheet. The [Two Pointers](/problems/patterns/two-pointers) idea of "advance the side that can't help any more" decides which pointer moves.
 
-Output is automatically sorted and disjoint, because each list is.
+## Brute force
+
+Intersect every pair of intervals. Because both lists are sorted and disjoint, looping over the first list on the outside produces the pieces in sorted order already. That is the reference brute force below. `O(n · m)` time.
+
+## Two pointers
+
+1. `i = j = 0`.
+2. While both lists have intervals:
+   1. `low = max(A[i].start, B[j].start)`, `high = min(A[i].end, B[j].end)`.
+   2. If `low ≤ high`, record `[low, high]`.
+   3. If `A[i].end < B[j].end`, advance `i`; otherwise advance `j`.
+3. Return the recorded pieces.
+
+**Why advance the earlier end.** Say `A[i]` ends first. Every later interval in `B` starts after `B[j]` ends, which is at or after `A[i]` ends, so none of them can touch `A[i]`. It is finished. `B[j]` may still meet `A[i + 1]`.
+
+## Walkthrough
+
+`A = [[1, 4], [6, 9], [12, 15]]`, `B = [[2, 7], [9, 13]]`
+
+| A[i] | B[j] | overlap | advance |
+| --- | --- | --- | --- |
+| [1, 4] | [2, 7] | [2, 4] | i (4 < 7) |
+| [6, 9] | [2, 7] | [6, 7] | j (7 < 9) |
+| [6, 9] | [9, 13] | [9, 9] | i (9 < 13) |
+| [12, 15] | [9, 13] | [12, 13] | j |
+
+Answer `[[2, 4], [6, 7], [9, 9], [12, 13]]`. Note `[9, 9]`: closed intervals that touch at one point intersect in that point.
 
 ## Complexity
 
-- Time `O(m + n)` — each step advances one pointer.
-- Space `O(m + n)` for the output in the worst case; `O(1)` extra otherwise.
+- All pairs: `O(n · m)`.
+- Two pointers: `O(n + m)` time, `O(1)` extra space beyond the output.
 
-## Alternatives to mention
+## Edge cases
 
-- Compare every pair and sort the results — `O(m · n)`.
-- Event sweep over all endpoints, counting how many lists are "open" — general but heavier.
+- Either list empty: no intersections.
+- One interval covering many in the other list: it stays while the other pointer advances.
+- Single-point intersections: included, since `low ≤ high`.
 
-## Pitfalls
+## Common mistakes
 
-- Advancing both pointers after an intersection — the longer range may still overlap the next range in the other list.
-- Using `<` for the non-empty test: touching ranges produce a single-point intersection like `[5, 5]`.
-- Either list may be empty.
+- Advancing both pointers after an overlap, which skips intersections.
+- Using `low < high`, which drops single-point intersections.
+- Advancing the interval that **starts** first instead of the one that ends first.
+
+## In the interview
+
+- Explain why the earlier-ending interval is finished; the loop is then short.
+- Likely follow-ups:
+  - *Union instead of intersection?* Merge the two lists by start, then run [Merge Intervals](/problems/merge-intervals)'s sweep.
+  - *k lists?* Intersect them pairwise, or sweep all endpoints with a counter and keep ranges where the count is `k`.

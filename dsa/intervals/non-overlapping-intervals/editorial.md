@@ -1,24 +1,57 @@
-**Key insight:** minimising removals = maximising the intervals you keep, which is classic activity selection: sort by **end** and greedily keep every interval that starts at or after the last kept end.
+**Key idea:** removing the fewest intervals is the same as **keeping the most** non-overlapping ones. Sort by **end** time and keep every interval that starts at or after the end of the last kept one. Choosing the interval that ends earliest always leaves the most room for the rest. The answer is the total minus the number kept.
 
-## Approach
+## Recognising the pattern
 
-1. Sort by end time.
-2. Walk the list with `lastEnd = -∞`. If `start >= lastEnd`, keep it and set `lastEnd = end`; otherwise it would overlap, so it's removed.
-3. Answer is `n - kept`.
+This is interval scheduling, the classic greedy covered in both the [Intervals](/problems/patterns/intervals) and [Greedy](/problems/patterns/greedy) sheets. The sort key is the whole trick: by end time, not start time.
 
-**Why earliest end is safe (exchange argument):** take any optimal set and swap its first interval for the earliest-ending interval overall. It ends no later, so it can't conflict with anything the original first interval didn't. Repeat on the rest.
+## Alternative: DP like LIS (shown below)
+
+Sort by start; `most[i]` = the largest set of compatible intervals whose last interval is `i`, computed from every earlier `j` that ends by the time `i` starts. That is the reference brute force below. `O(n²)`, the same structure as [Longest Increasing Subsequence](/problems/longest-increasing-subsequence).
+
+## Earliest end first
+
+1. Sort a copy by end.
+2. `kept = 0`, `lastEnd = −∞`.
+3. For each interval: if `start ≥ lastEnd`, keep it: `kept++`, `lastEnd = end`.
+4. Return `n − kept`.
+
+**Why earliest end is safe (exchange argument).** Take any optimal set of kept intervals. Its first interval ends no earlier than the greedy's first choice, which has the earliest end of all. Swap it for the greedy choice: nothing else in the set overlaps it, because the greedy choice ends even earlier. Repeat for each position.
+
+**Why not by start.** A long interval that starts first would be kept and would block many short ones. Sorting by end avoids that.
+
+## Walkthrough
+
+`intervals = [[1, 4], [2, 3], [3, 6], [5, 7]]`, sorted by end: `[2, 3], [1, 4], [3, 6], [5, 7]`.
+
+| interval | lastEnd | start ≥ lastEnd? | kept |
+| --- | --- | --- | --- |
+| [2, 3] | −∞ | yes | 1 (lastEnd 3) |
+| [1, 4] | 3 | no | 1 |
+| [3, 6] | 3 | yes | 2 (lastEnd 6) |
+| [5, 7] | 6 | no | 2 |
+
+Answer `4 − 2 = 2`.
 
 ## Complexity
 
-- Time `O(n log n)` for the sort; the greedy pass is `O(n)`.
-- Space `O(n)` for the sorted copy (`O(1)` extra if sorting in place).
+- DP: `O(n²)` time, `O(n)` space.
+- Greedy: `O(n log n)` for the sort, then `O(n)`.
 
-## Alternatives to mention
+## Edge cases
 
-- Sort by start and, on overlap, drop the one with the larger end (keep `lastEnd = min(lastEnd, end)`) — equivalent greedy.
-- DP like longest increasing subsequence: `O(n²)`.
+- Touching intervals (`[1, 2]` and `[2, 3]`) don't overlap: 0 removals.
+- Identical intervals: keep one, remove the rest.
+- Already disjoint: 0.
 
-## Pitfalls
+## Common mistakes
 
-- Sorting by start and keeping the first of each overlap — fails on `[[1, 100], [2, 3], [4, 5]]`.
-- Treating touching intervals as overlapping; here `[1, 2]` and `[2, 3]` are compatible (`>=`, not `>`).
+- Sorting by start and keeping the first of each overlapping pair.
+- Using `>` instead of `≥`, which treats touching intervals as overlapping.
+- Counting removals directly with complicated rules instead of counting what is kept.
+
+## In the interview
+
+- Rephrase as "keep the most" and state the earliest-end rule with its exchange argument.
+- Likely follow-ups:
+  - *Minimum Number of Arrows to Burst Balloons?* The same greedy; touching counts as overlapping there.
+  - *Weighted intervals?* Greedy fails; sort by end and use DP with binary search for the last compatible interval.

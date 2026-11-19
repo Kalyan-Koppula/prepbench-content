@@ -1,23 +1,55 @@
-**Key insight:** the input is sorted and disjoint, so the ranges fall into three consecutive groups — strictly left of the new interval, overlapping it, strictly right of it. One linear pass handles all three.
+**Key idea:** the list is already sorted and non-overlapping, so it splits into three consecutive parts: intervals entirely **before** the new one, intervals that **overlap** it, and intervals entirely **after** it. Copy the first part, absorb the middle part into the new interval, add it, and copy the rest. One pass, no sorting.
 
-## Approach
+## Recognising the pattern
 
-1. Copy ranges with `end < newStart` — they finish before the new interval begins.
-2. While a range has `start <= newEnd`, it overlaps: widen `[newStart, newEnd]` to `[min(starts), max(ends)]` and skip it.
-3. Push the widened interval, then copy the remaining ranges.
+Inserting into a sorted, disjoint list is the merge step from the [Intervals](/problems/patterns/intervals) sheet, applied to one interval. Because the input is sorted, the overlapping intervals are guaranteed to be contiguous.
+
+## Alternative: append and re-merge (shown below)
+
+Add the new interval to the list and run [Merge Intervals](/problems/merge-intervals) from scratch: sort by start and sweep. That is the reference brute force below. `O(n log n)` because of the sort, and simpler to get right, but it ignores the fact that the input is already sorted.
+
+## Three-phase scan
+
+1. While `intervals[i].end < newStart`: copy `intervals[i]`.
+2. While `intervals[i].start ≤ newEnd`: absorb it: `newStart = min(newStart, start)`, `newEnd = max(newEnd, end)`.
+3. Append `[newStart, newEnd]`.
+4. Copy all remaining intervals.
+
+**Why the conditions are exactly these.** An interval is entirely before the new one when it ends before the new one starts. Once that fails, the next interval overlaps the (growing) new interval exactly when it starts no later than its current end. The first interval that starts after that end, and everything after it, is entirely to the right.
+
+## Walkthrough
+
+`intervals = [[1, 2], [5, 6], [8, 10], [13, 15]]`, `newInterval = [4, 9]`
+
+| interval | phase | new interval after | result so far |
+| --- | --- | --- | --- |
+| [1, 2] | before (2 < 4) | [4, 9] | [1, 2] |
+| [5, 6] | overlap (5 ≤ 9) | [4, 9] | [1, 2] |
+| [8, 10] | overlap (8 ≤ 9) | [4, 10] | [1, 2] |
+| – | append | – | [1, 2], [4, 10] |
+| [13, 15] | after | – | [1, 2], [4, 10], [13, 15] |
 
 ## Complexity
 
-- Time `O(n)` — one pass, no sort.
-- Space `O(n)` for the output.
+- Append and re-merge: `O(n log n)`.
+- Three-phase scan: `O(n)` time, `O(n)` for the output.
+- Binary search can find the overlap boundaries in `O(log n)`, but building the output is still `O(n)`.
 
-## Alternatives to mention
+## Edge cases
 
-- Append and rerun Merge Intervals: `O(n log n)` — correct, but ignores that the input is sorted. Interviewers want the linear version.
-- Binary search for the first and last overlapping ranges finds the splice points in `O(log n)`, but building the new array is still `O(n)`.
+- Empty list: just the new interval.
+- New interval before everything, after everything, or covering everything.
+- Touching endpoints (`[1, 5]` and `[5, 7]`): they overlap here, because `5 ≤ 5`.
 
-## Pitfalls
+## Common mistakes
 
-- Empty `intervals` — the answer is just `[newInterval]`.
-- Using `<=` in step 1 or `<` in step 2 — closed ranges that touch must merge.
-- Forgetting the `min` on the start: the first overlapping range may start before `newInterval`.
+- Checking overlap against the **original** new end instead of the growing one.
+- Forgetting to append the new interval when nothing overlaps.
+- Re-sorting when the input is already sorted.
+
+## In the interview
+
+- Describe the three phases before coding; the loops then write themselves.
+- Likely follow-ups:
+  - *Many insertions?* Keep the intervals in a balanced BST (a TreeMap keyed by start) and merge with neighbours.
+  - *Remove an interval instead?* The same three phases, splitting overlapped intervals into the parts outside the removed range.
