@@ -1,22 +1,47 @@
 class TimeMap {
-  history = new Map<string, [number, string][]>()
+  // key -> timestamps and values in parallel, in the (increasing) order they were set.
+  times: Map<string, number[]>
+  values: Map<string, string[]>
+
+  constructor() {
+    this.times = new Map()
+    this.values = new Map()
+  }
 
   set(key: string, value: string, timestamp: number): void {
-    if (!this.history.has(key)) this.history.set(key, [])
-    this.history.get(key)!.push([timestamp, value])
+    let keyTimes = this.times.get(key)
+    let keyValues = this.values.get(key)
+    if (keyTimes === undefined || keyValues === undefined) {
+      keyTimes = []
+      keyValues = []
+      this.times.set(key, keyTimes)
+      this.values.set(key, keyValues)
+    }
+    keyTimes.push(timestamp)
+    keyValues.push(value)
   }
 
   get(key: string, timestamp: number): string {
-    const entries = this.history.get(key)
-    if (!entries) return ''
-    // First index whose time is > timestamp
-    let lo = 0
-    let hi = entries.length
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1
-      if (entries[mid][0] <= timestamp) lo = mid + 1
-      else hi = mid
+    const keyTimes = this.times.get(key)
+    const keyValues = this.values.get(key)
+    if (keyTimes === undefined || keyValues === undefined) {
+      return ''
     }
-    return lo === 0 ? '' : entries[lo - 1][1]
+    // Find the first index whose time is greater than timestamp.
+    let lo = 0
+    let hi = keyTimes.length
+    while (lo < hi) {
+      const mid = lo + Math.floor((hi - lo) / 2)
+      if (keyTimes[mid] <= timestamp) {
+        lo = mid + 1
+      } else {
+        hi = mid
+      }
+    }
+    // The entry just before it is the latest one at or before timestamp.
+    if (lo === 0) {
+      return ''
+    }
+    return keyValues[lo - 1]
   }
 }

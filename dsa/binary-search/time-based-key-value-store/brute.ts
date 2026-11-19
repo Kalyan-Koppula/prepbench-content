@@ -1,17 +1,28 @@
 class TimeMap {
-  log: [string, string, number][] = []
+  keys: string[]
+  values: string[]
+  stamps: number[]
 
-  set(key: string, value: string, timestamp: number): void {
-    this.log.push([key, value, timestamp])
+  constructor() {
+    this.keys = []
+    this.values = []
+    this.stamps = []
   }
 
+  set(key: string, value: string, timestamp: number): void {
+    this.keys.push(key)
+    this.values.push(value)
+    this.stamps.push(timestamp)
+  }
+
+  // O(total sets): scan everything for the latest matching entry.
   get(key: string, timestamp: number): string {
     let best = ''
     let bestTime = -1
-    for (const [k, v, t] of this.log) {
-      if (k === key && t <= timestamp && t > bestTime) {
-        best = v
-        bestTime = t
+    for (let i = 0; i < this.keys.length; i++) {
+      if (this.keys[i] === key && this.stamps[i] <= timestamp && this.stamps[i] > bestTime) {
+        best = this.values[i]
+        bestTime = this.stamps[i]
       }
     }
     return best

@@ -1,9 +1,21 @@
 function minEatingSpeed(piles: number[], h: number): number {
-  // Any speed below ceil(total / h) can't possibly finish; scan upward from there.
-  const total = piles.reduce((a, b) => a + b, 0)
-  for (let k = Math.max(1, Math.ceil(total / h)); ; k++) {
+  // Any speed below ceil(total / h) can't finish, so scan upward from there.
+  let total = 0
+  for (let i = 0; i < piles.length; i++) {
+    total += piles[i]
+  }
+  let speed = Math.ceil(total / h)
+  if (speed < 1) {
+    speed = 1
+  }
+  while (true) {
     let hours = 0
-    for (const pile of piles) hours += Math.ceil(pile / k)
-    if (hours <= h) return k
+    for (let i = 0; i < piles.length; i++) {
+      hours += Math.ceil(piles[i] / speed)
+    }
+    if (hours <= h) {
+      return speed
+    }
+    speed++
   }
 }
