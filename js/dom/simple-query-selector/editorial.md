@@ -9,7 +9,7 @@
 
 ## Walkthrough
 
-`querySelector(root, 'ul.menu li.active')`:
+`querySelectorAllLite(root, 'ul.menu li.active')`:
 
 | Step | Detail |
 | --- | --- |
@@ -17,7 +17,7 @@
 | Parse each compound | `{ tag: 'ul', classes: ['menu'] }`, `{ tag: 'li', classes: ['active'] }` |
 | Candidates | every descendant matching the **last** compound (`li.active`) |
 | Check ancestors right to left | walk up from each candidate looking for an ancestor matching `ul.menu` |
-| Return | the first candidate in document order that passes |
+| Return | every candidate that passes, in document order |
 
 Matching right to left (from the subject element outwards) is how browsers match selectors too: it rejects most elements after one cheap check.
 
@@ -29,9 +29,9 @@ Matching right to left (from the subject element outwards) is how browsers match
 
 - Tag, id, class and combinations (`a#x.y.z`).
 - Descendant chains of several levels.
-- No match returns `null`.
-- Document order of the first match.
-- Ancestors above the root don't count.
+- No match returns `[]`.
+- Results in document order.
+- Ancestors above the root can satisfy earlier compounds, exactly like native `element.querySelectorAll` (a common surprise).
 
 ## Pitfalls
 
