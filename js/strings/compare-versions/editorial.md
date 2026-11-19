@@ -7,6 +7,31 @@
 3. **Release vs pre-release:** if exactly one has a pre-release, that one is lower.
 4. **Pre-release:** walk identifiers. The side that runs out first is lower; two numerics compare numerically; numeric beats text by being lower; text compares with `<`.
 
+## Walkthrough
+
+`compareVersions('1.2.0-beta.2', '1.2.0-beta.11')`:
+
+| Step | Left | Right | Result |
+| --- | --- | --- | --- |
+| core | 1.2.0 | 1.2.0 | equal, continue |
+| pre-release present on both | `beta.2` | `beta.11` | compare identifiers |
+| `beta` vs `beta` | equal | | continue |
+| `2` vs `11` | both numeric | compare as numbers | **−1** |
+
+Numeric identifiers compare numerically (so `11 > 2`, unlike string comparison), a version **without** a pre-release is greater than the same core with one (`1.2.0 > 1.2.0-rc.1`), and build metadata after `+` is ignored.
+
+## Complexity
+
+`O(n)` in the length of the version strings.
+
+## Edge cases to test
+
+- Different core lengths (`1.2` equals `1.2.0`).
+- Numeric versus lexical comparison (`1.10.0 > 1.9.0`).
+- Pre-release versus release.
+- Numeric versus alphanumeric identifiers (`alpha.1 < alpha.beta`).
+- A leading `v` and build metadata.
+
 ## Pitfalls
 
 - Comparing `'1.10.0' > '1.9.0'` as strings (false) or splitting on `.` and comparing segments as strings.
@@ -20,3 +45,7 @@
 - **Ranges:** `satisfies('1.4.2', '^1.2.0')`, and how `^` and `~` differ for `0.x` versions.
 - **Validation:** reject leading zeros (`01.2.3`) and empty identifiers, as the spec requires.
 - **Max satisfying:** pick the highest version in a list that matches a range (what package managers do).
+
+## In the interview
+
+Name semver precedence rules explicitly, especially pre-releases. Mention using it as a comparator: `versions.sort(compareVersions)`.

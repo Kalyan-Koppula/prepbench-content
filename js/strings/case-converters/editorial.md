@@ -7,6 +7,32 @@
 3. `split(/[^A-Za-z0-9]+/)`, `filter(Boolean)`, lowercase each word.
 4. Join: camel = first word plus capitalised rest; Pascal = all capitalised; snake = `_`; kebab = `-`.
 
+## Walkthrough
+
+`toSnakeCase('parseXMLHttpRequest')`:
+
+| Step | Result |
+| --- | --- |
+| Insert a space between a lower-case letter or digit and an upper-case letter | `parse XMLHttp Request` |
+| Insert a space inside an acronym before a capitalised word | `parse XML Http Request` |
+| Split on anything that isn't a letter or digit; drop empties | `['parse', 'XML', 'Http', 'Request']` |
+| Lower-case each word | `['parse', 'xml', 'http', 'request']` |
+| Join with `_` | `parse_xml_http_request` |
+
+Every converter shares the same `splitWords` step and differs only in how words are joined and capitalised, so `toCamelCase('Hello_world-again')` gives `helloWorldAgain`.
+
+## Complexity
+
+`O(n)` per conversion.
+
+## Edge cases to test
+
+- Each input style: camel, Pascal, snake, kebab, spaced, mixed.
+- Acronyms (`XMLHttpRequest`, `userID`).
+- Digits (`version2Beta`).
+- Leading, trailing and repeated separators.
+- Empty strings.
+
 ## Pitfalls
 
 - Only handling `_` and `-`: `toSnakeCase('fooBar')` then returns `foobar`.
@@ -21,3 +47,7 @@
 - **Unicode letters:** use `\p{Lu}` / `\p{Ll}` with the `u` flag so `ÉtatCivil` splits correctly.
 - **Deep key conversion:** convert every key of a nested API response from snake to camel (and why you must not touch values).
 - **TypeScript:** a `CamelCase<'foo_bar'>` template-literal type.
+
+## In the interview
+
+Show the "split into words once, then join" design; it's what makes four converters short and consistent. Acronyms are where interviewers probe.

@@ -11,6 +11,30 @@
 3. After the loop, return `null` if the path has more segments than the pattern consumed.
 4. Wrap decoding in `try/catch`; a `URIError` means no match.
 
+## Walkthrough
+
+| Pattern | Path | Result |
+| --- | --- | --- |
+| `/users/:id` | `/users/42` | `{ id: '42' }` |
+| `/users/:id` | `/users/42/posts` | `null` (extra segment) |
+| `/posts/:slug?` | `/posts` | `{}` (optional parameter absent) |
+| `/files/*` | `/files/a/b%20c.txt` | `{ '*': 'a/b c.txt' }` |
+| `/users/:id` | `/users/42?tab=1` | `{ id: '42' }` (query ignored) |
+
+Matching walks pattern and path segments together: literals must match exactly, `:name` captures one decoded segment, `?` makes it optional, and `*` captures the rest.
+
+## Complexity
+
+`O(s)` for `s` segments.
+
+## Edge cases to test
+
+- Static routes, parameters, optional parameters and wildcards.
+- Trailing slashes and empty segments.
+- Percent-decoding of captured values (and malformed encodings).
+- Extra or missing segments.
+- Query strings and hashes ignored.
+
 ## Pitfalls
 
 - Building a regex from the pattern without escaping regex characters: `/v1.0/:id` then matches `/v100/…`.
@@ -24,3 +48,7 @@
 - **Compile once:** turn each pattern into a matcher function or regex for speed.
 - **Reverse routing:** `buildPath('/users/:id', { id: 7 })`, with encoding.
 - **Constraints:** `:id(\d+)` style params that must match a regex.
+
+## In the interview
+
+Mention route ranking when several patterns match (static beats parameter beats wildcard), and the `URLPattern` API as the emerging built-in.

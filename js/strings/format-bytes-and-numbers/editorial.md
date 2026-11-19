@@ -15,6 +15,29 @@
 2. Round `abs / 1024 ** unit` with the same helper. If the result is `>= 1024` and a bigger unit exists, move up and round again.
 3. Format the rounded number with `formatNumber(rounded)`; with no padding, `1.0` prints as `1`.
 
+## Walkthrough
+
+`formatBytes(1536)` and `formatNumber(1234567.891, 2)`:
+
+| Call | Steps | Result |
+| --- | --- | --- |
+| `formatBytes(1536)` | 1536 ≥ 1024 → divide: 1.5 KB; below 1024, stop | `'1.5 KB'` |
+| `formatNumber(1234567.891, 2)` | round half away from zero → 1234567.89; group the whole part in threes | `'1,234,567.89'` |
+
+Rounding uses exponent notation (`Math.round(Number('1.005e2'))`) to avoid floating-point surprises like `(1.005).toFixed(2) === '1.00'`.
+
+## Complexity
+
+`O(digits)`.
+
+## Edge cases to test
+
+- 0 bytes, exact powers of 1024, the largest unit.
+- Negative numbers and a negative result that rounds to 0 (no `-0`).
+- Rounding at `.5` boundaries.
+- Thousands grouping for 3, 4, 7 digits.
+- Decimals omitted versus fixed.
+
 ## Pitfalls
 
 - `toFixed` for rounding: `(1.005).toFixed(2) === '1.00'` and `(1.255).toFixed(2) === '1.25'`. `Math.round(x * 100) / 100` fails on `1.255` too.
@@ -30,3 +53,7 @@
 - **SI units:** 1 kB = 1000 B, with `KiB`/`MiB` for the binary ones; which does your OS show?
 - **Exponent inputs:** support `1e21` and `1e-7` by expanding `String(value)` into plain digits first.
 - **Banker's rounding** (half to even) for financial reports.
+
+## In the interview
+
+Mention `Intl.NumberFormat` (`new Intl.NumberFormat('en', { notation: 'compact' })`, `style: 'unit', unit: 'kilobyte'`), which handles locales; hand-written formatting is for when you can't use it or need exact control.
