@@ -101,6 +101,139 @@ try { /* … */ } catch (err) {        // err: unknown under strict
 
 Returning `unknown` from the network boundary forces validation (a hand-written guard or a schema library like Zod). `any` spreads: a single `any` makes every expression derived from it unchecked.
 
+## How the compiler thinks: sets of values
+
+The most useful mental model for TypeScript is that **a type is a set of values**:
+
+- `string` is the set of all strings; `'a' | 'b'` is a set with two members.
+- `A | B` (union) is the set of values in A **or** B.
+- `A & B` (intersection) is the set of values in A **and** B. For object types that means "has all the properties of both".
+- `never` is the empty set; `unknown` is the set of everything.
+- "A is assignable to B" means A is a **subset** of B.
+
+This explains results that otherwise look backwards:
+
+```ts
+type Named = { name: string }
+type Aged = { age: number }
+
+type Both = Named & Aged // values with name AND age: { name: string; age: number }
+type Either = Named | Aged // values with at least one of them
+
+declare const e: Either
+e.name // error: an Aged value has no name; only members common to every option are safe
+
+type Impossible = string & number // never: no value is both
+```
+
+It also explains why `{ name: string; age: number }` is assignable to `{ name: string }`: the set of objects with a name and an age is a subset of the set of objects with a name. That is structural typing.
+
+## Type inference and widening
+
+TypeScript infers types from values, and **widens** literal types when a value could change:
+
+```ts
+const mode = 'dark' // type 'dark': a const can't change
+let theme = 'dark' // type string: a let might be reassigned
+const config = { mode: 'dark' } // { mode: string }: properties are mutable
+
+const fixed = { mode: 'dark' } as const // { readonly mode: 'dark' }
+```
+
+Widening is why passing `config.mode` to a function expecting `'light' | 'dark'` fails, and why `as const` or `satisfies` fixes it.
+
+Inference flows in both directions:
+
+- **From values to variables**: `const n = 42` is `number` (or `42` for a `const`).
+- **From context to values** ("contextual typing"): in `button.addEventListener('click', (e) => …)`, `e` is inferred as `MouseEvent` from the parameter's declared type.
+- **Best common type**: `[1, 'a']` becomes `(string | number)[]`.
+
+Annotate function parameters and public return types; let inference handle local variables.
+
+## Type guards and assertion functions
+
+Narrowing works with built-in checks (`typeof`, `instanceof`, `in`, equality, truthiness). For your own checks, write a **type predicate**:
+
+```ts
+type Cat = { kind: 'cat'; meow(): void }
+type Dog = { kind: 'dog'; bark(): void }
+
+function isCat(pet: Cat | Dog): pet is Cat {
+  return pet.kind === 'cat'
+}
+
+function speak(pet: Cat | Dog) {
+  if (isCat(pet)) {
+    pet.meow() // narrowed to Cat
+  } else {
+    pet.bark() // narrowed to Dog
+  }
+}
+```
+
+An **assertion function** narrows by throwing:
+
+```ts
+function assertDefined<T>(value: T, message: string): asserts value is NonNullable<T> {
+  if (value === null || value === undefined) throw new Error(message)
+}
+
+const el = document.querySelector('#app')
+assertDefined(el, 'missing #app')
+el.append('ready') // el is Element here
+```
+
+A predicate is only as correct as its body: `pet is Cat` is a promise to the compiler that it can't verify.
+
+## Validating data at the boundary
+
+Types disappear at runtime. Data from `fetch`, `localStorage`, URL params or `postMessage` is `unknown` in reality, whatever you annotate it as. Validate it once at the boundary and derive the type from the validator:
+
+```ts
+import { z } from 'zod'
+
+const User = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string().email(),
+  role: z.enum(['admin', 'member']),
+})
+type User = z.infer<typeof User> // the type and the runtime check can't drift apart
+
+async function loadUser(id: string): Promise<User> {
+  const res = await fetch(`/api/users/${id}`)
+  return User.parse(await res.json()) // throws a descriptive error on bad data
+}
+```
+
+Writing `const user = (await res.json()) as User` compiles, but it is a claim, not a check: a renamed field on the server becomes a runtime `undefined` far from its cause.
+
+## Exhaustiveness checking
+
+With a discriminated union, `never` turns "I forgot a case" into a compile error:
+
+```ts
+type Shape =
+  | { kind: 'circle'; radius: number }
+  | { kind: 'square'; side: number }
+  | { kind: 'triangle'; base: number; height: number }
+
+function area(shape: Shape): number {
+  switch (shape.kind) {
+    case 'circle':
+      return Math.PI * shape.radius ** 2
+    case 'square':
+      return shape.side ** 2
+    case 'triangle':
+      return (shape.base * shape.height) / 2
+    default: {
+      const unreachable: never = shape // error here if a new kind is added and not handled
+      return unreachable
+    }
+  }
+}
+```
+
 ## Function overloads
 
 ```ts
@@ -197,3 +330,12 @@ Index access on arrays and records includes `undefined` in the type, so you must
 
 **How do you type a function that never returns?**
 Give it a `never` return type, as with a function that always throws or an infinite loop. Assertion functions use `asserts value is T` instead so the caller is narrowed afterwards.
+
+## Key takeaways
+
+- Types are sets of values: unions widen, intersections narrow, assignability is "subset of".
+- TypeScript is structural: shape matters, not names.
+- Literals widen unless the value is `const`; `as const` and `satisfies` keep them precise.
+- Narrow with built-in checks, type predicates and assertion functions; use `never` for exhaustiveness.
+- Types vanish at runtime: validate external data at the boundary and derive types from the validator.
+- Prefer `unknown` to `any`, unions of literals to enums, and strict compiler settings.

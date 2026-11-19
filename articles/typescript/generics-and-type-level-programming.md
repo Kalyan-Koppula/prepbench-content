@@ -193,6 +193,85 @@ type cases = [
 
 This `Equal` is stricter than mutual assignability: it distinguishes `any` from other types and `readonly` from mutable properties.
 
+## Worked example: a typed event emitter
+
+Type-level features pay off when they connect several values. An event emitter where each event name fixes its payload type:
+
+```ts
+type Events = {
+  login: { userId: string }
+  logout: undefined
+  message: { from: string; text: string }
+}
+
+class TypedEmitter<E extends Record<string, unknown>> {
+  private listeners: { [K in keyof E]?: Array<(payload: E[K]) => void> } = {}
+
+  on<K extends keyof E>(event: K, listener: (payload: E[K]) => void): () => void {
+    const list = (this.listeners[event] ??= [])
+    list.push(listener)
+    return () => {
+      this.listeners[event] = list.filter((l) => l !== listener)
+    }
+  }
+
+  emit<K extends keyof E>(event: K, ...args: E[K] extends undefined ? [] : [payload: E[K]]): void {
+    const payload = args[0] as E[K]
+    this.listeners[event]?.forEach((listener) => listener(payload))
+  }
+}
+
+const bus = new TypedEmitter<Events>()
+bus.on('message', (m) => m.text.toUpperCase()) // m: { from: string; text: string }
+bus.emit('login', { userId: '42' })
+bus.emit('logout') // no payload allowed
+bus.emit('message', { from: 'ana' }) // error: property 'text' is missing
+```
+
+Each feature does one job:
+
+| Feature | Job here |
+| --- | --- |
+| Generic constraint `E extends Record<string, unknown>` | Any map of event names to payloads |
+| `K extends keyof E` | The event name must exist |
+| Indexed access `E[K]` | The payload type for that event |
+| Mapped type `{ [K in keyof E]?: … }` | One listener list per event, correctly typed |
+| Conditional rest parameter | No payload argument for `undefined` events |
+
+## Worked example: typing a path getter
+
+A function that reads `get(obj, 'user.address.city')` with the result type computed from the path:
+
+```ts
+type PathValue<T, P extends string> = P extends `${infer Head}.${infer Rest}`
+  ? Head extends keyof T
+    ? PathValue<T[Head], Rest>
+    : never
+  : P extends keyof T
+    ? T[P]
+    : never
+
+type Data = { user: { address: { city: string; zip: number } } }
+
+type City = PathValue<Data, 'user.address.city'> // string
+type Zip = PathValue<Data, 'user.address.zip'> // number
+type Bad = PathValue<Data, 'user.phone'> // never
+```
+
+Step by step for `'user.address.city'`:
+
+| Step | `P` | Matches `Head.Rest`? | Recurse into |
+| --- | --- | --- | --- |
+| 1 | `user.address.city` | Head `user`, Rest `address.city` | `Data['user']` |
+| 2 | `address.city` | Head `address`, Rest `city` | `…['address']` |
+| 3 | `city` | no dot | `P extends keyof T`: `string` |
+
+Template literal types split the string, `infer` captures the pieces, and recursion walks the object type. Real libraries add array indices and depth limits, because deeply recursive types slow the compiler.
+
+## When not to use type-level programming
+
+Clever types have costs: slower editor feedback, unreadable error messages, and code few teammates can change. Reach for them in **library boundaries** (a router, a form library, an event bus) where one complex type makes hundreds of call sites safe. In application code, prefer plain interfaces, unions and a few generics. A good test: if a new team member can't explain the type after a minute, simplify it or add a named helper type with a comment and an example.
+
 ## Variance in one paragraph
 
 Function parameters are checked contravariantly under `strictFunctionTypes` (a handler for `Animal` can be used where a handler for `Dog` is expected, not the reverse), but methods declared with method syntax are checked bivariantly for compatibility with common DOM patterns. Arrays are treated covariantly, which is unsound for writes. You can annotate variance explicitly with `in` and `out` on type parameters (`interface Producer<out T>`), mostly for performance or documentation.
@@ -219,3 +298,12 @@ Generate the valid dotted paths with a recursive mapped type and template litera
 
 **When would you use a `const` type parameter?**
 When a function should infer literal and tuple types from its arguments, such as route definitions or tuple builders, without forcing callers to write `as const`.
+
+## Key takeaways
+
+- Generics link the types of inputs and outputs; constraints say what a type parameter must support.
+- `keyof`, indexed access and mapped types transform object types property by property.
+- Conditional types branch on assignability and distribute over unions; `infer` extracts parts of a type.
+- Template literal types and recursion can parse strings at the type level.
+- The built-in utility types are short mapped and conditional types you can write yourself.
+- Use advanced types at library boundaries; keep application types simple.

@@ -216,6 +216,107 @@ function useFetch<T>(url: string, parse: (json: unknown) => T): FetchState<T> {
 - Type reducers with a discriminated `Action` union; `useReducer` infers state and dispatch from the reducer.
 - Accept a `parse` or validator function instead of asserting `as T` on JSON.
 
+## Polymorphic components
+
+A component that renders as different elements (`<Text as="label" htmlFor="x">`) should accept exactly the props of the element it becomes:
+
+```tsx
+type TextProps<C extends React.ElementType> = {
+  as?: C
+  tone?: 'default' | 'muted'
+} & Omit<React.ComponentPropsWithoutRef<C>, 'as' | 'tone'>
+
+function Text<C extends React.ElementType = 'span'>({ as, tone = 'default', ...rest }: TextProps<C>) {
+  const Component = as ?? 'span'
+  return <Component data-tone={tone} {...rest} />
+}
+
+<Text as="label" htmlFor="email">Email</Text> // htmlFor allowed: it's a label
+<Text as="a" href="/docs">Docs</Text> // href allowed
+<Text href="/docs">Docs</Text> // error: span has no href
+```
+
+`Omit` removes the component's own props from the element's props so they can't conflict.
+
+## Typing forms and `FormData`
+
+Form data arrives as `FormDataEntryValue | null` (a string, a `File`, or nothing). Convert explicitly instead of casting:
+
+```tsx
+function readSignup(formData: FormData) {
+  const email = formData.get('email')
+  const age = formData.get('age')
+  if (typeof email !== 'string' || typeof age !== 'string') {
+    throw new Error('missing fields')
+  }
+  return { email, age: Number(age) }
+}
+
+<form
+  onSubmit={(event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const data = readSignup(new FormData(event.currentTarget))
+  }}
+/>
+```
+
+For anything larger, a schema validator (`z.object({...}).parse(Object.fromEntries(formData))`) gives one source of truth for the type and the checks.
+
+## Typing reducers and actions
+
+```tsx
+type State = { items: string[]; filter: 'all' | 'done' }
+type Action =
+  | { type: 'added'; item: string }
+  | { type: 'filtered'; filter: State['filter'] }
+  | { type: 'cleared' }
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case 'added':
+      return { ...state, items: [...state.items, action.item] } // action narrowed: item exists
+    case 'filtered':
+      return { ...state, filter: action.filter }
+    case 'cleared':
+      return { ...state, items: [] }
+  }
+}
+
+const [state, dispatch] = useReducer(reducer, { items: [], filter: 'all' })
+dispatch({ type: 'added', item: 'milk' })
+dispatch({ type: 'added' }) // error: item is missing
+```
+
+The discriminated union of actions makes each `case` narrow `action` to the right shape, and an unknown `type` is a compile error at the `dispatch` call.
+
+## Typing data fetching
+
+```tsx
+type AsyncState<T> =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; data: T }
+  | { status: 'error'; error: Error }
+
+function useFetch<T>(url: string, parse: (raw: unknown) => T): AsyncState<T> {
+  const [state, setState] = useState<AsyncState<T>>({ status: 'idle' })
+  useEffect(() => {
+    const controller = new AbortController()
+    setState({ status: 'loading' })
+    fetch(url, { signal: controller.signal })
+      .then((r) => r.json())
+      .then((raw) => setState({ status: 'success', data: parse(raw) }))
+      .catch((error) => {
+        if (error.name !== 'AbortError') setState({ status: 'error', error })
+      })
+    return () => controller.abort()
+  }, [url, parse])
+  return state
+}
+```
+
+The union means `data` exists only when `status` is `'success'`; the component must check before reading it, and impossible states (loading with data and an error) can't be represented. Passing a `parse` function keeps runtime validation and the type together.
+
 ## Common interview questions
 
 **Should components use `React.FC`?**
@@ -238,3 +339,12 @@ Use a function declaration with `<T>`, or an arrow with `<T,>` so the parser doe
 
 **How should a custom hook return multiple values?**
 Return a tuple with `as const` for two closely related values like `[value, setValue]`, so destructuring keeps each position's type. For more than two, return an object so callers can pick by name.
+
+## Key takeaways
+
+- Type props with a `type` or `interface`; extend native element props for wrappers.
+- `React.ReactNode` for children, specific event types (`React.ChangeEvent<HTMLInputElement>`) for handlers.
+- In React 19, `ref` is a regular prop; type it with the element type.
+- Generic and polymorphic components keep callers' types precise.
+- Discriminated unions model props, actions and async state so impossible combinations don't compile.
+- Validate form and network data at runtime; types alone don't check it.
