@@ -124,6 +124,57 @@ Interviewers want to hear "the cycle is a design problem, the container just sur
 
 If you've used NestJS you already know DI; the Spring deltas are classpath scanning instead of explicit module lists, proxies doing real work on your beans, and a much larger set of things the container itself provides (transactions, caching, validation, security).
 
+## Worked example: choosing between implementations
+
+Two implementations of the same interface:
+
+```java
+public interface StorageService {
+    URI store(String name, byte[] content);
+}
+
+@Component
+class S3Storage implements StorageService { /* … */ }
+
+@Component
+class LocalDiskStorage implements StorageService { /* … */ }
+
+@Service
+class AvatarService {
+    AvatarService(StorageService storage) { … } // which one?
+}
+```
+
+Startup fails with `NoUniqueBeanDefinitionException: expected single matching bean but found 2`. The options, and when each fits:
+
+| Technique | Code | Use when |
+| --- | --- | --- |
+| `@Primary` | `@Primary` on `S3Storage` | One implementation is the normal default |
+| `@Qualifier` | `AvatarService(@Qualifier("localDiskStorage") StorageService s)` | A specific consumer needs a specific one |
+| Conditional registration | `@ConditionalOnProperty(name = "storage.type", havingValue = "s3")` | The choice depends on configuration |
+| Profiles | `@Profile("local")` on `LocalDiskStorage` | Different environments use different ones |
+| Inject all | `AvatarService(List<StorageService> all)` or `Map<String, StorageService>` | You want to route between them at runtime |
+
+The conditional approach is usually the cleanest for infrastructure choices: exactly one bean exists in any environment, and consumers don't need to know there were options.
+
+## What injection buys in tests
+
+Because `AvatarService` receives its dependency through the constructor, a unit test doesn't need Spring at all:
+
+```java
+class AvatarServiceTest {
+    @Test
+    void storesResizedAvatar() {
+        var storage = new InMemoryStorage(); // a tiny fake implementing StorageService
+        var service = new AvatarService(storage);
+        service.upload("ana", pngBytes());
+        assertThat(storage.names()).containsExactly("avatars/ana.png");
+    }
+}
+```
+
+That's the practical argument for constructor injection: dependencies are explicit, required, immutable (`final` fields), and replaceable without reflection or a container.
+
 ## Common interview questions
 
 **What is inversion of control and what does Spring invert?**
@@ -157,3 +208,11 @@ Same idea: constructor injection by type with singleton default. NestJS needs ex
 - `@Value("${x}")` on a `static` field: silently never set.
 - Injecting `List<Foo>` and expecting a particular order: add `@Order` or implement `Ordered`.
 - Two `@Bean` methods returning the same type without names/qualifiers: ambiguity, found only at startup of the module that injects it.
+
+## Key takeaways
+
+- The container creates and wires objects; your classes declare what they need.
+- Prefer constructor injection: explicit, immutable, testable without Spring.
+- Resolve multiple candidates with `@Primary`, `@Qualifier`, conditions, profiles, or by injecting all of them.
+- Circular dependencies signal a design problem; restructure instead of using field or setter injection to hide them.
+- `@Component` scanning for your classes, `@Bean` methods for third-party objects and custom construction.

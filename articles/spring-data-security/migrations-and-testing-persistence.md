@@ -138,6 +138,48 @@ void createRollsBackWhenTagLimitExceeded() {
 - Use `TransactionTemplate` in tests to run arrange/assert steps in explicit, committed transactions when you need lazy loading in the assertion.
 - Test `@Transactional(readOnly = true)` methods for N+1 with a statement-count assertion rather than by eyeballing logs.
 
+## Worked example: a zero-downtime column rename
+
+Renaming `customer.fullname` to `customer.display_name` while old and new versions of the service run side by side during a rolling deploy. A single `ALTER TABLE … RENAME COLUMN` would break the old version instantly. Use **expand and contract** across releases:
+
+| Release | Migration | Application code |
+| --- | --- | --- |
+| 1 (expand) | `V12__add_display_name.sql`: add `display_name`, backfill from `fullname` | Writes **both** columns, reads `fullname` |
+| 2 | `V13__backfill_display_name.sql`: re-copy rows written before release 1 finished deploying | Writes both, reads `display_name` |
+| 3 (contract) | — | Writes and reads only `display_name` |
+| 4 | `V14__drop_fullname.sql`: drop the old column | — |
+
+```sql
+-- V12__add_display_name.sql
+ALTER TABLE customer ADD COLUMN display_name VARCHAR(200);
+UPDATE customer SET display_name = fullname WHERE display_name IS NULL;
+```
+
+At every point, the running versions only use columns that exist. The same pattern applies to splitting tables, changing types and adding `NOT NULL` constraints (add nullable, backfill, then add the constraint). For large tables, backfill in batches to avoid long locks.
+
+## Testing a migration
+
+```java
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Testcontainers
+class CustomerRepositoryTest {
+    @Container @ServiceConnection
+    static PostgreSQLContainer<?> db = new PostgreSQLContainer<>("postgres:17");
+
+    @Autowired CustomerRepository customers;
+
+    @Test
+    void migrationsProduceAWorkingSchema() {
+        Customer saved = customers.save(new Customer("Ana Lima"));
+        assertThat(customers.findById(saved.getId()))
+            .get().extracting(Customer::getDisplayName).isEqualTo("Ana Lima");
+    }
+}
+```
+
+Flyway runs every migration against a real PostgreSQL at test start, so a broken migration fails the build, not the deploy. Set `spring.jpa.hibernate.ddl-auto=validate` so Hibernate checks that entities match the migrated schema.
+
 ## Common interview questions
 
 **How do you manage schema changes?**
@@ -168,3 +210,11 @@ Without a test transaction, trigger a failure after the first write, assert the 
 - `@Transactional` on an integration test of a method that uses `REQUIRES_NEW` or `@Async`: the inner work runs outside the test transaction and leaks between tests.
 - Static Testcontainers in every class without reuse: a fresh database per class, minutes added to CI.
 - A `@DataJpaTest` that passes on H2 and a migration that fails on the first Postgres deploy.
+
+## Key takeaways
+
+- The schema is owned by versioned migrations (Flyway or Liquibase), never by `ddl-auto=update` in production.
+- Migrations are immutable once applied; fix forward with a new version.
+- Use expand-and-contract for changes that must work with old and new code at once.
+- Test persistence against the real database engine with Testcontainers, and set `ddl-auto=validate`.
+- Keep test data small and explicit, created per test.

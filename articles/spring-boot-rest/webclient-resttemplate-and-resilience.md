@@ -137,6 +137,75 @@ The costs: stack traces that say nothing, debugging through operators, a differe
 
 The Java 21 answer: in a Boot MVC app, `spring.threads.virtual.enabled=true` puts each request on a virtual thread, so blocking `RestClient` and JDBC calls park cheaply and you get WebFlux-like concurrency with ordinary imperative code, exceptions and debuggers. The remaining limits are real: connection pools, downstream capacity, and `synchronized` blocks pinning carriers on Java 21–23 (fixed in Java 24). Say: "I'd default to MVC with virtual threads and `RestClient`, and reach for WebFlux for streaming or when the whole stack is reactive."
 
+## Worked example: a resilient client for a flaky dependency
+
+```java
+@Configuration
+class InventoryClientConfig {
+    @Bean
+    RestClient inventoryRestClient(RestClient.Builder builder, InventoryProperties props) {
+        var settings = ClientHttpRequestFactorySettings.defaults()
+            .withConnectTimeout(Duration.ofMillis(500))
+            .withReadTimeout(Duration.ofSeconds(2));
+        return builder
+            .baseUrl(props.baseUrl().toString())
+            .requestFactory(ClientHttpRequestFactoryBuilder.detect().build(settings))
+            .defaultHeader("X-Client", "shop-api")
+            .build();
+    }
+}
+
+@Component
+class InventoryClient {
+    private final RestClient http;
+
+    InventoryClient(RestClient inventoryRestClient) { this.http = inventoryRestClient; }
+
+    @Retry(name = "inventory")                                          // retries transient failures
+    @CircuitBreaker(name = "inventory", fallbackMethod = "unknownStock") // stops calling when it's down
+    public StockLevel stock(String sku) {
+        return http.get()
+            .uri("/stock/{sku}", sku)
+            .retrieve()
+            .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
+                throw new NotFoundException("sku " + sku); // don't retry client errors
+            })
+            .body(StockLevel.class);
+    }
+
+    private StockLevel unknownStock(String sku, Throwable cause) {
+        return StockLevel.unknown(sku); // the product page shows "check availability" instead of failing
+    }
+}
+```
+
+```yaml
+resilience4j:
+  retry:
+    instances:
+      inventory:
+        max-attempts: 3
+        wait-duration: 200ms
+        enable-exponential-backoff: true
+        retry-exceptions: [java.io.IOException, org.springframework.web.client.ResourceAccessException]
+  circuitbreaker:
+    instances:
+      inventory:
+        sliding-window-size: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+```
+
+How the layers interact during an outage:
+
+| Phase | Behaviour |
+| --- | --- |
+| A few timeouts | Each call retries up to 3 times with backoff; most succeed on retry |
+| Failure rate passes 50% of the last 20 calls | The circuit opens: calls fail immediately and go to the fallback, no network traffic |
+| After 30 s | Half-open: a few trial calls go through; success closes the circuit, failure reopens it |
+
+Timeouts bound each attempt, retries handle blips, the circuit breaker protects both services during a real outage, and the fallback keeps the page useful. Only retry idempotent operations (or ones protected by idempotency keys).
+
 ## Common interview questions
 
 **Which HTTP client would you use in a new Spring Boot service and why?**
@@ -170,3 +239,11 @@ A `ClientHttpRequestInterceptor` on the `RestClient.Builder` that copies from MD
 - `block()` on a `WebClient` call inside a WebFlux handler: `IllegalStateException` or a dead event loop.
 - Retrying a `POST` that charged a card.
 - A circuit breaker whose fallback hits the same dependency.
+
+## Key takeaways
+
+- Use `RestClient` for synchronous calls in new code, `WebClient` when you're already reactive.
+- Always set connect and read timeouts; defaults can wait forever.
+- Retry only transient failures of idempotent operations, with exponential backoff and jitter.
+- Circuit breakers stop hammering a failing dependency and give it time to recover.
+- Design fallbacks so a failing dependency degrades the feature, not the whole page.

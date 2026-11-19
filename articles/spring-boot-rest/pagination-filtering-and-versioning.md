@@ -110,6 +110,45 @@ public ResponseEntity<OrderResponse> create(@RequestHeader("Idempotency-Key") UU
 
 Implementation points: store keys with a TTL (24 h is typical) in the DB or Redis; insert the key **before** doing the work inside the same transaction as the write so concurrent duplicates hit a unique constraint — one proceeds, the other returns 409 (in progress) or waits; compare the request fingerprint and return 422 if the same key arrives with a different body; scope keys per client/tenant. `PUT` and `DELETE` are idempotent by design and don't need it; `PATCH` depends on the semantics.
 
+## Worked example: keyset pagination
+
+Offset pagination (`LIMIT 20 OFFSET 100000`) makes the database read and discard 100,000 rows, and rows inserted between page loads shift results. Keyset ("seek") pagination continues from the last row seen instead:
+
+```java
+public interface EventRepository extends JpaRepository<Event, Long> {
+    // first page
+    List<Event> findTop20ByOrderByCreatedAtDescIdDesc();
+
+    // next pages: strictly "after" the last (createdAt, id) seen, in the same order
+    @Query("""
+        select e from Event e
+        where e.createdAt < :createdAt
+           or (e.createdAt = :createdAt and e.id < :id)
+        order by e.createdAt desc, e.id desc
+        """)
+    List<Event> findNextPage(Instant createdAt, long id, Limit limit);
+}
+
+record EventPage(List<EventDto> items, String nextCursor) {}
+
+EventPage page(String cursor) {
+    List<Event> rows = (cursor == null)
+        ? events.findTop20ByOrderByCreatedAtDescIdDesc()
+        : decode(cursor, (createdAt, id) -> events.findNextPage(createdAt, id, Limit.of(20)));
+    String next = rows.size() < 20 ? null : encode(rows.get(rows.size() - 1)); // base64 of "createdAt|id"
+    return new EventPage(rows.stream().map(EventDto::from).toList(), next);
+}
+```
+
+Key details:
+
+- The sort includes a **unique tiebreaker** (`id`), so rows with equal timestamps are neither skipped nor repeated.
+- An index on `(created_at DESC, id DESC)` makes each page an index range scan, equally fast on page 1 and page 10,000.
+- The cursor is **opaque** to clients (base64-encoded), so you can change its contents later.
+- You lose "jump to page 37" and total counts; that's the trade-off. Use offset pagination for small admin tables and keyset for feeds and large lists.
+
+Spring Data also offers `ScrollPosition` and `Window<T>` (`findFirst20ByOrderByCreatedAtDesc(ScrollPosition position)`) that implement keyset scrolling for you.
+
 ## Common interview questions
 
 **How do you paginate a list endpoint in Spring?**
@@ -140,3 +179,11 @@ Including links to related actions and resources in responses so clients follow 
 - Keyset cursor on a non-unique sort key: rows with equal timestamps get skipped.
 - Idempotency check outside the transaction: two concurrent retries both pass the "not seen" check.
 - `/v2` that copies every controller: now every bug fix is applied twice.
+
+## Key takeaways
+
+- Paginate every collection endpoint; offer stable sorting with a unique tiebreaker.
+- Offset pagination is simple but slow for deep pages and unstable under inserts; keyset pagination fixes both.
+- Validate and whitelist filter and sort fields; use Specifications or Querydsl for dynamic filters.
+- Version APIs explicitly (URL path or header) and evolve additively where possible.
+- Use idempotency keys for retried non-idempotent requests like payments.

@@ -98,6 +98,39 @@ management:
 
 Boot 3 (2022–2025) moved to Java 17+, Jakarta EE 9+ (`jakarta.*` packages), Spring Framework 6, Problem Details, observability via Micrometer, virtual-thread support and `RestClient`. Boot 4 (November 2025) sits on Spring Framework 7 and Jackson 3, modularises auto-configuration and starters, adds first-class API versioning and `@ImportHttpServices`, adopts JSpecify null-safety annotations, and removes long-deprecated pieces like `@MockBean`. Code written for 3.5 with current APIs migrates with import changes rather than rewrites.
 
+## Worked example: what happens when you run `main`
+
+```java
+@SpringBootApplication
+public class ShopApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(ShopApplication.class, args);
+    }
+}
+```
+
+1. `SpringApplication` determines the application type (servlet web, reactive web, or none) from the classpath.
+2. It prepares the **environment**: property sources from command-line arguments, environment variables, `application.yml` and profile-specific files.
+3. It creates the `ApplicationContext` and registers your configuration class.
+4. `@SpringBootApplication` = `@Configuration` + `@ComponentScan` (your package and below) + `@EnableAutoConfiguration`.
+5. **Auto-configuration** classes listed in `META-INF/spring/…AutoConfiguration.imports` are evaluated. Each is guarded by conditions: `@ConditionalOnClass(DataSource.class)`, `@ConditionalOnMissingBean`, `@ConditionalOnProperty`. Your own beans take precedence because of `@ConditionalOnMissingBean`.
+6. Beans are instantiated and wired; post-processors create proxies for `@Transactional`, `@Async`, security and so on.
+7. The embedded web server (Tomcat by default) starts on port 8080.
+8. `ApplicationRunner` and `CommandLineRunner` beans run, then `ApplicationReadyEvent` is published.
+
+To see step 5 for yourself, run with `--debug`: the conditions evaluation report lists every auto-configuration that matched and, for those that didn't, the condition that failed. That report answers most "why is this bean (not) here?" questions.
+
+## Overriding auto-configuration
+
+| Goal | How |
+| --- | --- |
+| Change a setting | A property: `spring.datasource.hikari.maximum-pool-size=20` |
+| Replace a bean | Define your own bean of that type; `@ConditionalOnMissingBean` backs off |
+| Customise without replacing | Customiser beans: `Jackson2ObjectMapperBuilderCustomizer`, `WebServerFactoryCustomizer` |
+| Turn one off | `@SpringBootApplication(exclude = DataSourceAutoConfiguration.class)` or `spring.autoconfigure.exclude` |
+
+Prefer properties, then customisers, then replacements; each step up means more code you own.
+
 ## Common interview questions
 
 **What does `@SpringBootApplication` do?**
@@ -128,3 +161,11 @@ By classpath and content negotiation: Jackson is on the classpath via the web st
 - Doing a long blocking call in a controller with a 200-thread pool and expecting Node-like throughput; measure, then enable virtual threads or use async.
 - `server.error.include-stacktrace=always` in production: stack traces in API responses.
 - Thinking `@Order` on a `@Component` Filter is optional: without it filters run in undefined order relative to each other.
+
+## Key takeaways
+
+- Spring Boot = Spring plus auto-configuration, starters, an embedded server and production features.
+- Auto-configuration is conditional: it backs off when you define your own beans.
+- Startup: environment, context, scanning, auto-configuration, beans and proxies, server, runners, ready event.
+- Use `--debug` and Actuator to see what was configured and why.
+- Override through properties first, customisers second, bean replacement last.

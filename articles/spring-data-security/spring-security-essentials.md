@@ -213,6 +213,60 @@ CorsConfigurationSource corsConfigurationSource() {
 - Checking ownership in the controller after already loading someone else's data, instead of filtering by owner in the query.
 - Trusting `X-Forwarded-*` headers without `server.forward-headers-strategy` set for the proxy you actually run.
 
+## Worked example: a request through the filter chain
+
+A client calls `GET /api/projects/42` with `Authorization: Bearer eyJ…`, against this configuration:
+
+```java
+@Bean
+SecurityFilterChain api(HttpSecurity http) throws Exception {
+    return http
+        .securityMatcher("/api/**")
+        .authorizeHttpRequests(auth -> auth
+            .requestMatchers(HttpMethod.GET, "/api/public/**").permitAll()
+            .requestMatchers("/api/admin/**").hasRole("ADMIN")
+            .anyRequest().authenticated())
+        .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults()))
+        .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .csrf(csrf -> csrf.disable()) // stateless bearer tokens: no cookies to forge
+        .build();
+}
+```
+
+| Step | Component | What happens |
+| --- | --- | --- |
+| 1 | `DelegatingFilterProxy` → `FilterChainProxy` | Picks the chain whose `securityMatcher` matches `/api/**` |
+| 2 | `CorsFilter` | Handles preflights and adds CORS headers if configured |
+| 3 | `BearerTokenAuthenticationFilter` | Extracts the token from the header |
+| 4 | `JwtAuthenticationProvider` | Verifies the signature against the issuer's keys (JWKS), checks `exp`, `nbf`, `iss` and audience |
+| 5 | `JwtAuthenticationConverter` | Turns claims (for example `scope` or `roles`) into `GrantedAuthority`s |
+| 6 | `SecurityContextHolder` | Stores the `Authentication` for this request |
+| 7 | `AuthorizationFilter` | Applies the rules: `/api/projects/42` needs `authenticated()`: allowed |
+| 8 | `DispatcherServlet` → controller | Runs; `@PreAuthorize` checks on the service may apply further rules |
+
+Failure modes: a missing or invalid token stops at step 4 with **401** and a `WWW-Authenticate` header; a valid token without the needed role stops at step 7 (or at `@PreAuthorize`) with **403**.
+
+## Object-level authorisation
+
+URL rules can't express "users may only read their own projects". That needs a check against the data:
+
+```java
+@PreAuthorize("hasRole('ADMIN') or @projectAccess.canRead(#id, authentication)")
+public ProjectDetails get(UUID id) { … }
+
+@Component("projectAccess")
+class ProjectAccess {
+    private final ProjectRepository projects;
+    ProjectAccess(ProjectRepository projects) { this.projects = projects; }
+
+    boolean canRead(UUID projectId, Authentication auth) {
+        return projects.existsByIdAndMembersUserId(projectId, auth.getName());
+    }
+}
+```
+
+Missing object-level checks (insecure direct object references) are the most common real-world API vulnerability: authenticated users fetching other users' data by changing an id. Test them explicitly.
+
 ## Common interview questions
 
 **How does Spring Security process a request?**
@@ -245,3 +299,11 @@ URL rules run in the filter chain before any controller code and know only the p
 - Putting the JWT secret in `application.yml` and committing it; use an environment variable and fail startup if it is missing.
 - Forgetting `OPTIONS` preflights hit the security chain: without the CORS bean they return 401 and the browser reports a CORS error that is really an auth error.
 - `SecurityContextHolder` is thread-local: `@Async` work does not see the user unless you set `SecurityContextHolder.setStrategyName(MODE_INHERITABLETHREADLOCAL)` or use `DelegatingSecurityContextExecutor`.
+
+## Key takeaways
+
+- Spring Security is a chain of servlet filters; know where authentication and authorisation happen.
+- Configure `SecurityFilterChain` beans; secure everything by default and open specific paths.
+- 401 means "who are you?"; 403 means "you can't do this".
+- For APIs, validate JWTs as a resource server, stay stateless, and disable CSRF only when no cookies authenticate requests.
+- Enforce object-level authorisation in services, not only URL rules.

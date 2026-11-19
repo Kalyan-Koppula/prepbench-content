@@ -118,6 +118,77 @@ Lifecycle events worth knowing: `ApplicationStartingEvent`, `ApplicationEnvironm
 
 `SpringApplication.run` builds the `Environment` (properties, profiles), creates the `ApplicationContext`, registers your main class, runs auto-configuration to add definitions, refreshes the context (the lifecycle above, for every singleton), starts the embedded server, then runs `CommandLineRunner`/`ApplicationRunner` beans and publishes `ApplicationReadyEvent`.
 
+## Worked example: a prototype bean inside a singleton
+
+```java
+@Component
+@Scope("prototype")
+class ReportBuilder {
+    private final List<String> lines = new ArrayList<>();
+    void add(String line) { lines.add(line); }
+    String build() { return String.join("\n", lines); }
+}
+
+@Service
+class ReportService {
+    private final ReportBuilder builder; // injected ONCE, when the singleton is created
+
+    ReportService(ReportBuilder builder) { this.builder = builder; }
+
+    String report(List<String> data) {
+        data.forEach(builder::add);
+        return builder.build(); // the second call still contains the first report's lines
+    }
+}
+```
+
+The prototype scope means "a new instance each time one is **requested from the container**". The singleton requests it only once, at construction, so every call shares the same builder. Fixes:
+
+```java
+@Service
+class ReportService {
+    private final ObjectProvider<ReportBuilder> builders;
+
+    ReportService(ObjectProvider<ReportBuilder> builders) { this.builders = builders; }
+
+    String report(List<String> data) {
+        ReportBuilder builder = builders.getObject(); // a fresh prototype per call
+        data.forEach(builder::add);
+        return builder.build();
+    }
+}
+```
+
+Alternatives: a `@Lookup` method, or a scoped proxy (`@Scope(value = "prototype", proxyMode = ScopedProxyMode.TARGET_CLASS)`), which hands out a new target per method call. Often the simplest answer is that `ReportBuilder` shouldn't be a bean at all: `new ReportBuilder()` inside the method is fine for objects without dependencies.
+
+The same mismatch happens with `request`- and `session`-scoped beans injected into singletons; there, Spring requires a scoped proxy or provider, otherwise startup fails because no request is active.
+
+## The lifecycle, observed
+
+```java
+@Component
+class CacheWarmer implements InitializingBean, DisposableBean {
+    CacheWarmer(ProductRepository repo) { System.out.println("1 constructor (dependencies injected)"); }
+
+    @PostConstruct
+    void init() { System.out.println("2 @PostConstruct"); }
+
+    @Override
+    public void afterPropertiesSet() { System.out.println("3 afterPropertiesSet"); }
+
+    @EventListener(ApplicationReadyEvent.class)
+    void ready() { System.out.println("4 application ready: safe to start background work"); }
+
+    @PreDestroy
+    void close() { System.out.println("5 @PreDestroy on shutdown"); }
+
+    @Override
+    public void destroy() { System.out.println("6 destroy"); }
+}
+```
+
+Use `@PostConstruct` for validating and preparing the bean itself, and `ApplicationReadyEvent` for work that needs the whole application running (warming caches through other beans, starting consumers). Long work in `@PostConstruct` slows startup and can run before the web server or other beans are ready.
+
 ## Common interview questions
 
 **Is a Spring singleton the same as the singleton pattern?**
@@ -151,3 +222,11 @@ A plain `@EventListener` runs synchronously inside the publisher's transaction, 
 - Expecting `@PreDestroy` on a prototype bean to run. It doesn't; the container doesn't track prototypes.
 - Reading a request-scoped bean from a scheduled job: `ScopeNotActiveException`.
 - `@EventListener` on a method with two parameters: Spring can't bind it; one event parameter only.
+
+## Key takeaways
+
+- Spring creates beans, injects dependencies, runs post-processors and init callbacks, and later destroy callbacks.
+- `BeanPostProcessor`s are how proxies and annotations like `@Transactional` get applied.
+- Singleton is the default scope; prototype beans injected into singletons are created only once unless you use a provider.
+- Use `@PostConstruct` for self-initialisation and `ApplicationReadyEvent` for application-wide startup work.
+- Request and session scopes need scoped proxies when injected into singletons.

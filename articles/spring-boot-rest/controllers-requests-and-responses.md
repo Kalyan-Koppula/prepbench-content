@@ -123,6 +123,56 @@ Return and accept **DTOs**, never JPA entities. The reasons you should be able t
 
 Map explicitly (a static `from(User)` method, or MapStruct for large codebases). Response and request DTOs are usually separate types, both records. Keep `Optional` out of DTOs; use `@Nullable` or absent fields with `NON_NULL` inclusion. Enumerations serialise by name; fine, but freeze the names.
 
+## Worked example: a complete resource
+
+```java
+@RestController
+@RequestMapping("/api/projects")
+class ProjectController {
+    private final ProjectService projects;
+
+    ProjectController(ProjectService projects) { this.projects = projects; }
+
+    @GetMapping
+    Page<ProjectSummary> list(@RequestParam(required = false) String q,
+                              @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable page) {
+        return projects.search(q, page); // 200 with a page of DTOs
+    }
+
+    @GetMapping("/{id}")
+    ProjectDetails get(@PathVariable UUID id) {
+        return projects.get(id); // throws NotFoundException → 404 via the exception handler
+    }
+
+    @PostMapping
+    ResponseEntity<ProjectDetails> create(@Valid @RequestBody CreateProject body, UriComponentsBuilder uri) {
+        ProjectDetails created = projects.create(body);
+        URI location = uri.path("/api/projects/{id}").buildAndExpand(created.id()).toUri();
+        return ResponseEntity.created(location).body(created); // 201 + Location header
+    }
+
+    @PatchMapping("/{id}")
+    ProjectDetails rename(@PathVariable UUID id, @Valid @RequestBody RenameProject body) {
+        return projects.rename(id, body.name()); // 200 with the updated resource
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void delete(@PathVariable UUID id) {
+        projects.delete(id); // 204, idempotent: deleting twice is still 204 (or 404 by policy)
+    }
+}
+
+record CreateProject(@NotBlank @Size(max = 80) String name, @Size(max = 500) String description) {}
+record RenameProject(@NotBlank @Size(max = 80) String name) {}
+record ProjectSummary(UUID id, String name, Instant createdAt) {}
+record ProjectDetails(UUID id, String name, String description, Instant createdAt, int memberCount) {}
+```
+
+The request for `POST /api/projects` flows through: the servlet container → `DispatcherServlet` → handler mapping picks `create` → the `@RequestBody` is read by Jackson's message converter → `@Valid` runs Bean Validation (failure: 400 before the method runs) → the method executes → the return value is written as JSON with status 201 and a `Location` header.
+
+Design points to mention: plural resource nouns, DTOs in and out (never entities), `201` with `Location` for creation, `204` for deletion, `PATCH` for partial updates, pagination by default on collections, and errors handled centrally rather than in each method.
+
 ## Common interview questions
 
 **`@Controller` vs `@RestController`?**
@@ -156,3 +206,11 @@ Return `ResponseEntity<Resource>` or `StreamingResponseBody` with the right `Con
 - Two `@RequestBody` parameters on one method: the body can only be read once. Wrap in one DTO.
 - Returning `Map<String, Object>` from controllers to avoid writing a DTO: no types, no validation, no docs.
 - Mixing `@ResponseStatus` and `ResponseEntity` on the same method: the entity's status wins and the annotation misleads readers.
+
+## Key takeaways
+
+- Controllers map HTTP to method calls; keep them thin and delegate to services.
+- Bind with `@PathVariable`, `@RequestParam`, `@RequestBody` and validate with `@Valid`.
+- Return DTOs, not entities; use records for request and response shapes.
+- Use correct status codes: 200, 201 with `Location`, 204, 400, 404, 409.
+- Handle errors in one `@RestControllerAdvice` with Problem Details.

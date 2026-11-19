@@ -134,6 +134,51 @@ public class BookmarkStatsDao {
 
 `JdbcClient` (Spring 6.1) is the fluent API over `JdbcTemplate`/`NamedParameterJdbcTemplate`; same `DataSource`, same transaction manager, so it participates in `@Transactional` alongside JPA. Spring Data JDBC is the middle ground: repositories and aggregates without a persistence context or lazy loading. The answer interviewers want: "JPA for the aggregates I mutate, SQL for the queries I read, both in the same transaction."
 
+## Worked example: dynamic search with Specifications
+
+A search screen filters products by optional name, category, price range and availability. Writing a derived query for every combination is impossible; Specifications compose predicates:
+
+```java
+public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpecificationExecutor<Product> {}
+
+final class ProductSpecs {
+    static Specification<Product> nameContains(String text) {
+        return (root, query, cb) -> text == null ? null
+            : cb.like(cb.lower(root.get("name")), "%" + text.toLowerCase() + "%");
+    }
+
+    static Specification<Product> inCategory(String category) {
+        return (root, query, cb) -> category == null ? null : cb.equal(root.get("category"), category);
+    }
+
+    static Specification<Product> priceBetween(BigDecimal min, BigDecimal max) {
+        return (root, query, cb) -> {
+            if (min == null && max == null) return null;
+            if (min == null) return cb.lessThanOrEqualTo(root.get("price"), max);
+            if (max == null) return cb.greaterThanOrEqualTo(root.get("price"), min);
+            return cb.between(root.get("price"), min, max);
+        };
+    }
+
+    static Specification<Product> inStock(Boolean onlyInStock) {
+        return (root, query, cb) -> Boolean.TRUE.equals(onlyInStock) ? cb.greaterThan(root.get("stock"), 0) : null;
+    }
+}
+
+Page<Product> search(ProductFilter f, Pageable page) {
+    Specification<Product> spec = Specification.allOf(
+        ProductSpecs.nameContains(f.name()),
+        ProductSpecs.inCategory(f.category()),
+        ProductSpecs.priceBetween(f.minPrice(), f.maxPrice()),
+        ProductSpecs.inStock(f.inStock()));
+    return products.findAll(spec, page);
+}
+```
+
+A specification that returns `null` adds no condition, so only the filters the user actually set appear in the `WHERE` clause. Parameters are bound, not concatenated, so the `like` pattern is safe from SQL injection. Whitelist sortable fields from the `Pageable` before passing it through, since users can otherwise sort by any mapped property.
+
+Alternatives: Querydsl (type-safe generated query classes), `@Query` with `(:name is null or …)` conditions for a handful of filters, or `JdbcClient` with a small query builder when the SQL is complex.
+
 ## Common interview questions
 
 **How does Spring Data create an implementation from an interface?**
@@ -164,3 +209,11 @@ Last write wins unless the entity has a `@Version` column, in which case the sec
 - Native queries with `select *` that stop matching the entity after a migration adds a column with no default mapping.
 - `Sort.by("owner.name")` on a derived query joins silently; on a native query it fails because the property is not a column.
 - Returning `Page` entities straight from a controller: Jackson serialises every lazy association it can reach.
+
+## Key takeaways
+
+- Extend `JpaRepository` (or a narrower interface) and let Spring Data generate implementations.
+- Derived queries suit simple lookups; `@Query` handles anything longer; Specifications or Querydsl handle dynamic filters.
+- Return `Optional` for single results, `Page`/`Slice` for paged lists, and projections for read models.
+- `@Modifying` queries bypass the persistence context; clear it or reload afterwards.
+- Drop to `JdbcClient` for reporting SQL and bulk operations.

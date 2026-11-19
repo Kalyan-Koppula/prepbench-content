@@ -154,6 +154,76 @@ class OrderRepositoryTest {
 
 Say "I avoid `@SpringBootTest` for things a slice can test, because every distinct context costs seconds and the suite's runtime is what kills the feedback loop".
 
+## Worked example: one feature, three test levels
+
+The feature: `POST /api/projects` creates a project and rejects duplicate names.
+
+**1. Unit test of the service** (no Spring, milliseconds):
+
+```java
+@Test
+void rejectsDuplicateNames() {
+    var repo = mock(ProjectRepository.class);
+    when(repo.existsByNameIgnoreCase("Apollo")).thenReturn(true);
+    var service = new ProjectService(repo);
+
+    assertThatThrownBy(() -> service.create(new CreateProject("Apollo", null)))
+        .isInstanceOf(DuplicateNameException.class);
+}
+```
+
+**2. Web slice test** (MVC layer only, mocked service): checks HTTP mapping, validation and error format.
+
+```java
+@WebMvcTest(ProjectController.class)
+class ProjectControllerTest {
+    @Autowired MockMvc mvc;
+    @MockitoBean ProjectService projects;
+
+    @Test
+    void returns409ForDuplicates() throws Exception {
+        when(projects.create(any())).thenThrow(new DuplicateNameException("Apollo"));
+
+        mvc.perform(post("/api/projects")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"name": "Apollo"}
+                    """))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.title").value("Duplicate name"));
+    }
+
+    @Test
+    void returns400ForBlankName() throws Exception {
+        mvc.perform(post("/api/projects").contentType(MediaType.APPLICATION_JSON).content("{\"name\": \"\"}"))
+            .andExpect(status().isBadRequest());
+    }
+}
+```
+
+**3. Integration test** (full context, real PostgreSQL in a container): checks the unique constraint and the whole path.
+
+```java
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Testcontainers
+class ProjectApiIT {
+    @Container @ServiceConnection
+    static PostgreSQLContainer<?> db = new PostgreSQLContainer<>("postgres:17");
+
+    @Autowired TestRestTemplate http;
+
+    @Test
+    void createsThenRejectsDuplicate() {
+        var first = http.postForEntity("/api/projects", Map.of("name", "Apollo"), String.class);
+        var second = http.postForEntity("/api/projects", Map.of("name", "apollo"), String.class);
+        assertThat(first.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(second.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    }
+}
+```
+
+Each level catches different bugs: business rules (unit), HTTP contract and validation (slice), and wiring, SQL and constraints (integration). Most tests should be at the first two levels; keep a few integration tests for the critical paths. `@ServiceConnection` (Boot 3.1+) wires the container's URL and credentials into the datasource automatically.
+
 ## Common interview questions
 
 **What does `@WebMvcTest` load and what doesn't it?**
@@ -184,3 +254,11 @@ Override the `Clock` bean with `Clock.fixed` via a `@TestConfiguration` with `@P
 - `@MockitoBean` on a bean the controller doesn't use "just in case": a new context for that class.
 - Testing JSON with string equality: field order and whitespace are not the contract; use `jsonPath` or JSONassert lenient mode.
 - `@Transactional` on a `RANDOM_PORT` test: the HTTP request runs in Tomcat's thread, outside the test's transaction; nothing is rolled back.
+
+## Key takeaways
+
+- Test at three levels: plain unit tests, slice tests (`@WebMvcTest`, `@DataJpaTest`), and a few full integration tests.
+- Slices load only part of the context, so they start quickly and isolate the layer.
+- Use Testcontainers with `@ServiceConnection` for real databases instead of H2.
+- Mock collaborators with `@MockitoBean` in slices; avoid mocking in integration tests.
+- Assert on HTTP status and response bodies, not just that "no exception was thrown".

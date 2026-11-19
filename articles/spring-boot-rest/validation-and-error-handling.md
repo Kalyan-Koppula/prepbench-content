@@ -170,6 +170,91 @@ The rules for the error shape:
 5. Validation errors list every field, not just the first; 400 for syntax/shape, optionally 422 for semantically invalid, 409 for state conflicts.
 6. Don't catch `Exception` in services to "handle" it; let it reach the advice.
 
+## Worked example: one error format for every failure
+
+```java
+@RestControllerAdvice
+class ApiExceptionHandler extends ResponseEntityExceptionHandler {
+
+    // Bean Validation failures on @Valid @RequestBody
+    @Override
+    protected ResponseEntity<Object> handleMethodArgumentNotValid(
+            MethodArgumentNotValidException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Validation failed");
+        problem.setTitle("Invalid request");
+        problem.setProperty("errors", ex.getBindingResult().getFieldErrors().stream()
+            .map(e -> Map.of("field", e.getField(), "message", e.getDefaultMessage()))
+            .toList());
+        return ResponseEntity.badRequest().body(problem);
+    }
+
+    @ExceptionHandler(NotFoundException.class)
+    ProblemDetail notFound(NotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Not found");
+        return problem;
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    ProblemDetail conflict(DataIntegrityViolationException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "The request conflicts with existing data");
+        problem.setTitle("Conflict");
+        return problem; // don't leak SQL details to clients
+    }
+
+    @ExceptionHandler(Exception.class)
+    ProblemDetail unexpected(Exception ex, HttpServletRequest request) {
+        log.error("Unhandled error on {} {}", request.getMethod(), request.getRequestURI(), ex);
+        ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.INTERNAL_SERVER_ERROR);
+        problem.setTitle("Internal error");
+        return problem;
+    }
+}
+```
+
+A validation failure then always looks like this (`application/problem+json`, RFC 9457):
+
+```json
+{
+  "type": "about:blank",
+  "title": "Invalid request",
+  "status": 400,
+  "detail": "Validation failed",
+  "instance": "/api/projects",
+  "errors": [
+    { "field": "name", "message": "must not be blank" }
+  ]
+}
+```
+
+Clients can rely on one shape for every error: a machine-readable status and title, a human-readable detail, and field errors for forms. Extending `ResponseEntityExceptionHandler` keeps Spring's built-in handling for things like unsupported media types and malformed JSON in the same format; enable `spring.mvc.problemdetails.enabled=true` for the defaults.
+
+## Custom constraints
+
+When a rule spans several fields, write a class-level constraint:
+
+```java
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+@Constraint(validatedBy = DateRangeValidator.class)
+@interface ValidDateRange {
+    String message() default "end must be after start";
+    Class<?>[] groups() default {};
+    Class<? extends Payload>[] payload() default {};
+}
+
+class DateRangeValidator implements ConstraintValidator<ValidDateRange, BookingRequest> {
+    public boolean isValid(BookingRequest r, ConstraintValidatorContext ctx) {
+        return r.start() == null || r.end() == null || r.end().isAfter(r.start());
+    }
+}
+
+@ValidDateRange
+record BookingRequest(@NotNull LocalDate start, @NotNull LocalDate end) {}
+```
+
+Keep validation that needs the database (uniqueness, existence) in the service layer, enforced by constraints in the database too.
+
 ## Common interview questions
 
 **How do you validate incoming requests?**
@@ -200,3 +285,11 @@ Give a friendly early check in a custom validator or service lookup, but enforce
 - Validating a `List<Item>` body with `@Valid` but no `@Valid` on the element: the list is validated, the items aren't; use `List<@Valid Item>`.
 - Putting `@Validated` on the controller and getting `ConstraintViolationException` (500 by default) instead of the 400 MVC path: either handle it in the advice or drop the class annotation on Spring 6.1+.
 - Returning the `ex.getMessage()` of a `DataIntegrityViolationException`: it contains the SQL and constraint name.
+
+## Key takeaways
+
+- Validate input at the boundary with Bean Validation; write custom constraints for cross-field rules.
+- Throw specific exceptions from services; translate them to HTTP in one `@RestControllerAdvice`.
+- Use Problem Details (RFC 9457) for a single, predictable error format.
+- Never leak stack traces, SQL or internal messages to clients; log them instead.
+- Back uniqueness rules with database constraints and map violations to 409.

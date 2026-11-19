@@ -177,6 +177,65 @@ With Actuator, `/actuator/conditions` gives the same report as JSON, `/actuator/
 
 Writing your own auto-configuration (for a shared library): a `@AutoConfiguration` class with conditions, listed in the `.imports` file, plus a `@ConfigurationProperties` for its settings. A starter is just a POM depending on it.
 
+## Worked example: typed, validated configuration
+
+```java
+@Validated
+@ConfigurationProperties(prefix = "payments")
+public record PaymentsProperties(
+    @NotNull URI baseUrl,
+    @NotBlank String apiKey,
+    @DurationUnit(ChronoUnit.SECONDS) Duration timeout,
+    @Min(0) @Max(5) int maxRetries,
+    Map<String, String> merchantIds) {
+
+    public PaymentsProperties {
+        if (timeout == null) timeout = Duration.ofSeconds(5); // default
+    }
+}
+
+@SpringBootApplication
+@ConfigurationPropertiesScan
+public class ShopApplication { }
+```
+
+```yaml
+# application.yml (shared defaults)
+payments:
+  base-url: https://sandbox.payments.example
+  timeout: 3
+  max-retries: 2
+  merchant-ids:
+    eu: m-123
+    us: m-456
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+payments:
+  base-url: https://api.payments.example
+  max-retries: 3
+```
+
+And the secret comes from the environment: `PAYMENTS_API_KEY=…` binds to `payments.api-key` through relaxed binding.
+
+What this gives you:
+
+- **Type safety**: `Duration`, `URI` and maps are converted once, at startup.
+- **Fail fast**: a missing API key or an out-of-range retry count stops the application at startup with a clear message, instead of failing on the first payment.
+- **One place** to see every payment setting, injectable anywhere as a normal bean.
+- **Profiles** override only what differs in production.
+
+Avoid scattering `@Value("${payments.timeout}")` through the code: it duplicates keys as strings, can't be validated as a group, and is harder to test.
+
+## Debugging "where did this value come from?"
+
+- `/actuator/env` (secured, and not exposed publicly) lists every property source in precedence order and which one supplied each value.
+- `/actuator/configprops` shows bound `@ConfigurationProperties` beans with their final values (secrets masked).
+- Starting with `--debug` prints the auto-configuration report: which auto-configurations applied, and which conditions failed for those that didn't.
+
 ## Common interview questions
 
 **Where does Spring Boot look for configuration and which source wins?**
@@ -207,3 +266,11 @@ Ship an `@AutoConfiguration` class guarded by `@ConditionalOnClass`/`@Conditiona
 - `spring.profiles.active` inside a profile-specific file: ignored. Only `spring.profiles.include`/groups work there, and only in the base document.
 - Durations without units: `timeout: 2000` is milliseconds unless the field says otherwise; write `2s`.
 - YAML booleans and versions: `on`/`yes` become `true`, `1.10` becomes `1.1`; quote them.
+
+## Key takeaways
+
+- Bind related settings into validated `@ConfigurationProperties` records instead of scattered `@Value`s.
+- Profiles override defaults per environment; keep the differences small.
+- Property precedence: command line and environment variables override files; know the order roughly.
+- Secrets come from the environment or a secrets manager, never from committed files.
+- Auto-configuration is conditional bean registration; inspect it with the debug report.

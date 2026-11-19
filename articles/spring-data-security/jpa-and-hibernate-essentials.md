@@ -172,6 +172,44 @@ Hibernate 6 also lets you skip the package name in JPQL when the record is impor
 
 Say: "Entities for writes inside a transaction, projections for reads at the API boundary."
 
+## Worked example: what Hibernate does in one transaction
+
+```java
+@Transactional
+public void renameAndTag(long postId, String title, String tagName) {
+    Post post = posts.findById(postId).orElseThrow();       // 1. SELECT post (now MANAGED)
+    post.setTitle(title);                                     // 2. no SQL yet: just a change in memory
+    Tag tag = tags.findByName(tagName)                        // 3. auto-flush? see below
+        .orElseGet(() -> tags.save(new Tag(tagName)));        // 4. INSERT tag (or deferred)
+    post.getTags().add(tag);                                  // 5. no SQL yet
+}                                                             // 6. commit: flush → UPDATE post, INSERT post_tags
+```
+
+| Step | Persistence context | SQL |
+| --- | --- | --- |
+| 1 | Loads `Post#postId`, keeps a snapshot of its state | `select … from post where id = ?` |
+| 2 | Entity differs from snapshot ("dirty") | none |
+| 3 | Before running a JPQL query, Hibernate flushes pending changes that could affect it (auto flush) | possibly `update post set title = ?` |
+| 4 | New `Tag` becomes managed | `insert into tag …` (with an `IDENTITY` id, immediately) |
+| 5 | Collection change recorded | none |
+| 6 | Dirty checking compares every managed entity to its snapshot | remaining `update`s and the join-table `insert` |
+
+Two lessons:
+
+- You never call `save` on an entity that is already managed: **dirty checking** writes changes at flush time. Calling `save` on it is harmless but misleading.
+- SQL order differs from code order. Logging SQL (`spring.jpa.show-sql` in development, or a datasource proxy) is the only reliable way to know what runs.
+
+## The entity states, concretely
+
+| State | How you get there | Changes tracked? |
+| --- | --- | --- |
+| Transient | `new Post()` | No |
+| Managed | `persist`, `find`, a query result, inside an open persistence context | Yes, written at flush |
+| Detached | The transaction (and context) ended, or `detach`/`clear` | No; `merge` copies its state onto a managed instance |
+| Removed | `remove` on a managed entity | Deleted at flush |
+
+Most "my change wasn't saved" bugs are detached entities: an entity loaded in one transaction, modified in a controller, and never merged. Most "it saved something I didn't ask for" bugs are managed entities modified by code that didn't intend to persist.
+
 ## Common interview questions
 
 **What is the difference between JPA, Hibernate and Spring Data JPA?**
@@ -206,3 +244,11 @@ Jackson will walk lazy associations outside the transaction (lazy-init exception
 - Mixing `List` and `Set` carelessly: two `List` collections fetched in one query throw `MultipleBagFetchException`; `Set` avoids it.
 - Expecting a lazy `@OneToOne` on the inverse (`mappedBy`) side to be lazy: without the foreign key Hibernate cannot know whether to create a proxy or `null`, so it loads eagerly. Map the owning side, or make it a `@ManyToOne` with a unique constraint.
 - Leaving `optional = true` on a required `@ManyToOne`: Hibernate must use an outer join and cannot assume the row exists; `optional = false` gives an inner join and a `NOT NULL` column.
+
+## Key takeaways
+
+- JPA is the specification, Hibernate the implementation, Spring Data the repository layer on top.
+- Managed entities are tracked; changes are written at flush through dirty checking.
+- The owning side of a relationship (the one with the foreign key) controls what is persisted.
+- Default to `LAZY` associations and fetch what each use case needs explicitly.
+- Implement `equals`/`hashCode` on entities carefully (by business key or id with care), and return DTOs from APIs.

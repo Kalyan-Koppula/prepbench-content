@@ -140,6 +140,58 @@ How to reason about the number:
 - Virtual threads (`spring.threads.virtual.enabled=true`) do not change this: a request still needs a real connection, and a million virtual threads waiting on a 10-connection pool just wait faster. Size the pool for the DB and let the connection timeout reject excess load.
 - Leaks: `leak-detection-threshold: 20000` logs a stack trace for connections held longer than 20 s, usually a transaction wrapped around a remote call.
 
+## Worked example: from 101 queries to 2
+
+An endpoint lists 100 orders with their customer names and line counts:
+
+```java
+@Transactional(readOnly = true)
+public List<OrderRow> recent() {
+    return orders.findTop100ByOrderByCreatedAtDesc().stream()
+        .map(o -> new OrderRow(o.getId(), o.getCustomer().getName(), o.getLines().size()))
+        .toList();
+}
+```
+
+With SQL logging on, a single request shows:
+
+```text
+select … from orders order by created_at desc limit 100     -- 1 query
+select … from customer where id = ?                          -- × up to 100 (lazy customer)
+select … from order_line where order_id = ?                  -- × 100 (lazy lines)
+```
+
+Up to 201 round trips. Fixes, depending on what the screen needs:
+
+**Option 1: an entity graph** for the to-one association, and a batch size for the collection:
+
+```java
+@EntityGraph(attributePaths = "customer")
+List<Order> findTop100ByOrderByCreatedAtDesc();
+```
+
+```yaml
+spring.jpa.properties.hibernate.default_batch_fetch_size: 50 # lines load in batches with IN (…)
+```
+
+Result: 1 query for orders joined with customers, plus 2 batched queries for lines: 3 total.
+
+**Option 2: a DTO projection**, since the screen only needs three values:
+
+```java
+@Query("""
+    select new com.example.OrderRow(o.id, c.name, size(o.lines))
+    from Order o join o.customer c
+    order by o.createdAt desc
+    limit 100
+    """)
+List<OrderRow> recentRows();
+```
+
+Result: 1 query, no entities in memory, no dirty checking. For read-only list screens this is usually the best answer.
+
+How to catch N+1 before production: log SQL in development, count queries in tests (Hibernate statistics or a datasource proxy asserting `queryCount <= 3`), and watch query counts per request in tracing.
+
 ## Common interview questions
 
 **What is the N+1 problem and how do you find it?**
@@ -173,3 +225,11 @@ Hibernate skips snapshotting entities for dirty checking and sets manual flush m
 - An `@Async` method called with an entity argument: it runs on another thread with no persistence context; pass ids.
 - `JOIN FETCH` plus pagination: in-memory paging of the whole table.
 - Pool size 100 "to be safe": more context switching at the DB and a connection storm after every deploy.
+
+## Key takeaways
+
+- N+1 comes from lazy associations accessed in a loop; detect it by logging and counting SQL.
+- Fix with fetch joins or entity graphs for to-one, batch fetching for collections, or DTO projections for read screens.
+- Keep transactions short, around the unit of work, and disable Open Session in View.
+- Use optimistic locking (`@Version`) by default; pessimistic locks only for hot contended rows.
+- Size the connection pool from measurements; more connections are not automatically faster.

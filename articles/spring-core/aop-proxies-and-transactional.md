@@ -159,6 +159,62 @@ Needs `spring-boot-starter-aop` (AspectJ annotations, Spring proxies — no weav
 
 Good uses: timing/metrics, auditing, retry, tenant context. Bad uses: business logic — nobody can find it.
 
+## Worked example: a transaction that silently doesn't roll back
+
+```java
+@Service
+public class OrderService {
+    private final OrderRepository orders;
+    private final PaymentClient payments;
+
+    public void checkout(Cart cart) {
+        Order order = createOrder(cart); // self-invocation: no proxy, no transaction
+        payments.charge(order);
+    }
+
+    @Transactional
+    public Order createOrder(Cart cart) {
+        Order order = orders.save(Order.from(cart));
+        cart.items().forEach(item -> reserveStock(item)); // throws on the third item
+        return order;
+    }
+}
+```
+
+The third reservation fails, yet the order row and the first two reservations stay in the database. Why: `checkout` calls `createOrder` on `this`, the raw object, not on the Spring proxy that wraps it. The `@Transactional` advice lives in the proxy, so no transaction is started; each repository call commits on its own.
+
+Trace the two paths:
+
+| Call | Goes through | Transaction? |
+| --- | --- | --- |
+| Controller → `orderService.createOrder(cart)` | Proxy → advice → target | Yes |
+| `checkout` → `this.createOrder(cart)` | Target directly | No |
+
+Fixes, best first:
+
+1. Put `@Transactional` on the **entry point** (`checkout`), the method external callers use.
+2. Move `createOrder` to another bean (for example `OrderWriter`), so the call crosses a proxy.
+3. Inject the bean's own proxy (`@Lazy` self-injection) or use `TransactionTemplate` for programmatic control. These work but are a sign the boundaries need rethinking.
+
+A second trap in the same code: charging the payment **inside** a database transaction would hold a database connection during a slow network call, and if the transaction later rolls back, the customer has been charged anyway. Keep remote calls outside transactions and use an outbox or compensation for consistency.
+
+## Checked exceptions and rollback
+
+By default a transaction rolls back on **unchecked** exceptions (`RuntimeException`, `Error`) and **commits** on checked ones:
+
+```java
+@Transactional
+public void importFile(Path file) throws IOException {
+    repository.save(header(file));
+    parseLines(file); // throws IOException: the header is still committed
+}
+
+@Transactional(rollbackFor = Exception.class) // roll back on checked exceptions too
+public void importFileSafely(Path file) throws IOException { ... }
+```
+
+Catching an exception inside the transactional method and not rethrowing also means the transaction commits, unless you mark it with `TransactionAspectSupport.currentTransactionStatus().setRollbackOnly()`.
+
 ## Common interview questions
 
 **How does `@Transactional` work under the hood?**
@@ -192,3 +248,11 @@ Spring AOP is proxy-based: only public method executions on beans, applied at ru
 - `@Cacheable` on a method returning a mutable entity: every caller gets the same instance and mutations leak.
 - Testing transactions with `@Transactional` on the test class: the test's transaction rolls back at the end, hiding commit-time failures like constraint violations.
 - `@Async` on a method that returns a value directly: callers get `null`.
+
+## Key takeaways
+
+- Spring AOP works through proxies; only calls that go through the proxy get advice.
+- `@Transactional` opens, commits or rolls back around the proxied method; self-invocation bypasses it.
+- Defaults: propagation `REQUIRED`, rollback on unchecked exceptions only.
+- Keep remote calls out of database transactions.
+- `@Async` and `@Cacheable` have the same proxy rules and pitfalls.
