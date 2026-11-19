@@ -1,20 +1,26 @@
-// BFS over remaining amounts: the first time we hit 0, the depth is the coin count.
 function coinChange(coins: number[], amount: number): number {
-  const seen = new Set<number>([amount])
-  let frontier = [amount]
-  for (let depth = 0; frontier.length; depth++) {
+  // BFS over remaining amounts: each level uses one more coin, so the first
+  // time we reach 0, the level is the answer. Same O(amount * coins), different shape.
+  const seen = new Array(amount + 1).fill(false)
+  seen[amount] = true
+  let level: number[] = [amount]
+  let used = 0
+  while (level.length > 0) {
     const next: number[] = []
-    for (const rest of frontier) {
-      if (rest === 0) return depth
-      for (const c of coins) {
-        const r = rest - c
-        if (r >= 0 && !seen.has(r)) {
-          seen.add(r)
-          next.push(r)
+    for (let i = 0; i < level.length; i++) {
+      if (level[i] === 0) {
+        return used
+      }
+      for (let c = 0; c < coins.length; c++) {
+        const rest = level[i] - coins[c]
+        if (rest >= 0 && !seen[rest]) {
+          seen[rest] = true
+          next.push(rest)
         }
       }
     }
-    frontier = next
+    level = next
+    used++
   }
   return -1
 }

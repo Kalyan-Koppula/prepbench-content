@@ -1,15 +1,19 @@
 function countSubstrings(s: string): number {
   let count = 0
-  const expand = (lo: number, hi: number) => {
-    while (lo >= 0 && hi < s.length && s[lo] === s[hi]) {
-      count++ // s[lo..hi] is a palindrome
-      lo--
-      hi++
-    }
-  }
-  for (let i = 0; i < s.length; i++) {
-    expand(i, i) // odd lengths
-    expand(i, i + 1) // even lengths
+  for (let center = 0; center < s.length; center++) {
+    count += countFrom(s, center, center) // odd lengths
+    count += countFrom(s, center, center + 1) // even lengths
   }
   return count
+}
+
+// Every successful outward step is one more palindrome with this centre.
+function countFrom(s: string, left: number, right: number): number {
+  let found = 0
+  while (left >= 0 && right < s.length && s[left] === s[right]) {
+    found++
+    left--
+    right++
+  }
+  return found
 }

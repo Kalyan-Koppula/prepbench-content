@@ -1,27 +1,57 @@
-**Key insight:** whether the prefix of length `i` splits depends only on shorter prefixes: it does if some earlier split point `j` is reachable and `s[j..i)` is a word.
+**Key idea:** let `ok[i]` mean "the first `i` characters can be split into dictionary words". Then `ok[i]` is true when some earlier split point `j` has `ok[j]` true and the piece `s[j..i)` is a word. Fill `ok` from left to right; the answer is `ok[n]`.
 
-## Approach
+## Recognising the pattern
 
-- **State:** `ok[i]` = the first `i` characters can be split into dictionary words.
-- **Recurrence:** `ok[i] = OR over j < i of (ok[j] AND s[j..i) ∈ dict)`. Only `j ≥ i - maxWordLen` can match.
-- **Base case:** `ok[0] = true` — the empty prefix needs no words.
-- **Order:** `i = 1 … n`; answer `ok[n]`. Break out of the inner loop as soon as one `j` works.
-- **Space:** the whole boolean array is needed (any earlier `j` may be read).
+Splitting a string into valid pieces, where only the boundary positions matter, is a prefix DP from the [1-D Dynamic Programming](/problems/patterns/dp-1d) sheet. Plain backtracking re-explores the same suffix many times; the table remembers which prefixes work.
 
-Progression: the brute recursion "try every word that matches at position `i`, recurse on the rest" is exponential on inputs like `"aaaa…ab"`; memoising on the start index makes it polynomial; the table above is the bottom-up version.
+## Alternative: BFS over positions (shown below)
+
+From each reachable position, try every dictionary word that fits next, and mark the position after it as reachable. If position `n` is reached, the string can be split. That is the reference brute force below. `O(n × dictionary × word length)`, fine when the dictionary is small.
+
+## Prefix DP
+
+1. Put the words in a set and note the longest word length `L`.
+2. `ok[0] = true`.
+3. For each `i` from 1 to `n`: for each `j` from `i − 1` down to `max(0, i − L)`: if `ok[j]` and `s[j..i)` is a word, set `ok[i] = true` and stop.
+4. Return `ok[n]`.
+
+Limiting `j` to the last `L` positions avoids checking pieces longer than any word.
+
+## Walkthrough
+
+`s = "leetcode"`, `wordDict = ["leet", "code"]`
+
+| i | prefix | split found | ok[i] |
+| --- | --- | --- | --- |
+| 0 | "" | – | true |
+| 1–3 | l, le, lee | none | false |
+| 4 | leet | ok[0] and "leet" | true |
+| 5–7 | … | none | false |
+| 8 | leetcode | ok[4] and "code" | true |
+
+Answer `true`.
 
 ## Complexity
 
-- Time `O(n · L²)` — `n` end positions × up to `L` start positions × `O(L)` to slice and hash the substring (`L` = longest word).
-- Space `O(n)` for the table plus the word set.
+- Backtracking without memo: exponential on inputs like `"aaaa…ab"` with words `a`, `aa`, `aaa`.
+- BFS over positions: `O(n × W × L)` for `W` words.
+- Prefix DP: `O(n × L × L)`: `n` positions, up to `L` split points each, and building and hashing a substring of length up to `L`. Space `O(n)`.
 
-## Alternatives to mention
+## Edge cases
 
-- BFS / DFS over reachable indices with a visited set — the same reachability seen as a graph.
-- A **trie** of dictionary words lets you walk forward from each reachable `j` and mark every word end in one pass, avoiding repeated substring hashing.
+- The whole string is one word: `ok[n]` via `j = 0`.
+- Repeated use of one word, like `"aaaa"` with `["a"]`: allowed.
+- No valid split: `false`.
 
-## Pitfalls
+## Common mistakes
 
-- Greedy longest-match fails (`"aaaa"` with `["aaa","aa"]`).
-- Forgetting `ok[0] = true` makes everything false.
-- Return type is boolean — "can it be split", not the split itself (that's Word Break II, which needs backtracking over the same table).
+- Greedily taking the longest matching word first, which fails on `"aaaaaaa"` with `["aaaa", "aaa"]`.
+- Forgetting `ok[0] = true`.
+- Backtracking without memoisation.
+
+## In the interview
+
+- State the meaning of `ok[i]` precisely, then the recurrence.
+- Likely follow-ups:
+  - *Return all sentences (Word Break II)?* Backtracking with memoisation of the sentences for each suffix; the output can be exponential.
+  - *Large dictionary?* A trie lets you walk forward from `j` and stop when no word continues.

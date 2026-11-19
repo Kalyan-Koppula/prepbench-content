@@ -1,32 +1,62 @@
-**Key insight:** every palindromic substring is "some centre, expanded some distance", so counting successful expansions over all `2n - 1` centres counts each palindrome exactly once.
+**Key idea:** count from centres. Every palindromic substring has exactly one centre (a character, or the gap between two). From each of the `2n − 1` centres, expand outward; each successful step finds exactly one new palindrome. Total `O(n²)` time and `O(1)` space.
 
-## Approach 1 — interval DP
+## Recognising the pattern
 
-- **State:** `pal[i][j]` = `s[i..j]` is a palindrome.
-- **Recurrence:** `pal[i][j] = s[i] === s[j] && (j - i < 2 || pal[i + 1][j - 1])`.
-- **Base cases:** length-1 substrings are palindromes; length-2 ones are if both characters match (folded into `j - i < 2`).
-- **Order:** by increasing length, or `i` from `n - 1` down to `0` with `j` from `i` up — so `pal[i+1][j-1]` is ready.
-- **Answer:** the number of `true` cells. `O(n²)` time and space.
+Counting substrings with a property that grows from the inside (`s[i..j]` is a palindrome when the ends match and `s[i+1..j−1]` is one) is the same interval structure as [Longest Palindromic Substring](/problems/longest-palindromic-substring), described in the [1-D Dynamic Programming](/problems/patterns/dp-1d) sheet. Only the bookkeeping changes: count instead of keep the longest.
 
-## Approach 2 — expand around centres (space-optimised)
+## Alternative: interval DP table (shown below)
 
-1. For each index, expand the odd centre `(i, i)` and the even centre `(i, i + 1)`.
-2. Each iteration where `s[lo] === s[hi]` is one more palindrome — increment and widen.
-3. Stop at the first mismatch: a wider window around the same centre can't be a palindrome if this one isn't.
+Fill `isPal[i][j]` by increasing length: true when `s[i] = s[j]` and the inside is a palindrome (or empty). Count the true cells. That is the reference brute force below. Time and space `O(n²)`.
 
-The DP only ever reads along diagonals radiating from a centre, which the expansion walks directly — so the table disappears.
+Checking each of the `n(n+1)/2` substrings directly by reversing it costs `O(n³)`.
+
+## Counting from centres
+
+1. `count = 0`.
+2. For each `center`: add the expansions from `(center, center)` and from `(center, center + 1)`.
+3. An expansion adds 1 for each step where `s[left] = s[right]`, then moves both ends outward; it stops at the first mismatch or the string's end.
+
+**Why nothing is counted twice.** A palindrome's centre is fixed by its start and end: `(i + j) / 2`. So each palindromic substring is reached from exactly one centre, at exactly one step.
+
+**Why stopping at the first mismatch is safe.** If `s[i..j]` is not a palindrome, no wider substring with the same centre can be one, because it contains `s[i..j]` as its middle.
+
+## Walkthrough
+
+`s = "abba"`
+
+| centre | type | palindromes found | count |
+| --- | --- | --- | --- |
+| 0 | odd | a | 1 |
+| 0–1 | even | (a, b) mismatch | 1 |
+| 1 | odd | b | 2 |
+| 1–2 | even | bb, abba | 4 |
+| 2 | odd | b | 5 |
+| 2–3 | even | (b, a) mismatch | 5 |
+| 3 | odd | a | 6 |
+
+Answer `6`.
 
 ## Complexity
 
-- Time `O(n²)` worst case (all-equal strings); typical strings stop expanding quickly.
-- Space `O(1)`.
+- Reverse and compare every substring: `O(n³)`.
+- Interval DP: `O(n²)` time and space.
+- Centre expansion: `O(n²)` time, `O(1)` space. The worst case is a single repeated letter, where the answer itself is `n(n+1)/2`.
 
-## Alternatives to mention
+## Edge cases
 
-- Brute force: test all `n(n+1)/2` substrings in `O(n)` each — `O(n³)`.
-- Manacher's algorithm gives the radius at every centre in `O(n)`, and the count follows directly from the radii.
+- One character: 1.
+- All letters different: `n` (only the single letters).
+- All the same letter: `n(n+1)/2`.
 
-## Pitfalls
+## Common mistakes
 
-- Missing even-length centres undercounts `"abba"` (no `bb`, no `abba`).
-- Counting distinct palindromes is a different problem — here duplicates at different positions all count.
+- Only odd-length centres, missing `bb` and `abba`.
+- Counting distinct strings instead of positions: `"aa"` has three palindromic substrings (`a`, `a`, `aa`), not two.
+- Continuing an expansion past a mismatch.
+
+## In the interview
+
+- Explain the "one centre per palindrome" argument; it is what makes the count correct.
+- Likely follow-ups:
+  - *Count distinct palindromic substrings?* Collect them in a set (fine for small inputs), or use a palindromic tree.
+  - *Minimum cuts to partition into palindromes?* Precompute `isPal`, then a 1-D DP over cut positions.

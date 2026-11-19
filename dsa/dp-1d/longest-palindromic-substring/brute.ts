@@ -1,11 +1,26 @@
-// Try lengths from longest to shortest, starts from left to right.
+// Interval DP: isPal[i][j] is true when s[i..j] is a palindrome.
 function longestPalindrome(s: string): string {
-  const isPal = (lo: number, hi: number) => {
-    while (lo < hi) if (s[lo++] !== s[hi--]) return false
-    return true
+  const n = s.length
+  const isPal: boolean[][] = []
+  for (let i = 0; i < n; i++) {
+    isPal.push(new Array(n).fill(false))
   }
-  for (let len = s.length; len > 0; len--)
-    for (let start = 0; start + len <= s.length; start++)
-      if (isPal(start, start + len - 1)) return s.slice(start, start + len)
-  return ''
+  let bestStart = 0
+  let bestLength = 1
+  for (let length = 1; length <= n; length++) {
+    for (let i = 0; i + length - 1 < n; i++) {
+      const j = i + length - 1
+      if (s[i] !== s[j]) {
+        continue
+      }
+      if (length <= 2 || isPal[i + 1][j - 1]) {
+        isPal[i][j] = true
+        if (length > bestLength) {
+          bestLength = length
+          bestStart = i
+        }
+      }
+    }
+  }
+  return s.substring(bestStart, bestStart + bestLength)
 }

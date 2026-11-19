@@ -1,11 +1,12 @@
 function rob(nums: number[]): number {
-  // prev1 = best over houses [0..i-1], prev2 = best over [0..i-2].
-  let prev2 = 0
-  let prev1 = 0
-  for (const cash of nums) {
-    const cur = Math.max(prev1, prev2 + cash)
-    prev2 = prev1
-    prev1 = cur
+  let twoBack = 0 // best over houses 0..i-2
+  let oneBack = 0 // best over houses 0..i-1
+  for (let i = 0; i < nums.length; i++) {
+    // Skip house i, or rob it on top of the best that ends two houses back.
+    const robIt = twoBack + nums[i]
+    const current = robIt > oneBack ? robIt : oneBack
+    twoBack = oneBack
+    oneBack = current
   }
-  return prev1
+  return oneBack
 }

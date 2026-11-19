@@ -1,26 +1,60 @@
-**Key insight:** it's Coin Change with the squares `1, 4, 9, …` as coins — the last square used is some `k²`, and the rest must be made optimally.
+**Key idea:** this is [Coin Change](/problems/coin-change) where the coins are the perfect squares `1, 4, 9, 16, …`. Let `fewest[x]` be the fewest squares summing to `x`; then `fewest[x] = 1 + min over k of fewest[x − k²]`. Fill from 1 up to `n`.
 
-## Approach
+## Recognising the pattern
 
-- **State:** `fewest[x]` = minimum number of squares summing to `x`.
-- **Recurrence:** `fewest[x] = 1 + min over k ≥ 1 with k² ≤ x of fewest[x - k²]`.
-- **Base case:** `fewest[0] = 0`. (`1` is a square, so every `x` is reachable — no `-1` case.)
-- **Order:** `x = 1 … n` so smaller amounts are final.
-- **Space:** the full table is needed; `fewest[x]` reads up to `√x` scattered earlier entries.
+"Fewest items, each usable any number of times, to make an exact total" is unbounded knapsack from the [1-D Dynamic Programming](/problems/patterns/dp-1d) sheet. Greedy (largest square first) fails: for 12 it gives `9 + 1 + 1 + 1` (four squares), but `4 + 4 + 4` uses three.
 
-Progression: recursion "subtract any square and recurse" is exponential; memoise on the remainder; tabulate bottom-up as above.
+## Alternative: BFS over remainders (shown below)
+
+Start from `n`. One level of BFS subtracts one square in every possible way. The first level that reaches 0 is the fewest squares. A `seen` array stops each remainder from being queued twice. That is the reference brute force below. It is often faster in practice, because the answer is never more than 4, so BFS stops after at most four levels.
+
+## Bottom-up table
+
+1. `fewest[0] = 0`, every other entry ∞.
+2. For `x` from 1 to `n`: for every `k` with `k² ≤ x`: `fewest[x] = min(fewest[x], fewest[x − k²] + 1)`.
+3. Return `fewest[n]`. It is always finite, since `1` is a square.
+
+## Walkthrough
+
+`n = 12`
+
+| x | squares tried (x − k²) | fewest[x] |
+| --- | --- | --- |
+| 1 | 0 | 1 |
+| 2 | 1 | 2 |
+| 3 | 2 | 3 |
+| 4 | 3, **0** | 1 |
+| 5 | 4, 1 | 2 |
+| 8 | 7, **4** | 2 |
+| 9 | 8, 5, **0** | 1 |
+| 12 | 11, **8**, 3 | 3 |
+
+`fewest[11] = 3` (9 + 1 + 1), `fewest[8] = 2`, `fewest[3] = 3`, so `fewest[12] = 2 + 1 = 3`: `4 + 4 + 4`.
 
 ## Complexity
 
-- Time `O(n√n)` — `√x` options for each `x`. About 670k steps at `n = 10⁴`.
-- Space `O(n)`.
+- Table: `O(n √n)` time, `O(n)` space.
+- BFS: `O(n √n)` in the worst case, usually much less, `O(n)` space.
 
-## Alternatives to mention
+## A mathematical shortcut
 
-- **BFS** from `n`, subtracting squares level by level; the first level to hit `0` is the answer. Often faster since the depth is at most 4.
-- **Math:** by Lagrange's four-square theorem the answer is ≤ 4. It is `1` if `n` is a square, `2` if `n - a²` is a square for some `a`, `4` exactly when `n = 4^k(8m + 7)` (Legendre), otherwise `3`. `O(√n)` — a strong follow-up answer, but lead with the DP.
+Lagrange's four-square theorem says every positive integer is a sum of at most four squares. Legendre's theorem says exactly four are needed only when `n` has the form `4^a (8b + 7)`. So the answer is 1 if `n` is a square, 2 if `n − k²` is a square for some `k`, 4 for that special form, and 3 otherwise: `O(√n)`. Worth mentioning; interviewers expect the DP.
 
-## Pitfalls
+## Edge cases
 
-- Greedy (largest square first) fails: `12 = 9 + 1 + 1 + 1` (4) vs `4 + 4 + 4` (3).
-- Initialising the table with `0` instead of `Infinity` makes every `min` return `1`.
+- `n` is itself a square: 1.
+- `n = 7` (form `8b + 7`): 4.
+- `n = 1`: 1.
+
+## Common mistakes
+
+- Greedy by the largest square.
+- Looping `k` while `k ≤ x` instead of `k² ≤ x`.
+- Recursing without memoisation.
+
+## In the interview
+
+- Name the reduction to coin change immediately; the code is the same.
+- Likely follow-ups:
+  - *Return the squares used?* Store the chosen `k` for each `x` and walk back.
+  - *Faster?* BFS, or the number-theory shortcut above.

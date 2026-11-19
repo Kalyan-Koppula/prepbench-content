@@ -1,19 +1,28 @@
-// Split on whether house 0 is taken, then O(n^2) "last taken house" DP on the remaining row.
-function rob(nums: number[]): number {
-  const line = (arr: number[]) => {
-    const endAt: number[] = []
-    let best = 0
-    for (let i = 0; i < arr.length; i++) {
-      let before = 0
-      for (let j = 0; j <= i - 2; j++) before = Math.max(before, endAt[j])
-      endAt.push(before + arr[i])
-      best = Math.max(best, endAt[i])
+// O(n^2) "last robbed house" DP on nums[lo..hi].
+function robLine(nums: number[], lo: number, hi: number): number {
+  const endAt: number[] = []
+  let best = 0
+  for (let i = lo; i <= hi; i++) {
+    let before = 0
+    for (let j = lo; j <= i - 2; j++) {
+      if (endAt[j - lo] > before) {
+        before = endAt[j - lo]
+      }
     }
-    return best
+    endAt.push(before + nums[i])
+    if (endAt[i - lo] > best) {
+      best = endAt[i - lo]
+    }
   }
+  return best
+}
+
+function rob(nums: number[]): number {
   const n = nums.length
-  if (n === 1) return nums[0]
-  const skipFirst = line(nums.slice(1))
-  const takeFirst = nums[0] + line(nums.slice(2, n - 1)) // neighbours 1 and n-1 are off-limits
-  return Math.max(skipFirst, takeFirst)
+  if (n === 1) {
+    return nums[0]
+  }
+  const a = robLine(nums, 0, n - 2)
+  const b = robLine(nums, 1, n - 1)
+  return a > b ? a : b
 }

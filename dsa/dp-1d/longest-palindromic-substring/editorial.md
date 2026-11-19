@@ -1,35 +1,63 @@
-**Key insight:** a palindrome is determined by its centre and radius, and there are only `2n - 1` centres — expanding from each finds every maximal palindrome in `O(n²)` total with `O(1)` memory.
+**Key idea:** every palindrome has a centre: one character for odd lengths, or the gap between two characters for even lengths. There are `2n − 1` centres. From each, expand outward while the two ends match. The longest expansion over all centres is the answer, in `O(n²)` time and `O(1)` space.
 
-## Approach 1 — interval DP (the DP framing)
+## Recognising the pattern
 
-- **State:** `pal[i][j]` = `s[i..j]` is a palindrome.
-- **Recurrence:** `pal[i][j] = s[i] === s[j] && (j - i < 2 || pal[i + 1][j - 1])`.
-- **Base cases:** single characters (`i === j`) are palindromes; two equal adjacent characters are too — both covered by `j - i < 2`.
-- **Order:** `pal[i][j]` reads the strictly shorter interval `[i+1, j-1]`, so iterate by increasing length (or `i` from `n - 1` down to `0`, `j` upward).
-- Track the longest `true` interval, preferring the smallest `i` on ties.
+"Longest substring with a property", where the property for `s[i..j]` follows from the property for `s[i+1..j−1]`, is an interval DP (see [1-D Dynamic Programming](/problems/patterns/dp-1d) and [2-D Dynamic Programming](/problems/patterns/dp-2d)). Expanding around centres visits the same states in a different order and needs no table.
 
-This is `O(n²)` time **and** space.
+## Alternative: interval DP table (shown below)
 
-## Approach 2 — expand around centres (the space optimisation)
+`isPal[i][j]` is true when `s[i] = s[j]` and the inside `s[i+1..j−1]` is a palindrome (or there is no inside, for lengths 1 and 2). Fill by increasing length, so the inside is always ready. Track the longest true cell. That is the reference brute force below. Time `O(n²)`, space `O(n²)`.
 
-1. For each index `i`, expand the odd centre `(i, i)` and the even centre `(i, i + 1)` while the two ends match.
-2. The palindrome found has length `hi - lo - 1` after the loop stops.
-3. Replace the best only when **strictly** longer. Centres are visited left to right, and for a fixed length a later centre means a later start, so ties keep the leftmost palindrome.
+The truly naive approach, checking every substring directly, is `O(n³)`.
 
-The DP table is only ever consulted along a diagonal from each centre, which is exactly what the expansion walks — so the table can be dropped entirely.
+## Expanding around centres
+
+1. For each `center` from 0 to `n − 1`:
+   1. Expand from `(center, center)` for odd lengths.
+   2. Expand from `(center, center + 1)` for even lengths.
+2. An expansion moves `left` down and `right` up while both are in range and `s[left] = s[right]`. When it stops, the palindrome is `s[left+1..right−1]`, of length `right − left − 1`.
+3. Keep the longest; on ties keep the earlier one (use `>` not `>=`).
+
+**Why it is a DP in disguise.** Expanding from a centre checks `s[i+1..j−1]` before `s[i..j]`, exactly the dependency in the table. Because each step depends only on the previous step at the same centre, a single pair of indices replaces the whole table.
+
+## Walkthrough
+
+`s = "racecars"`
+
+| centre | type | expansion | length |
+| --- | --- | --- | --- |
+| 0 (r) | odd | r | 1 |
+| 2 (c) | odd | c → (a, e) mismatch | 1 |
+| 3 (e) | odd | e → cec → aceca → racecar → stops at the end | 7 |
+| 3–4 | even | e, c mismatch | 0 |
+| 5 (a) | odd | a → (c, r) mismatch | 1 |
+
+Answer `"racecar"`, starting at index `3 − 3 = 0`.
 
 ## Complexity
 
-- Time `O(n²)` — each of the `2n - 1` expansions is `O(n)` worst case (e.g. `"aaaa…"`).
-- Space `O(1)` beyond the output.
+- All substrings checked directly: `O(n³)` time.
+- Interval DP: `O(n²)` time and space.
+- Centre expansion: `O(n²)` time worst case (a string of one repeated letter), `O(1)` extra space.
+- Manacher's algorithm achieves `O(n)`, rarely expected.
 
-## Alternatives to mention
+## Edge cases
 
-- Brute force: check every substring, `O(n³)`.
-- **Manacher's algorithm** finds all palindromic radii in `O(n)` — name it, but it's rarely expected in full.
+- Length 1: the string itself.
+- No repeated neighbours or mirrors (`"abcd"`): the first character.
+- All the same letter: the whole string, found from the middle centre.
+- Even-length answers (`"abba"`): only found from the gap centres.
 
-## Pitfalls
+## Common mistakes
 
-- Forgetting even-length centres (`"abba"`).
-- Updating on `>=` returns the rightmost of equal-length answers.
-- Comparisons are case-sensitive: `"Aa"` is not a palindrome.
+- Forgetting even-length centres.
+- Off-by-one when converting the expansion's end indices back to a start and length.
+- Filling the interval table by `i` ascending, so the inside cell isn't ready yet.
+
+## In the interview
+
+- Mention the `O(n³)` check, then the table, then the centre expansion as the space-saving version.
+- Likely follow-ups:
+  - *Count palindromic substrings?* The same expansion, counting each step.
+  - *Longest palindromic subsequence (not contiguous)?* A different 2-D DP: `lps[i][j]` with skip-one-end transitions.
+  - *Linear time?* Manacher's algorithm reuses mirror information inside the current rightmost palindrome.

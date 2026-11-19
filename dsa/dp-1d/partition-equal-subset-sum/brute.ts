@@ -1,11 +1,21 @@
-// Grow the set of every achievable subset sum, then look for half the total.
 function canPartition(nums: number[]): boolean {
-  const total = nums.reduce((a, b) => a + b, 0)
-  let sums = new Set<number>([0])
-  for (const x of nums) {
-    const next = new Set(sums)
-    for (const s of sums) next.add(s + x)
+  // Grow the set of every reachable subset sum (one number at a time).
+  let total = 0
+  for (let i = 0; i < nums.length; i++) {
+    total += nums[i]
+  }
+  if (total % 2 === 1) {
+    return false
+  }
+  let sums = new Set<number>()
+  sums.add(0)
+  for (let i = 0; i < nums.length; i++) {
+    const next = new Set<number>()
+    for (const s of sums) {
+      next.add(s)
+      next.add(s + nums[i])
+    }
     sums = next
   }
-  return total % 2 === 0 && sums.has(total / 2)
+  return sums.has(total / 2)
 }

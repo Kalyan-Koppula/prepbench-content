@@ -1,11 +1,15 @@
 function minCostClimbingStairs(cost: number[]): number {
-  // dp[i] = cheapest cost to stand on position i (fee for i not yet paid).
-  let twoBack = 0 // dp[0]
-  let oneBack = 0 // dp[1]
+  // dp[i] = cheapest way to stand on position i (its own fee not paid yet).
+  // Positions 0 and 1 are free starting points.
+  let twoBack = 0 // dp[i - 2]
+  let oneBack = 0 // dp[i - 1]
   for (let i = 2; i <= cost.length; i++) {
-    const cur = Math.min(oneBack + cost[i - 1], twoBack + cost[i - 2])
+    // Arrive from i - 1 (paying its fee) or from i - 2 (paying its fee).
+    const fromOne = oneBack + cost[i - 1]
+    const fromTwo = twoBack + cost[i - 2]
+    const current = fromOne < fromTwo ? fromOne : fromTwo
     twoBack = oneBack
-    oneBack = cur
+    oneBack = current
   }
-  return oneBack
+  return oneBack // position cost.length is the top
 }

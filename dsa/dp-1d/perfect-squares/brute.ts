@@ -1,9 +1,26 @@
-// Number theory cross-check (Lagrange / Legendre): the answer is 1, 2, 3 or 4.
+// BFS over remainders: each level subtracts one more square.
 function numSquares(n: number): number {
-  const isSquare = (x: number) => Number.isInteger(Math.sqrt(x))
-  if (isSquare(n)) return 1
-  for (let a = 1; a * a <= n; a++) if (isSquare(n - a * a)) return 2
-  let m = n
-  while (m % 4 === 0) m /= 4
-  return m % 8 === 7 ? 4 : 3
+  const seen = new Array(n + 1).fill(false)
+  let level: number[] = [n]
+  seen[n] = true
+  let squaresUsed = 0
+  while (level.length > 0) {
+    squaresUsed++
+    const next: number[] = []
+    for (let i = 0; i < level.length; i++) {
+      const remaining = level[i]
+      for (let k = 1; k * k <= remaining; k++) {
+        const left = remaining - k * k
+        if (left === 0) {
+          return squaresUsed
+        }
+        if (!seen[left]) {
+          seen[left] = true
+          next.push(left)
+        }
+      }
+    }
+    level = next
+  }
+  return 0
 }

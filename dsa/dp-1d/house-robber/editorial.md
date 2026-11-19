@@ -1,26 +1,57 @@
-**Key insight:** for each house the only question is "take it or not"; taking it forces you to build on the best answer two houses back.
+**Key idea:** for each house you either skip it, keeping the best total from the houses before it, or rob it, adding its cash to the best total from the houses **two** back. `best(i) = max(best(i − 1), best(i − 2) + nums[i])`. Two running variables are enough.
 
-## Approach
+## Recognising the pattern
 
-- **State:** `best[i]` = most cash from houses `0 … i - 1` (a prefix of length `i`).
-- **Recurrence:** `best[i] = max(best[i - 1], best[i - 2] + nums[i - 1])` — skip house `i - 1`, or take it and skip its left neighbour.
-- **Base cases:** `best[0] = 0` (no houses), `best[1] = nums[0]` (follows from the recurrence with `best[-1] = 0`).
-- **Order:** left to right; answer `best[n]`.
-- **Space optimisation:** the recurrence reads two previous values, so carry `prev1` / `prev2`.
+Choose items in a row to maximise a total, with a rule forbidding neighbours: the take-or-skip recurrence from the [1-D Dynamic Programming](/problems/patterns/dp-1d) sheet. The no-neighbours rule is exactly why the "take" branch looks two steps back.
 
-Progression: the brute recursion branches twice per house (`O(2ⁿ)`); memoising on the index gives `O(n)`; tabulate; then roll the table into two variables.
+## Brute force
+
+Trying every subset of houses with no two neighbours is exponential. The reference brute force below is a slower DP: `endAt[i]` is the best total whose last robbed house is `i`, computed by scanning every earlier house at least two back. `O(n²)`.
+
+## Bottom-up with two variables
+
+1. `twoBack = 0`, `oneBack = 0` (the best over no houses).
+2. For each house: `current = max(oneBack, twoBack + nums[i])`; shift `twoBack = oneBack`, `oneBack = current`.
+3. Return `oneBack`.
+
+**Why the recurrence covers every plan.** The best plan for houses `0..i` either robs house `i` or doesn't. If it doesn't, it is the best plan for `0..i−1`. If it does, house `i − 1` is untouched, and the rest must be the best plan for `0..i−2`.
+
+## Walkthrough
+
+`nums = [2, 7, 9, 3, 1]`
+
+| house | cash | skip (oneBack) | rob (twoBack + cash) | best |
+| --- | --- | --- | --- | --- |
+| 0 | 2 | 0 | 2 | 2 |
+| 1 | 7 | 2 | 7 | 7 |
+| 2 | 9 | 7 | 11 | 11 |
+| 3 | 3 | 11 | 10 | 11 |
+| 4 | 1 | 11 | 12 | 12 |
+
+Answer `12`: houses 0, 2 and 4.
 
 ## Complexity
 
-- Time `O(n)`.
-- Space `O(1)`.
+- Subsets: `O(2^n)`.
+- Last-robbed DP: time `O(n²)`, space `O(n)`.
+- Two variables: time `O(n)`, space `O(1)`.
 
-## Pitfalls
+## Edge cases
 
-- Greedy "take all even or all odd indices" fails: `[2, 1, 1, 2]` needs houses 0 and 3.
-- Update order: compute `cur` from the old `prev1`/`prev2` before shifting them.
+- One house: rob it.
+- Two houses: the larger one.
+- All zeros: 0.
 
-## Follow-ups
+## Common mistakes
 
-- Houses in a circle → House Robber II (run this twice on two ranges).
-- Houses on a tree → post-order DP returning `(take, skip)` per node.
+- Greedily taking every other house (even or odd positions), which fails on inputs like `[2, 1, 1, 2]`.
+- Forgetting that the best plan may skip two houses in a row.
+- Updating `twoBack` and `oneBack` in the wrong order.
+
+## In the interview
+
+- Explain the take-or-skip choice in one sentence, then show the two-variable version.
+- Likely follow-ups:
+  - *Houses in a circle?* Solve twice, without the first house and without the last (House Robber II).
+  - *Houses on a binary tree?* Return two values per node, robbed and not robbed (House Robber III).
+  - *Return the chosen houses?* Keep the full table and walk back.
