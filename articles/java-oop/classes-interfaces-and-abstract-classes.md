@@ -159,6 +159,70 @@ Rule of thumb: define types with interfaces; share implementation with an abstra
 
 `equals`, `hashCode`, `toString`, `getClass`, `clone` (protected, avoid), `finalize` (deprecated for removal; use `Cleaner`), `wait`/`notify`/`notifyAll` (monitor methods, see concurrency). Override `toString` on anything you log; records do it for you.
 
+## Worked example: initialisation order
+
+```java
+class Base {
+    static { System.out.println("1 Base static"); }
+    { System.out.println("3 Base instance block"); }
+    Base() {
+        System.out.println("4 Base constructor");
+        describe(); // calls the override before Child's fields are set
+    }
+    void describe() { System.out.println("Base.describe"); }
+}
+
+class Child extends Base {
+    static { System.out.println("2 Child static"); }
+    private String name = "child";
+    { System.out.println("5 Child instance block"); }
+    Child() { System.out.println("6 Child constructor"); }
+    @Override void describe() { System.out.println("Child.describe, name = " + name); }
+}
+
+new Child();
+```
+
+Output:
+
+```text
+1 Base static
+2 Child static
+3 Base instance block
+4 Base constructor
+Child.describe, name = null
+5 Child instance block
+6 Child constructor
+```
+
+The rules: static initialisers run once, parent first, when the class is first used. For each object, the parent's instance initialisers and constructor run completely before the child's field initialisers and instance blocks. That's why `name` is still `null` when the overridden method runs from the base constructor, and why calling overridable methods from constructors is a classic bug.
+
+## Worked example: interface default methods and conflicts
+
+```java
+interface Walker {
+    default String move() { return "walk"; }
+}
+interface Swimmer {
+    default String move() { return "swim"; }
+}
+
+class Duck implements Walker, Swimmer {
+    @Override
+    public String move() { // required: two defaults with the same signature conflict
+        return Walker.super.move() + " and " + Swimmer.super.move();
+    }
+}
+```
+
+Resolution rules when a class inherits the same method from several places:
+
+1. A method from a **class** (including superclasses) wins over interface defaults.
+2. Otherwise, the most **specific** interface wins (a sub-interface over its parent).
+3. Otherwise, the class must override and choose explicitly with `Interface.super.method()`.
+
+Default methods were added in Java 8 so interfaces like `Collection` could gain methods (`stream()`, `removeIf`) without breaking every existing implementation.
+
 ## Common interview questions
 
 **What is the order of initialisation when you construct a subclass?**
@@ -184,3 +248,19 @@ They have names (`of`, `from`, `valueOf`), can return cached instances or a subt
 
 **Why is calling an overridable method from a constructor a bug?**
 The subclass's override runs before the subclass constructor has initialised its fields, so it observes defaults (`null`, `0`) even for `final` fields. Make the methods called from constructors `private` or `final`, or move the work to a factory method.
+
+## Pitfalls
+
+- Calling overridable methods from constructors.
+- Using abstract classes only to share constants or utilities (use a final utility class or static imports).
+- Exposing fields as `public` instead of through methods.
+- Non-static inner classes that accidentally hold a reference to their outer instance (a memory leak in long-lived callbacks).
+- Interfaces with dozens of methods that every implementer must stub out.
+
+## Key takeaways
+
+- Prefer the narrowest access modifier; `private` by default.
+- Initialisation order: static parent, static child, then parent instance, then child instance, per object.
+- Interfaces define capabilities and can have default, static and private methods; abstract classes share state and partial implementation.
+- Resolve default-method conflicts explicitly with `Interface.super.method()`.
+- Use static nested classes unless you need the outer instance.

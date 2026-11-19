@@ -129,6 +129,57 @@ LinkedHashMap<String, Integer> ordered = scores.entrySet().stream()
 
 The explicit type witness `Map.Entry.<String, Integer>comparingByValue()` is the same inference problem as `reversed()`.
 
+## Worked example: a leaderboard
+
+Rank players by score (highest first), then by fewer games played, then by name, with players who haven't played yet at the end:
+
+```java
+record Player(String name, Integer score, int gamesPlayed) {}
+
+Comparator<Player> leaderboard = Comparator
+    .comparing(Player::score, Comparator.nullsLast(Comparator.reverseOrder()))
+    .thenComparingInt(Player::gamesPlayed)
+    .thenComparing(Player::name, String.CASE_INSENSITIVE_ORDER);
+
+List<Player> players = new ArrayList<>(List.of(
+    new Player("ana", 120, 10),
+    new Player("Ben", 120, 8),
+    new Player("cy", null, 0),
+    new Player("dee", 150, 12)));
+
+players.sort(leaderboard);
+// dee (150), Ben (120, 8 games), ana (120, 10 games), cy (no score)
+```
+
+Reading the chain:
+
+| Step | Key | Order | Breaks ties between |
+| --- | --- | --- | --- |
+| 1 | `score` | Descending, `null` last | Everyone |
+| 2 | `gamesPlayed` | Ascending | Ben and ana (both 120) |
+| 3 | `name` | Case-insensitive | Players equal on both |
+
+Each `thenComparing` only matters when everything before it is equal. Building comparators from key extractors like this is clearer and safer than writing `compare` by hand.
+
+## Why `a - b` is a broken comparator
+
+```java
+Comparator<Integer> broken = (a, b) -> a - b;
+broken.compare(Integer.MIN_VALUE, 1); // overflows to a large positive number: says MIN_VALUE > 1
+```
+
+Subtraction overflows for values far apart, breaking the contract and producing wrong sorts or `IllegalArgumentException: Comparison method violates its general contract!` from TimSort. Use `Integer.compare(a, b)` or `Comparator.comparingInt`.
+
+## The contract, precisely
+
+A comparator must define a total order:
+
+1. **Sign symmetry**: `sgn(compare(a, b)) == -sgn(compare(b, a))`.
+2. **Transitivity**: if `a > b` and `b > c`, then `a > c`.
+3. **Consistency**: if `compare(a, b) == 0`, then `a` and `b` compare the same way against every `c`.
+
+Comparators that read mutable state, use random values, or compare floating-point numbers with `-` (where `NaN` breaks ordering) violate these rules. Use `Double.compare`, which orders `NaN` consistently.
+
 ## Common interview questions
 
 **`Comparable` versus `Comparator`?**
@@ -154,3 +205,19 @@ When you need ordered iteration, range queries, or nearest-key lookups (`floorKe
 
 **Why does `Comparator.comparing(p -> p.name()).reversed()` fail to compile?**
 Target typing flows into the first call, but `reversed()` is resolved left to right on the result of `comparing`, so the lambda's parameter has no type information and is inferred as `Object`. A method reference or an explicitly typed lambda parameter fixes it.
+
+## Pitfalls
+
+- Subtraction-based comparators that overflow.
+- Comparators inconsistent with `equals` used in `TreeSet`/`TreeMap`, which silently drop "duplicate" elements.
+- Forgetting `reversed()` applies to the whole chain built so far, not just the last key.
+- Mutating fields used for ordering while objects are inside a `TreeSet` or `PriorityQueue`.
+- Not handling `null` keys (use `nullsFirst` or `nullsLast`).
+
+## Key takeaways
+
+- `Comparable` defines one natural order; `Comparator` defines any number of external orders.
+- Build comparators with `comparing`, `thenComparing`, `reversed`, `nullsFirst`/`nullsLast`.
+- Never subtract to compare; use `Integer.compare` and friends.
+- Keep ordering consistent with `equals` for sorted collections.
+- Java's object sort is stable (TimSort), so sorting by secondary keys first also works.

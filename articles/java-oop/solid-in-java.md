@@ -133,6 +133,82 @@ class PostgresOrderStore implements OrderStore { public void insert(Order o) { /
 
 The interface lives in the domain package, the implementation in the infrastructure package, and the dependency arrows point inward. This is the structure behind hexagonal/ports-and-adapters and why Spring prefers constructor injection: the dependency is explicit, final, and the class can be unit-tested with a fake.
 
+## Worked example: refactoring a notification service
+
+A class that violates several principles at once:
+
+```java
+public class NotificationService {
+    public void notify(User user, String message, String channel) {
+        if (channel.equals("email")) {
+            // build an SMTP connection, format HTML, send
+        } else if (channel.equals("sms")) {
+            // call the SMS provider's HTTP API, truncate to 160 characters
+        } else if (channel.equals("push")) {
+            // call the push service
+        }
+        // write an audit row with JDBC
+    }
+}
+```
+
+Problems: one class knows every channel (SRP), adding a channel means editing it (OCP), and it creates its own SMTP and JDBC connections, so it can't be tested without real infrastructure (DIP).
+
+Refactored:
+
+```java
+public interface NotificationChannel {
+    String name();
+    void send(User user, String message);
+}
+
+@Component
+class EmailChannel implements NotificationChannel {
+    private final MailSender mail;
+    EmailChannel(MailSender mail) { this.mail = mail; }
+    public String name() { return "email"; }
+    public void send(User user, String message) { mail.send(user.email(), message); }
+}
+
+@Component
+class SmsChannel implements NotificationChannel {
+    private final SmsClient sms;
+    SmsChannel(SmsClient sms) { this.sms = sms; }
+    public String name() { return "sms"; }
+    public void send(User user, String message) {
+        sms.send(user.phone(), message.length() > 160 ? message.substring(0, 160) : message);
+    }
+}
+
+@Service
+public class NotificationService {
+    private final Map<String, NotificationChannel> channels;
+    private final AuditLog audit;
+
+    public NotificationService(List<NotificationChannel> channels, AuditLog audit) {
+        this.channels = channels.stream().collect(Collectors.toMap(NotificationChannel::name, c -> c));
+        this.audit = audit;
+    }
+
+    public void notify(User user, String message, String channel) {
+        NotificationChannel target = channels.get(channel);
+        if (target == null) throw new IllegalArgumentException("Unknown channel " + channel);
+        target.send(user, message);
+        audit.record(user, channel);
+    }
+}
+```
+
+| Principle | Where it shows |
+| --- | --- |
+| Single responsibility | Each channel class knows one delivery mechanism; the service only routes and audits |
+| Open/closed | A new `PushChannel` bean is picked up automatically; the service doesn't change |
+| Liskov substitution | Every channel honours the same contract: `send` delivers or throws, nothing else |
+| Interface segregation | `NotificationChannel` has only what callers need |
+| Dependency inversion | The service depends on `NotificationChannel` and `AuditLog` abstractions, injected by Spring |
+
+In tests, pass a fake channel and an in-memory audit log; no SMTP server or database required.
+
 ## Spring-flavoured phrasing
 
 | Principle | What it looks like in Spring Boot |
@@ -173,3 +249,17 @@ By the client: each interface should match what one kind of caller needs. If imp
 
 **Why does Spring recommend constructor injection?**
 Dependencies are explicit and `final`, the object is never in a half-constructed state, circular dependencies fail fast, and tests can construct the class with fakes without a container. It is DIP made visible in the signature.
+
+## Pitfalls
+
+- Applying every principle up front and creating interfaces with a single implementation "just in case".
+- Splitting classes so finely that following one feature means opening ten files.
+- Inheritance hierarchies that violate Liskov (a subclass that throws `UnsupportedOperationException` for an inherited method).
+- Treating dependency injection frameworks as the same thing as dependency inversion.
+
+## Key takeaways
+
+- SRP: one reason to change. OCP: extend by adding code, not editing it. LSP: subtypes keep the contract.
+- ISP: small, client-focused interfaces. DIP: depend on abstractions, inject implementations.
+- In Spring, constructor injection plus interfaces plus collections of beans give OCP and DIP naturally.
+- Apply SOLID where change is likely; avoid speculative abstractions.

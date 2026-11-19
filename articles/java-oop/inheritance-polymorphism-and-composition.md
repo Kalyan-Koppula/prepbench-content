@@ -153,6 +153,74 @@ if (o instanceof String str) { }   // pattern: test and bind in one step
 
 Upcasts are implicit and always safe. Downcasts compile when the types are related and are checked at runtime. A cast between unrelated classes is a compile error; a cast to an interface compiles for any non-final class because a subclass might implement it.
 
+## Worked example: the fragile base class
+
+```java
+public class CountingSet<E> extends HashSet<E> {
+    private int addCount = 0;
+
+    @Override
+    public boolean add(E e) {
+        addCount++;
+        return super.add(e);
+    }
+
+    @Override
+    public boolean addAll(Collection<? extends E> c) {
+        addCount += c.size();
+        return super.addAll(c);
+    }
+
+    public int addCount() { return addCount; }
+}
+
+CountingSet<String> set = new CountingSet<>();
+set.addAll(List.of("a", "b", "c"));
+set.addCount(); // 6, not 3
+```
+
+`HashSet.addAll` happens to call `add` for each element, so every element is counted twice. The subclass depended on an **implementation detail** of its parent, which could change in any release. That is the fragile base class problem.
+
+The composition version wraps a set instead of extending one:
+
+```java
+public class CountingSet<E> implements Set<E> {
+    private final Set<E> inner;
+    private int addCount = 0;
+
+    public CountingSet(Set<E> inner) { this.inner = inner; }
+
+    @Override
+    public boolean add(E e) {
+        addCount++;
+        return inner.add(e);
+    }
+
+    @Override
+    public boolean addAll(Collection<? extends E> c) {
+        addCount += c.size();
+        return inner.addAll(c); // calls inner.add, not ours: no double counting
+    }
+
+    public int addCount() { return addCount; }
+
+    // remaining Set methods simply delegate to inner
+    @Override public int size() { return inner.size(); }
+    @Override public boolean contains(Object o) { return inner.contains(o); }
+    // ...
+}
+```
+
+It works with any `Set` implementation, and it can't be broken by changes inside `HashSet`. The cost is writing delegating methods (or extending a forwarding base class written once).
+
+## When inheritance is the right tool
+
+- A genuine "is-a" relationship where the subclass honours the whole contract (Liskov).
+- The base class is **designed for extension**: documented hooks (template method), `protected` extension points, and a statement of which methods call which.
+- Framework extension points meant for subclassing (`AbstractList`, Spring's `OncePerRequestFilter`).
+
+Otherwise, prefer composition and interfaces. Mark classes `final` unless you've designed them for inheritance; sealed classes are the middle ground, allowing a known set of subclasses.
+
 ## Common interview questions
 
 **What is the difference between overriding and overloading?**
@@ -178,3 +246,19 @@ A subtype must honour the supertype's contract so callers never need to know whi
 
 **Is Java's method call always virtual?**
 Instance methods are virtual unless `private`, `final` or `static`. The JIT removes most of the cost by inlining monomorphic call sites, so the overhead is not a reason to avoid interfaces.
+
+## Pitfalls
+
+- Inheriting to reuse code when there's no is-a relationship.
+- Calling overridable methods from constructors (the subclass method runs before its fields are initialised).
+- Overloading when you meant overriding (a different parameter type): use `@Override` always.
+- Breaking `equals` symmetry by mixing `instanceof` checks across a hierarchy.
+- Deep hierarchies that make behaviour hard to trace.
+
+## Key takeaways
+
+- Overriding is chosen at runtime by the object's class; overloading at compile time by argument types.
+- Liskov: a subtype must be usable anywhere its supertype is expected, without surprises.
+- Inheritance couples you to the parent's implementation; composition couples you only to its interface.
+- Prefer composition and interfaces; reserve inheritance for classes designed for it.
+- Use `@Override`, `final` and sealed types to make intent explicit.

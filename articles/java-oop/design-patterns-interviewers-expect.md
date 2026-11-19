@@ -211,6 +211,65 @@ Repo repo = new TimedRepo(new CachingRepo(new JdbcRepo()));   // compose freely,
 
 Spring AOP (`@Transactional`, `@Cacheable`, `@Retryable`) is decorator applied by proxy; that is the answer to "how does `@Transactional` work" at the design level. Overkill: one cross-cutting concern on one class, where a few lines inline are clearer. Pitfall: forwarding boilerplate for wide interfaces; use Lombok `@Delegate` or keep interfaces narrow (ISP).
 
+## Worked example: combining patterns in a pricing engine
+
+Real code rarely uses one pattern alone. A checkout's pricing step:
+
+```java
+// Strategy: interchangeable discount rules
+interface DiscountRule {
+    BigDecimal apply(Cart cart, BigDecimal subtotal);
+}
+
+class PercentageOff implements DiscountRule {
+    private final BigDecimal percent;
+    PercentageOff(BigDecimal percent) { this.percent = percent; }
+    public BigDecimal apply(Cart cart, BigDecimal subtotal) {
+        return subtotal.multiply(BigDecimal.ONE.subtract(percent.movePointLeft(2)));
+    }
+}
+
+class BuyXGetYFree implements DiscountRule {
+    public BigDecimal apply(Cart cart, BigDecimal subtotal) { /* … */ return subtotal; }
+}
+
+// Factory: build the right rules from configuration
+class DiscountRuleFactory {
+    DiscountRule create(PromoConfig config) {
+        return switch (config.type()) {
+            case "PERCENT" -> new PercentageOff(config.value());
+            case "BOGO" -> new BuyXGetYFree();
+            default -> throw new IllegalArgumentException("Unknown promo " + config.type());
+        };
+    }
+}
+
+// Decorator: add behaviour (logging, caps) around any rule
+class CappedDiscount implements DiscountRule {
+    private final DiscountRule inner;
+    private final BigDecimal maxDiscount;
+    CappedDiscount(DiscountRule inner, BigDecimal maxDiscount) { this.inner = inner; this.maxDiscount = maxDiscount; }
+    public BigDecimal apply(Cart cart, BigDecimal subtotal) {
+        BigDecimal discounted = inner.apply(cart, subtotal);
+        BigDecimal floor = subtotal.subtract(maxDiscount);
+        return discounted.max(floor); // never discount more than the cap
+    }
+}
+
+// The engine applies a chain of rules (a simple chain of responsibility)
+class PricingEngine {
+    private final List<DiscountRule> rules;
+    PricingEngine(List<DiscountRule> rules) { this.rules = List.copyOf(rules); }
+    BigDecimal price(Cart cart) {
+        BigDecimal total = cart.subtotal();
+        for (DiscountRule rule : rules) total = rule.apply(cart, total);
+        return total.setScale(2, RoundingMode.HALF_EVEN);
+    }
+}
+```
+
+In an interview, naming the patterns is worth less than explaining what each one buys: **strategy** makes rules swappable and testable in isolation, the **factory** keeps construction logic in one place, the **decorator** adds a cap without touching any rule, and the engine stays closed to modification as new promotions appear.
+
 ## Others to recognise by name
 
 - **Adapter**: convert one interface to another (`Arrays.asList`, `InputStreamReader`).
@@ -250,3 +309,19 @@ Global mutable state, hidden dependencies, order-dependent initialisation and un
 
 **Factory method versus abstract factory?**
 Factory method is one method that creates one product, often overridden or chosen by key. Abstract factory is an object that creates a family of related products so they are consistent (a look-and-feel's buttons and menus). The second is rare in backend code.
+
+## Pitfalls
+
+- Using a pattern because it's familiar rather than because the problem needs it.
+- Singletons with mutable global state (hard to test, hidden coupling); prefer a single dependency-injected instance.
+- Builders for classes with two fields.
+- Observer implementations that never unregister listeners, leaking memory.
+- Deep decorator stacks that make debugging hard.
+
+## Key takeaways
+
+- Know the intent of each common pattern: creation (builder, factory, singleton), structure (decorator, adapter), behaviour (strategy, observer, template method).
+- Explain the problem a pattern solves before its structure.
+- Modern Java often replaces pattern boilerplate with lambdas (strategy), records (value objects) and dependency injection (singletons, factories).
+- Patterns combine: strategy plus factory plus decorator is common in business rules.
+- Avoid patterns where a plain function or class is clearer.

@@ -125,6 +125,65 @@ When a value type has many optional fields, a constructor with twelve parameters
 
 Immutability is the default, not a religion. Keep mutability for accumulators inside a method, builders, caches with explicit synchronisation, and entities with a lifecycle. The rule is that mutable state should be local or guarded, never shared and unguarded.
 
+## Worked example: making a mutable class immutable
+
+Start with a typical mutable class:
+
+```java
+public class Order {
+    private String id;
+    private List<String> items;
+    private Date createdAt;
+
+    public Order(String id, List<String> items, Date createdAt) {
+        this.id = id;
+        this.items = items;           // shares the caller's list
+        this.createdAt = createdAt;   // shares a mutable Date
+    }
+
+    public List<String> getItems() { return items; } // callers can modify our list
+    public void setId(String id) { this.id = id; }
+}
+```
+
+Three ways callers can change an "immutable" object after the fact: through the setter, by modifying the list they passed in, and by modifying the list returned by the getter. The immutable version:
+
+```java
+public final class Order {                             // 1. can't be subclassed to add mutability
+    private final String id;                           // 2. final fields
+    private final List<String> items;
+    private final Instant createdAt;                   // 3. immutable type instead of Date
+
+    public Order(String id, List<String> items, Instant createdAt) {
+        this.id = Objects.requireNonNull(id);
+        this.items = List.copyOf(items);              // 4. defensive copy in (also rejects nulls)
+        this.createdAt = Objects.requireNonNull(createdAt);
+    }
+
+    public String id() { return id; }
+    public List<String> items() { return items; }     // 5. already unmodifiable, safe to return
+    public Instant createdAt() { return createdAt; }
+
+    public Order withItem(String item) {               // 6. "modification" returns a new object
+        List<String> next = new ArrayList<>(items);
+        next.add(item);
+        return new Order(id, next, createdAt);
+    }
+}
+```
+
+As a record, the same thing is shorter: `record Order(String id, List<String> items, Instant createdAt)` with a compact constructor that does `items = List.copyOf(items);`.
+
+## The cost, and how to keep it low
+
+Creating a new object for every change sounds expensive, but:
+
+- Short-lived objects are cheap to allocate and collect in modern JVMs (see [JVM Memory and Garbage Collection](/read/jvm-memory-and-garbage-collection)).
+- Immutable objects can be **shared** freely: no defensive copies when passing them around, no locks between threads.
+- For large structures that change often, use a builder to accumulate changes and produce one immutable result, or persistent data structures that share most of their internals between versions.
+
+Where mutability belongs: performance-critical inner loops, builders, JPA entities, and objects whose identity persists while their state changes (a shopping cart in memory). Keep that mutability contained and don't leak it.
+
 ## Common interview questions
 
 **How do you make a class immutable?**
@@ -150,3 +209,19 @@ Allocation in the JVM is a pointer bump and short-lived objects die cheaply in t
 
 **What is a value object?**
 An object whose identity is its value: two instances with equal fields are interchangeable, so it is immutable and defines `equals`/`hashCode` on all fields. `Money`, `Email` and `DateRange` are value objects; an `Order` with an id is an entity.
+
+## Pitfalls
+
+- Declaring fields `final` but exposing mutable collections or dates through getters.
+- Forgetting the defensive copy in constructors.
+- Using `Collections.unmodifiableList(list)` and assuming the result can't change; it's a view, and the original list can still change underneath it.
+- Making JPA entities immutable (frameworks need to mutate them).
+- Deep object graphs where one mutable leaf undermines the whole value.
+
+## Key takeaways
+
+- Immutable means: `final` class, `private final` fields, no setters, defensive copies in and out.
+- `List.copyOf` and `Map.copyOf` produce truly unmodifiable copies; `unmodifiable…` views don't.
+- Records are the easiest route to immutable value objects; still copy mutable components.
+- Immutable objects are thread-safe, safe as map keys and easy to reason about.
+- Value objects compare by value; entities compare by identity.
