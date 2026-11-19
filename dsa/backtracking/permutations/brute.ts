@@ -1,10 +1,24 @@
 function permute(nums: number[]): number[][] {
-  // Permute the tail, then insert the head at every position.
-  if (nums.length === 0) return [[]]
-  const [head, ...tail] = nums
+  // Swap-based: fix position k by swapping each later element into it.
+  const arr = nums.slice()
   const result: number[][] = []
-  for (const p of permute(tail)) {
-    for (let pos = 0; pos <= p.length; pos++) result.push([...p.slice(0, pos), head, ...p.slice(pos)])
+
+  function explore(k: number): void {
+    if (k === arr.length) {
+      result.push(arr.slice())
+      return
+    }
+    for (let i = k; i < arr.length; i++) {
+      let temp = arr[k]
+      arr[k] = arr[i]
+      arr[i] = temp
+      explore(k + 1)
+      temp = arr[k] // swap back
+      arr[k] = arr[i]
+      arr[i] = temp
+    }
   }
+
+  explore(0)
   return result
 }

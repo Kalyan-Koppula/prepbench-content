@@ -1,20 +1,30 @@
-function exist(board: string[][], word: string): boolean {
-  const rows = board.length
-  const cols = board[0].length
-
-  const dfs = (r: number, c: number, i: number): boolean => {
-    if (i === word.length) return true
-    if (r < 0 || c < 0 || r >= rows || c >= cols || board[r][c] !== word[i]) return false
-    const saved = board[r][c]
-    board[r][c] = '#' // on the current path
-    const found = dfs(r + 1, c, i + 1) || dfs(r - 1, c, i + 1) || dfs(r, c + 1, i + 1) || dfs(r, c - 1, i + 1)
-    board[r][c] = saved
-    return found
+function trace(board: string[][], word: string, i: number, r: number, c: number): boolean {
+  if (i === word.length) {
+    return true // every letter matched
   }
+  if (r < 0 || c < 0 || r >= board.length || c >= board[0].length) {
+    return false
+  }
+  if (board[r][c] !== word[i]) {
+    return false // wrong letter, or '#' (already on this path)
+  }
+  const saved = board[r][c]
+  board[r][c] = '#' // mark: this cell is on the current path
+  const found =
+    trace(board, word, i + 1, r + 1, c) ||
+    trace(board, word, i + 1, r - 1, c) ||
+    trace(board, word, i + 1, r, c + 1) ||
+    trace(board, word, i + 1, r, c - 1)
+  board[r][c] = saved // unmark before returning
+  return found
+}
 
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      if (dfs(r, c, 0)) return true
+function exist(board: string[][], word: string): boolean {
+  for (let r = 0; r < board.length; r++) {
+    for (let c = 0; c < board[0].length; c++) {
+      if (trace(board, word, 0, r, c)) {
+        return true
+      }
     }
   }
   return false

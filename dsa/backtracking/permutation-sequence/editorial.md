@@ -1,28 +1,58 @@
-**Key insight:** in sorted order, permutations come in blocks of `(n-1)!` that share the same first digit. Dividing `k - 1` by the block size picks the first digit directly; the remainder ranks the permutation within that block. Repeat — no enumeration needed.
+**Key idea:** you don't need to generate permutations to find the kth one. In sorted order, the first `(n − 1)!` permutations start with the smallest digit, the next `(n − 1)!` with the second smallest, and so on. Dividing the 0-based rank by `(n − 1)!` tells you the first digit directly; the remainder is the rank within that block. Repeat with one digit fewer.
 
-## Approach
+## Recognising the pattern
 
-1. Keep the unused digits in ascending order, and precompute factorials up to `n`.
-2. Convert to a 0-indexed rank: `rank = k - 1`.
-3. For `remaining = n` down to `1`:
-   - `block = (remaining - 1)!`.
-   - `index = floor(rank / block)` selects the next digit from the unused list; remove it.
-   - `rank = rank % block`.
+This sits in the [Backtracking](/problems/patterns/backtracking) sheet as the case where you **count** subtrees instead of exploring them. Knowing how many leaves each branch has lets you jump straight to the right branch, a trick that turns `O(n!)` enumeration into `O(n²)` construction.
 
-This is reading `k - 1` in the **factorial number system**: each "digit" says which unused element comes next.
+## Brute force
 
-Example: `n = 4`, `k = 10` → `rank = 9`. Blocks of `3! = 6`: index `1` → digit `2`, rank `3`. Blocks of `2! = 2`: index `1` of `[1, 3, 4]` → `3`, rank `1`. Blocks of `1`: index `1` of `[1, 4]` → `4`, rank `0`. Last: `1`. Answer `"2341"`.
+Start from `1 2 … n` and apply "next permutation" `k − 1` times. That is the reference brute force below. Correct, but `O(k · n)`, which for `n = 9` can be over 3 million steps. (Generating all `n!` permutations and sorting them is far worse.)
+
+## Optimal: the factorial number system
+
+1. `digits = [1, 2, …, n]`, `rank = k − 1`.
+2. For `remaining` from `n` down to 1:
+   1. `block = (remaining − 1)!`, the number of permutations per choice of the next digit.
+   2. `index = floor(rank / block)`. The next digit is `digits[index]`.
+   3. Append it and remove it from `digits`.
+   4. `rank = rank % block`.
+3. Return the built string.
+
+Using a 0-based rank makes the division line up: rank 0 is the first permutation, in block 0.
+
+## Walkthrough
+
+`n = 4`, `k = 9`, so `rank = 8`. Factorials: `3! = 6`, `2! = 2`, `1! = 1`.
+
+| remaining | digits | block | index = rank / block | pick | rank after |
+| --- | --- | --- | --- | --- | --- |
+| 4 | 1 2 3 4 | 6 | 8 / 6 = 1 | 2 | 8 % 6 = 2 |
+| 3 | 1 3 4 | 2 | 2 / 2 = 1 | 3 | 0 |
+| 2 | 1 4 | 1 | 0 | 1 | 0 |
+| 1 | 4 | 1 | 0 | 4 | 0 |
+
+Answer `"2314"`: the 9th permutation of 1–4.
 
 ## Complexity
 
-- Time `O(n²)` — `n` steps, each removing from an array of length `<= n`. Trivial for `n <= 9`.
-- Space `O(n)`.
+- Repeated next permutation: time `O(k · n)`, space `O(n)`.
+- Factorial construction: time `O(n²)` (removing from the list is `O(n)`, done `n` times). Space `O(n)`.
 
-## Alternatives to mention
+## Edge cases
 
-- Generate permutations in order by backtracking (or apply next-permutation `k - 1` times) until the `k`-th: `O(n! · n)` in the worst case. Fine for small `n`, but say why the direct method is better.
+- `k = 1`: the digits in increasing order.
+- `k = n!`: the digits in decreasing order.
+- `n = 1`: `"1"`.
 
-## Pitfalls
+## Common mistakes
 
-- Forgetting to convert `k` to 0-indexed — every answer shifts by one.
-- Recomputing factorials inside the loop is harmless here but shows sloppiness; precompute.
+- Using `k` instead of `k − 1`, which shifts every answer by one block.
+- Forgetting to remove the chosen digit.
+- Using the block size `remaining!` instead of `(remaining − 1)!`.
+
+## In the interview
+
+- Show the block structure on `n = 3` (two permutations start with each digit), then generalise.
+- Likely follow-ups:
+  - *The rank of a given permutation?* The reverse process: for each position, count unused smaller digits and multiply by the factorial.
+  - *Repeated digits?* Blocks are counted with multinomial coefficients instead of factorials.

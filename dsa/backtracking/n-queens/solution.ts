@@ -1,26 +1,41 @@
 function solveNQueens(n: number): string[][] {
   const result: string[][] = []
   const queenCol: number[] = [] // queenCol[r] = column of the queen in row r
-  const cols = new Set<number>()
-  const diag = new Set<number>() // r - c is constant along a "\" diagonal
-  const anti = new Set<number>() // r + c is constant along a "/" diagonal
+  const colUsed = new Array(n).fill(false)
+  const diagUsed = new Array(2 * n).fill(false) // "\" diagonals: r - c + n is constant
+  const antiUsed = new Array(2 * n).fill(false) // "/" diagonals: r + c is constant
 
-  const place = (r: number) => {
+  function boardFromColumns(): string[] {
+    const rows: string[] = []
+    for (let r = 0; r < n; r++) {
+      let row = ''
+      for (let c = 0; c < n; c++) {
+        row += c === queenCol[r] ? 'Q' : '.'
+      }
+      rows.push(row)
+    }
+    return rows
+  }
+
+  // Place one queen in row r, then the rows below it.
+  function place(r: number): void {
     if (r === n) {
-      result.push(queenCol.map((c) => '.'.repeat(c) + 'Q' + '.'.repeat(n - c - 1)))
+      result.push(boardFromColumns())
       return
     }
     for (let c = 0; c < n; c++) {
-      if (cols.has(c) || diag.has(r - c) || anti.has(r + c)) continue
-      cols.add(c)
-      diag.add(r - c)
-      anti.add(r + c)
+      if (colUsed[c] || diagUsed[r - c + n] || antiUsed[r + c]) {
+        continue // attacked
+      }
+      colUsed[c] = true
+      diagUsed[r - c + n] = true
+      antiUsed[r + c] = true
       queenCol.push(c)
       place(r + 1)
       queenCol.pop()
-      cols.delete(c)
-      diag.delete(r - c)
-      anti.delete(r + c)
+      colUsed[c] = false
+      diagUsed[r - c + n] = false
+      antiUsed[r + c] = false
     }
   }
 

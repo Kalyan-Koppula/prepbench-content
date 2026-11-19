@@ -1,8 +1,26 @@
 function subsetsWithDup(nums: number[]): number[][] {
-  const seen = new Map<string, number[]>()
-  for (let mask = 0; mask < 1 << nums.length; mask++) {
-    const subset = nums.filter((_, i) => mask & (1 << i)).sort((a, b) => a - b)
-    seen.set(subset.join(','), subset)
+  // Generate all 2^n subsets of the sorted array and keep each distinct one once.
+  const sorted = nums.slice()
+  sorted.sort((a, b) => a - b)
+  const seen = new Set<string>()
+  const result: number[][] = []
+  const path: number[] = []
+
+  function explore(i: number): void {
+    if (i === sorted.length) {
+      const key = path.join(',')
+      if (!seen.has(key)) {
+        seen.add(key)
+        result.push(path.slice())
+      }
+      return
+    }
+    explore(i + 1) // skip sorted[i]
+    path.push(sorted[i]) // take sorted[i]
+    explore(i + 1)
+    path.pop()
   }
-  return [...seen.values()]
+
+  explore(0)
+  return result
 }

@@ -1,18 +1,44 @@
-function partition(s: string): string[][] {
-  // Each of the n - 1 gaps is either a cut or not.
-  const isPal = (t: string) => t === [...t].reverse().join('')
-  const result: string[][] = []
-  for (let mask = 0; mask < 1 << (s.length - 1); mask++) {
-    const pieces: string[] = []
-    let from = 0
-    for (let gap = 0; gap < s.length - 1; gap++) {
-      if (mask & (1 << gap)) {
-        pieces.push(s.slice(from, gap + 1))
-        from = gap + 1
-      }
+function isPalindrome(s: string, from: number, to: number): boolean {
+  while (from < to) {
+    if (s[from] !== s[to]) {
+      return false
     }
-    pieces.push(s.slice(from))
-    if (pieces.every(isPal)) result.push(pieces)
+    from++
+    to--
   }
+  return true
+}
+
+function partition(s: string): string[][] {
+  // Try every set of cut positions (each of the n - 1 gaps is cut or not),
+  // and keep the partitions where every piece is a palindrome.
+  const n = s.length
+  const result: string[][] = []
+  const cut = new Array(n).fill(false) // cut[g]: cut after index g
+
+  function explore(gap: number): void {
+    if (gap === n - 1) {
+      const pieces: string[] = []
+      let from = 0
+      for (let i = 0; i < n; i++) {
+        if (i === n - 1 || cut[i]) {
+          if (!isPalindrome(s, from, i)) {
+            return
+          }
+          pieces.push(s.substring(from, i + 1))
+          from = i + 1
+        }
+      }
+      result.push(pieces)
+      return
+    }
+    cut[gap] = false
+    explore(gap + 1)
+    cut[gap] = true
+    explore(gap + 1)
+    cut[gap] = false
+  }
+
+  explore(0)
   return result
 }

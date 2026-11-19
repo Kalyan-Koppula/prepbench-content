@@ -1,25 +1,26 @@
-const KEYPAD: Record<string, string> = {
-  '2': 'abc', '3': 'def', '4': 'ghi', '5': 'jkl',
-  '6': 'mno', '7': 'pqrs', '8': 'tuv', '9': 'wxyz',
-}
+const KEYPAD = ['', '', 'abc', 'def', 'ghi', 'jkl', 'mno', 'pqrs', 'tuv', 'wxyz']
 
 function letterCombinations(digits: string): string[] {
-  if (digits.length === 0) return []
   const result: string[] = []
+  if (digits.length === 0) {
+    return result
+  }
   const path: string[] = []
 
-  const backtrack = (i: number) => {
+  // Position i gets one of the letters of digits[i].
+  function explore(i: number): void {
     if (i === digits.length) {
       result.push(path.join(''))
       return
     }
-    for (const letter of KEYPAD[digits[i]]) {
-      path.push(letter)
-      backtrack(i + 1)
+    const letters = KEYPAD[digits.charCodeAt(i) - 48]
+    for (let j = 0; j < letters.length; j++) {
+      path.push(letters[j])
+      explore(i + 1)
       path.pop()
     }
   }
 
-  backtrack(0)
+  explore(0)
   return result
 }

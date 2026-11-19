@@ -1,26 +1,57 @@
-**Key insight:** fill positions left to right; at each position, any element not yet used is a valid choice. A `used` flag per index makes that check O(1), and undoing it after recursion lets siblings reuse the element.
+**Key idea:** fill the positions one at a time. For the next position, try every element that hasn't been used yet, recurse, then mark it unused again. When every position is filled, record a copy.
 
-## Approach
+## Recognising the pattern
 
-1. `backtrack()`: if `path` has all `n` elements, record a copy.
-2. Otherwise, for each index `i` not yet used: mark it, push `nums[i]`, recurse, then pop and unmark.
+"Every ordering" of distinct elements is the permutation template from the [Backtracking](/problems/patterns/backtracking) sheet: unlike subsets, order matters, so each level chooses from **all** unused elements rather than only later ones.
 
-### Swap variant
+## Alternative: swap-based (shown below)
 
-Fix position `k` by swapping each `nums[j]` (`j >= k`) into it, recurse on `k + 1`, then swap back. No `used` array and no `path`, at the cost of mutating the input.
+Fix positions from left to right by swapping: for position `k`, swap each element at `k..n−1` into position `k`, recurse on `k + 1`, then swap back. The array itself holds the current permutation, so no `used` array or separate path is needed. That is the reference brute force below; it is just as efficient.
+
+## Backtracking with a used array
+
+1. `path = []`, `used` = all false.
+2. `explore()`:
+   1. If `path` has `n` elements, record a copy and return.
+   2. For each `i` with `used[i]` false: mark it used, push `nums[i]`, call `explore()`, pop, unmark.
+
+Every permutation is a sequence of distinct choices, one per level, so each is generated exactly once.
+
+## Walkthrough
+
+`nums = [1, 2, 3]`
+
+| level 1 | level 2 | level 3 | recorded |
+| --- | --- | --- | --- |
+| 1 | 2 | 3 | [1, 2, 3] |
+| 1 | 3 | 2 | [1, 3, 2] |
+| 2 | 1 | 3 | [2, 1, 3] |
+| 2 | 3 | 1 | [2, 3, 1] |
+| 3 | 1 | 2 | [3, 1, 2] |
+| 3 | 2 | 1 | [3, 2, 1] |
+
+Six permutations: `3 × 2 × 1`.
 
 ## Complexity
 
-- Time `O(n · n!)`: `n!` leaves, each copied in `O(n)`. Internal nodes add only a constant factor.
-- Space `O(n)` for recursion, `path` and `used`, excluding the output.
+- Time `O(n · n!)`: `n!` permutations, each copied in `O(n)`. The internal nodes of the tree add a constant factor.
+- Space `O(n)` for the path, the `used` array and the recursion, plus the output.
 
-## Alternatives to mention
+## Edge cases
 
-- Insertion: permute the rest, then insert the first element into every gap. Neat recursively, but allocates many intermediate arrays.
-- Next-permutation iteration on a sorted copy: generates all permutations in lexicographic order with `O(1)` extra space per step.
+- One element: one permutation.
+- Negative numbers: irrelevant.
 
-## Pitfalls
+## Common mistakes
 
-- Forgetting to reset `used[i]` after the recursive call.
-- Recording `path` without copying it.
-- With duplicate values (Permutations II), you'd sort and skip `nums[i] === nums[i - 1] && !used[i - 1]`.
+- Forgetting to unmark `used[i]` after the recursive call.
+- Recording `path` instead of a copy.
+- Starting the loop at a `start` index as in subsets, which produces only the increasing order.
+
+## In the interview
+
+- Contrast with subsets: "here order matters, so each position may take any unused element."
+- Likely follow-ups:
+  - *Duplicates in the input (Permutations II)?* Sort, and skip `nums[i]` if it equals `nums[i − 1]` and `nums[i − 1]` is not currently used.
+  - *Next permutation in order?* A direct `O(n)` rule (Next Permutation).
+  - *The kth permutation?* Count subtrees with factorials instead of enumerating (Permutation Sequence).

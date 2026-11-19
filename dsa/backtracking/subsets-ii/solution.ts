@@ -1,19 +1,22 @@
 function subsetsWithDup(nums: number[]): number[][] {
-  const sorted = [...nums].sort((a, b) => a - b)
+  const sorted = nums.slice()
+  sorted.sort((a, b) => a - b) // equal values side by side
   const result: number[][] = []
   const path: number[] = []
 
-  const backtrack = (start: number) => {
-    result.push([...path])
+  function explore(start: number): void {
+    result.push(path.slice())
     for (let i = start; i < sorted.length; i++) {
-      // Same value as the previous choice at this level → same subtree.
-      if (i > start && sorted[i] === sorted[i - 1]) continue
+      // The same value as the previous choice at this level leads to the same subtree.
+      if (i > start && sorted[i] === sorted[i - 1]) {
+        continue
+      }
       path.push(sorted[i])
-      backtrack(i + 1)
+      explore(i + 1)
       path.pop()
     }
   }
 
-  backtrack(0)
+  explore(0)
   return result
 }

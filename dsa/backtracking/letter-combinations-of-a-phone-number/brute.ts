@@ -1,10 +1,19 @@
+const KEYS = ['', '', 'abc', 'def', 'ghi', 'jkl', 'mno', 'pqrs', 'tuv', 'wxyz']
+
 function letterCombinations(digits: string): string[] {
-  if (digits.length === 0) return []
-  const keys = ['', '', 'abc', 'def', 'ghi', 'jkl', 'mno', 'pqrs', 'tuv', 'wxyz']
-  let combos = ['']
-  for (const d of digits) {
+  if (digits.length === 0) {
+    return []
+  }
+  // Iterative: extend every combination so far with each letter of the next digit.
+  let combos: string[] = ['']
+  for (let i = 0; i < digits.length; i++) {
+    const letters = KEYS[digits.charCodeAt(i) - 48]
     const next: string[] = []
-    for (const prefix of combos) for (const ch of keys[Number(d)]) next.push(prefix + ch)
+    for (let p = 0; p < combos.length; p++) {
+      for (let j = 0; j < letters.length; j++) {
+        next.push(combos[p] + letters[j])
+      }
+    }
     combos = next
   }
   return combos
