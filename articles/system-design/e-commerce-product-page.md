@@ -208,6 +208,53 @@ Techniques: hero image preloaded with `fetchpriority="high"`; lazy load lower ga
 - `Intl.NumberFormat` for currency, locale-specific tax-inclusive display, translated variant names, RTL layout.
 - Sanitise user reviews; CSRF protection on cart mutations; don't put personal data in cached HTML.
 
+## Running the interview
+
+A 45-minute plan for this question:
+
+| Minutes | Focus |
+| --- | --- |
+| 0–5 | Requirements: variants, inventory freshness, SEO, international markets, performance targets |
+| 5–12 | Architecture: server-rendered shell, gallery, variant picker, price and stock, cart, recommendations |
+| 12–20 | Data model (product, variants, availability) and APIs |
+| 20–35 | Deep dives: rendering strategy and caching, variant state in the URL, add-to-cart flow |
+| 35–45 | Performance budget, SEO, analytics, accessibility |
+
+## Core implementation sketch
+
+Variant selection is easiest to get right as a pure function from the chosen options to the matching variant and to which other options remain available:
+
+```ts
+type Variant = { id: string; options: Record<string, string>; inStock: boolean; price: number }
+
+function resolveVariant(variants: Variant[], selected: Record<string, string>) {
+  const match = variants.find((v) => Object.entries(selected).every(([k, val]) => v.options[k] === val))
+
+  // For each option value, can it still lead to an in-stock variant given the other choices?
+  function isAvailable(optionName: string, value: string) {
+    return variants.some(
+      (v) =>
+        v.inStock &&
+        v.options[optionName] === value &&
+        Object.entries(selected).every(([k, val]) => k === optionName || v.options[k] === val),
+    )
+  }
+
+  return { match, isAvailable }
+}
+```
+
+The selected options live in the URL (`?color=blue&size=m`), so the page is shareable and the server can render the right variant, price and image on first load. Unavailable combinations stay visible but are marked "out of stock" rather than hidden, so the layout doesn't jump.
+
+## Trade-offs to state explicitly
+
+| Decision | Option A | Option B | Choose by |
+| --- | --- | --- | --- |
+| Rendering | Fully static | Static shell + dynamic price and stock | Price and stock freshness: stream or fetch those parts |
+| Variant state | Component state | URL params | URL: shareable, SEO-friendly, survives refresh |
+| Add to cart | Wait for the server | Optimistic with rollback | Optimistic, but confirm stock at checkout |
+| Images | Original files | Image CDN with formats and sizes | Always a CDN; the hero image is the LCP element |
+
 ## Deep-dive questions
 
 **How do you get both SEO and fresh stock?**
@@ -227,3 +274,11 @@ Bundle size checks and Lighthouse CI in pull requests, RUM dashboards on LCP/INP
 
 **Why integers for money?**
 Floating-point can't represent many decimal amounts exactly; integer minor units avoid rounding errors in totals.
+
+## Key takeaways
+
+- Render the product page on the server or at the edge for SEO and LCP; fetch volatile price and stock separately.
+- Keep variant choices in the URL and derive availability with a pure function.
+- Treat the hero image as the LCP element: preload, prioritise and size it.
+- Add to cart optimistically, but re-check price and stock at checkout.
+- Structured data, accessible variant pickers and a performance budget are part of the design.

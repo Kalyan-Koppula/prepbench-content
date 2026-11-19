@@ -197,6 +197,69 @@ pending --ack--> sent --recipient device got it--> delivered --recipient viewed-
 - E2E encryption (Signal protocol) if required: keys on device, server stores ciphertext; search becomes client-side.
 - Unicode and emoji handling, RTL text with `dir="auto"`, localised timestamps.
 
+## Running the interview
+
+A 45-minute plan for this question:
+
+| Minutes | Focus |
+| --- | --- |
+| 0–5 | Requirements: 1:1 or groups, media, history length, delivery guarantees, devices |
+| 5–12 | Architecture: connection manager, message store, conversation list, thread view, composer |
+| 12–20 | Data model (client ids, server ids, ordering) and socket events |
+| 20–35 | Deep dives: reconnection and resync, delivery states, offline queue, virtualised history |
+| 35–45 | Presence, multi-device, accessibility and security |
+
+## Core implementation sketch
+
+The connection manager reconnects with backoff and resynchronises after each reconnect:
+
+```ts
+function createConnection(url: string, handlers: { onEvent: (e: unknown) => void; onOpen: () => void }) {
+  let socket: WebSocket | null = null
+  let attempt = 0
+  let closedByUser = false
+
+  function connect() {
+    socket = new WebSocket(url)
+    socket.onopen = () => {
+      attempt = 0
+      handlers.onOpen() // resync: fetch messages after the last seen id, flush the outbox
+    }
+    socket.onmessage = (event) => handlers.onEvent(JSON.parse(event.data))
+    socket.onclose = () => {
+      if (closedByUser) return
+      const delay = Math.min(30_000, 500 * 2 ** attempt) + Math.random() * 500
+      attempt += 1
+      setTimeout(connect, delay)
+    }
+  }
+
+  connect()
+  return {
+    send(payload: unknown) {
+      if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(payload))
+      else throw new Error('offline') // the caller keeps it in the outbox
+    },
+    close() {
+      closedByUser = true
+      socket?.close()
+    },
+  }
+}
+```
+
+Each outgoing message carries a client-generated id. It is shown immediately as "sending", kept in an outbox (persisted in IndexedDB) until the server acknowledges it with its server id and timestamp, and retried after reconnects. The server deduplicates by client id, so retries never create duplicates.
+
+## Trade-offs to state explicitly
+
+| Decision | Option A | Option B | Choose by |
+| --- | --- | --- | --- |
+| Transport | WebSocket | SSE + POST | Two-way, frequent traffic favours WebSockets; SSE is simpler behind some proxies |
+| Ordering | Client timestamps | Server sequence per conversation | Server sequence: clocks disagree |
+| History | Load everything | Paginate backwards, virtualise | Long conversations need both |
+| Offline | Fail sends | Persistent outbox | Mobile users expect queued sends |
+| Multi-tab | One socket per tab | One shared socket (SharedWorker or leader tab) | Server connection limits and battery |
+
 ## Deep-dive questions
 
 **Why WebSocket rather than SSE for chat?**
@@ -216,3 +279,11 @@ Measure scroll height before prepending, then set `scrollTop += newHeight - oldH
 
 **How would you implement presence at scale?**
 Server tracks connections with heartbeats and a TTL; clients subscribe only to relevant users; updates are batched and throttled; "last seen" is coarse to reduce churn.
+
+## Key takeaways
+
+- Use WebSockets with reconnection, exponential backoff and a resync step after every reconnect.
+- Give each message a client id for optimistic display, retries and server-side deduplication.
+- Order by server-assigned sequence numbers, not client clocks.
+- Persist an outbox for offline sends; show sending, sent, delivered and read states.
+- Virtualise history, load older messages upwards while preserving scroll position, and announce new messages politely.

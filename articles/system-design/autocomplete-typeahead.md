@@ -214,6 +214,63 @@ function Highlight({ text, query }: { text: string; query: string }) {
 - **Offline**: show cached and recent searches; disable network fetching gracefully.
 - **Analytics**: log selected suggestion and position to improve ranking.
 
+## Running the interview
+
+A 45-minute plan for this question:
+
+| Minutes | Focus |
+| --- | --- |
+| 0–5 | Requirements: data source and size, result types, latency target, mobile, accessibility |
+| 5–12 | Architecture: input, controller, cache, results list, server API |
+| 12–20 | Data model and component API |
+| 20–35 | Deep dives: request lifecycle (debounce, abort, cache), combobox keyboard and ARIA, highlighting |
+| 35–45 | Performance, failure modes, follow-ups |
+
+## Core implementation sketch
+
+The request controller is where most of the interview's correctness lives:
+
+```ts
+type Result = { id: string; label: string }
+
+function createSuggestionSource(fetchFn: (q: string, signal: AbortSignal) => Promise<Result[]>) {
+  const cache = new Map<string, Result[]>() // query -> results (bound it with LRU in production)
+  let controller: AbortController | null = null
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  return function suggest(query: string, onResults: (r: Result[]) => void, delay = 200) {
+    clearTimeout(timer)
+    const q = query.trim().toLowerCase()
+    if (q.length < 2) return onResults([])
+    const cached = cache.get(q)
+    if (cached) return onResults(cached) // instant for repeated and back-spaced queries
+
+    timer = setTimeout(async () => {
+      controller?.abort() // a newer query cancels the older request
+      controller = new AbortController()
+      try {
+        const results = await fetchFn(q, controller.signal)
+        cache.set(q, results)
+        onResults(results)
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') onResults([]) // show an error state in a real UI
+      }
+    }, delay)
+  }
+}
+```
+
+Points to narrate: debounce limits requests, abort guarantees only the latest response renders, the cache makes backspacing instant, and the minimum length avoids useless one-letter queries. A further optimisation: if "rea" returned fewer results than the page size, "reac" can be filtered locally from it without a request.
+
+## Trade-offs to state explicitly
+
+| Decision | Option A | Option B | Choose by |
+| --- | --- | --- | --- |
+| Where to search | Server per keystroke | Ship a client index | Dataset size and change rate (a few thousand items can live on the client) |
+| Request pacing | Debounce | Throttle | Debounce for search requests; throttle when intermediate results matter |
+| Stale responses | Abort | Sequence ids | Abort when the transport supports it; ids otherwise |
+| Cache | Memory per session | Persistent (IndexedDB) | Whether suggestions are personal and how fresh they must be |
+
 ## Deep-dive questions
 
 **Why debounce rather than throttle?**
@@ -233,3 +290,11 @@ CDN caching for popular prefixes, small payloads, minimum query length, debounce
 
 **How do you show recent searches?**
 Store them locally (bounded list in `localStorage`), show on focus with empty input in a separate labelled group, allow removing entries.
+
+## Key takeaways
+
+- Clarify the data size and latency target first; they decide client versus server search.
+- Debounce, abort and cache together make the request lifecycle correct and fast.
+- Implement the ARIA combobox pattern with `aria-activedescendant`; keep focus in the input.
+- Highlight matches safely with text nodes, never HTML strings.
+- Handle empty, loading, error and offline states explicitly.

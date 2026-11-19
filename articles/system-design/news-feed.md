@@ -196,6 +196,57 @@ Debounce rapid toggles or send the final desired state (`PUT /like { liked: true
 - Relative times via `Intl.RelativeTimeFormat`; RTL layouts; locale-aware counts (`Intl.NumberFormat` compact notation).
 - Sanitise rich text and link previews (XSS); `rel="noopener noreferrer"` on external links; CSP.
 
+## Running the interview
+
+A 45-minute plan for this question:
+
+| Minutes | Focus |
+| --- | --- |
+| 0–5 | Requirements: post types, real-time needs, devices, scale of a user's feed |
+| 5–12 | Architecture: feed store, list renderer, post components, server APIs, real-time channel |
+| 12–20 | Data model (normalised posts and users) and APIs (cursor pagination) |
+| 20–35 | Deep dives: infinite scroll with virtualisation, optimistic interactions, new-post banner |
+| 35–45 | Media, accessibility, offline and error handling |
+
+## Core implementation sketch
+
+Cursor pagination plus normalised storage keeps the client store simple:
+
+```ts
+type Post = { id: string; authorId: string; text: string; likeCount: number; likedByMe: boolean }
+type FeedState = {
+  postsById: Record<string, Post>
+  order: string[] // post ids in display order
+  nextCursor: string | null
+  loading: boolean
+}
+
+async function loadMore(state: FeedState, fetchPage: (cursor: string | null) => Promise<{ posts: Post[]; nextCursor: string | null }>) {
+  const reachedEnd = state.nextCursor === null && state.order.length > 0
+  if (state.loading || reachedEnd) return state // the caller sets loading before awaiting
+  const page = await fetchPage(state.nextCursor)
+  const postsById = { ...state.postsById }
+  const order = [...state.order]
+  for (const post of page.posts) {
+    if (!postsById[post.id]) order.push(post.id) // skip duplicates when new posts shifted the page
+    postsById[post.id] = post
+  }
+  return { postsById, order, nextCursor: page.nextCursor, loading: false }
+}
+```
+
+An optimistic like updates `postsById[id]` immediately (toggle `likedByMe`, adjust `likeCount`), sends the request, and rolls back with a toast on failure. Because posts are stored once by id, the change shows everywhere the post appears.
+
+## Trade-offs to state explicitly
+
+| Decision | Option A | Option B | Choose by |
+| --- | --- | --- | --- |
+| Pagination | Offset | Cursor | Cursor for feeds: stable when new posts arrive |
+| New posts | Insert automatically | "N new posts" banner | Banner: no content jumping under the reader |
+| Real-time | Polling | WebSocket or SSE | Update frequency and server cost; SSE is enough for one-way pushes |
+| Rendering | Render everything | Virtualise | Virtualise beyond a few hundred variable-height items |
+| Initial load | Client fetch | Server-rendered first page | SSR or streaming for faster LCP and SEO |
+
 ## Deep-dive questions
 
 **Why cursor pagination?**
@@ -215,3 +266,11 @@ SSE: one-way, low frequency, works over HTTP with auto-reconnect. WebSocket only
 
 **How would you restore scroll position after viewing a post?**
 Keep the feed cache and measured heights in memory and restore the virtualiser's offset, or show the post in an overlay route so the feed never unmounts.
+
+## Key takeaways
+
+- Use cursor pagination and dedupe by id; offsets break when new posts arrive.
+- Normalise posts and users so updates appear everywhere at once.
+- Infinite scroll needs a sentinel observer, a loading guard and virtualisation for long sessions.
+- Make likes and comments optimistic with rollback.
+- Show new posts behind a banner instead of shifting the list; keep feed items accessible as articles.

@@ -204,6 +204,68 @@ Following the APG carousel pattern:
 - **SSR**: render the first slide's markup and image server-side; hydrate controls later; avoid reading `window` width in render.
 - **Security**: user-uploaded images served from a separate domain; strip EXIF location on upload.
 
+## Running the interview
+
+A 45-minute plan for this question:
+
+| Minutes | Focus |
+| --- | --- |
+| 0–5 | Requirements: number of images, autoplay, thumbnails, zoom, touch, accessibility |
+| 5–12 | Architecture: viewport, track, controls, thumbnails, preloader |
+| 12–20 | Data model and component API (controlled index, callbacks) |
+| 20–35 | Deep dives: responsive images and preloading, swipe gestures, keyboard and screen readers |
+| 35–45 | Large galleries, performance, follow-ups like a lightbox |
+
+## Core implementation sketch
+
+A CSS scroll-snap track gives native swiping, momentum and keyboard scrolling with little JavaScript:
+
+```css
+.track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  overscroll-behavior-x: contain; /* don't trigger the browser's back gesture */
+}
+.slide {
+  flex: 0 0 100%;
+  scroll-snap-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .track { scroll-behavior: auto; }
+}
+```
+
+```ts
+function goTo(track: HTMLElement, index: number) {
+  const slide = track.children[index] as HTMLElement
+  track.scrollTo({ left: slide.offsetLeft, behavior: 'smooth' })
+}
+
+// Track the current slide without scroll listeners.
+const observer = new IntersectionObserver(
+  (entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) setCurrent(Number((entry.target as HTMLElement).dataset.index))
+    }
+  },
+  { root: track, threshold: 0.6 },
+)
+track.querySelectorAll('.slide').forEach((slide) => observer.observe(slide))
+```
+
+The current index drives the "3 of 12" label, the active thumbnail, and preloading of the next and previous images.
+
+## Trade-offs to state explicitly
+
+| Decision | Option A | Option B | Choose by |
+| --- | --- | --- | --- |
+| Sliding | Transform-based track | Native scroll snap | Scroll snap for touch feel and less code; transforms for custom effects |
+| Loading | All images | Current ± 1, lazy the rest | Bandwidth; preload neighbours for instant navigation |
+| Autoplay | On | Off by default | Accessibility (WCAG requires pause controls); off unless content requires it |
+| Many items | Render all | Virtualise slides and thumbnails | Hundreds of items |
+
 ## Deep-dive questions
 
 **How do you make the carousel's first image fast?**
@@ -223,3 +285,11 @@ Moving content distracts and can't be read in time; announcements spam screen re
 
 **How would you build infinite looping?**
 With transforms, clone the first and last slides at the ends and jump without animation when you reach a clone; or compute positions modulo length. With scroll snap, it's harder, which is one reason to avoid looping.
+
+## Key takeaways
+
+- Serve responsive images with `srcset`/`sizes`, reserve space with `aspect-ratio`, and lazy-load all but the first slide.
+- Preload the neighbouring slides so navigation feels instant.
+- Native scroll snap provides swiping and momentum; observers track the current slide.
+- Keyboard controls, labelled buttons, a live "N of M" status and pausable autoplay make it accessible.
+- Virtualise very large galleries and their thumbnail strips.

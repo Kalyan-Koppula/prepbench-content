@@ -188,6 +188,53 @@ WebSocket because traffic is high-frequency and bidirectional. WebRTC peer-to-pe
 - Sanitise pasted HTML; embeds in sandboxed iframes; CSP.
 - Bidirectional text, combining characters and grapheme clusters (use the editor framework's handling, not naive string indices).
 
+## Running the interview
+
+A 45-minute plan for this question:
+
+| Minutes | Focus |
+| --- | --- |
+| 0–5 | Requirements: document type, number of collaborators, offline, history, permissions |
+| 5–12 | Architecture: editor view, document model, sync engine, transport, persistence |
+| 12–20 | Why naive syncing fails; OT versus CRDT |
+| 20–35 | Deep dives: concurrent edits, presence and cursors, offline merge, undo |
+| 35–45 | Performance, durability, accessibility and security |
+
+## Core implementation sketch
+
+With a CRDT library such as Yjs, the client wiring is small; the library handles merging:
+
+```ts
+import * as Y from 'yjs'
+import { WebsocketProvider } from 'y-websocket'
+import { IndexeddbPersistence } from 'y-indexeddb'
+
+const doc = new Y.Doc()
+const text = doc.getText('body') // a shared, mergeable text type
+
+new IndexeddbPersistence(`doc-${docId}`, doc) // offline: edits persist locally
+const provider = new WebsocketProvider(SYNC_URL, docId, doc) // syncs updates with peers via the server
+
+provider.awareness.setLocalStateField('user', { name: me.name, color: me.color }) // presence and cursors
+
+text.observe((event) => {
+  // re-render, or let an editor binding (ProseMirror, CodeMirror, Monaco) apply the delta
+})
+
+text.insert(0, 'Hello') // local edit: applied immediately, broadcast as a compact update
+```
+
+Why it converges: every inserted character gets a unique id (client id plus a counter) and a reference to its neighbour at insertion time. Concurrent inserts at the same spot are ordered deterministically by id, so every replica that has received the same set of updates shows the same text, in any delivery order. Deletions mark characters as removed ("tombstones"), which the library compacts over time.
+
+## Trade-offs to state explicitly
+
+| Decision | Option A | Option B | Choose by |
+| --- | --- | --- | --- |
+| Merge algorithm | OT (central server transforms ops) | CRDT (merge anywhere) | OT for server-centric systems; CRDT for offline and peer-to-peer |
+| Transport | WebSocket | WebRTC between peers | WebSocket through a server for reliability and access control |
+| Persistence | Store every op | Snapshots + recent updates | Snapshots bound load time; keep updates for history |
+| Undo | Global | Per user, only own changes | Per-user undo is what people expect |
+
 ## Deep-dive questions
 
 **Explain OT vs CRDT in two sentences.**
@@ -207,3 +254,11 @@ Persist updates locally before acknowledging to the user, send them to the serve
 
 **What changes for 500 simultaneous editors?**
 Throttle and sample presence, shard rooms across servers with a pub/sub layer, compact update logs aggressively, and limit visible cursors and avatars.
+
+## Key takeaways
+
+- Last-write-wins and locking don't work for real-time co-editing; use OT or CRDTs.
+- CRDTs converge regardless of delivery order and support offline editing; OT relies on a central server.
+- Apply local edits immediately and sync compact updates in the background.
+- Presence (cursors, selections) is ephemeral state, separate from the document.
+- Plan persistence with snapshots, per-user undo, permissions checks on the server, and accessible editing.
