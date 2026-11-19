@@ -1,25 +1,57 @@
-**Key insight:** store words in a trie; a literal letter follows one edge, while a `.` branches into every child — a DFS over the trie that only fans out at wildcards.
+**Key idea:** store the words in a trie. A normal letter in the pattern follows exactly one child; a `.` tries every child that exists. The search only ever explores paths that real words take, so wildcards stay cheap.
 
-## Approach
+## Recognising the pattern
 
-1. `addWord` is a normal trie insert that marks the final node with `isEnd`.
-2. `search` runs `dfs(node, i)`:
-   - If `i` reached the end of the pattern, succeed only if `node.isEnd`.
-   - For a letter, move to that child (fail if missing).
-   - For `.`, try each child with `i + 1`; return `true` as soon as one branch matches.
+Matching patterns against a dictionary, character by character, is a trie search from the [Tries](/problems/patterns/tries) sheet with **backtracking** at the wildcard positions. Without a trie, every search compares the pattern with every stored word.
+
+## Brute force
+
+Keep a list of words. For a search, compare the pattern with every word of the same length, position by position, letting `.` match anything. That is the reference brute force below. `O(words × length)` per search.
+
+## Optimal: trie with recursive matching
+
+`addWord` is a normal trie insert.
+
+`matches(node, pattern, i)` answers "does some stored word, continuing from `node`, match `pattern[i..]`?":
+
+1. If `i == pattern.length`, return `node.isEnd`. The pattern must match a whole word, not a prefix.
+2. If `pattern[i]` is `.`, return `true` if `matches(child, pattern, i + 1)` holds for any existing child.
+3. Otherwise follow the child for `pattern[i]`; if it doesn't exist, return `false`.
+
+`search(pattern)` is `matches(root, pattern, 0)`.
+
+## Walkthrough
+
+Words: `bad`, `dad`, `mad`.
+
+| search | path | result |
+| --- | --- | --- |
+| "pad" | no child `p` at the root | false |
+| "bad" | b → a → d, end marked | true |
+| ".ad" | try b → a → d: end marked | true (stops at the first match) |
+| "b.." | b, then any child (a), then any child (d), end marked | true |
+| "b." | b → a, then the pattern ends at a node that isn't a word end | false |
 
 ## Complexity
 
-- `addWord`: `O(L)`.
-- `search`: `O(L)` without dots. Each dot can multiply the branches by up to 26, so `O(26^d · L)` in the worst case — small here because `d <= 2`.
-- Space `O(total characters)` for the trie, plus `O(L)` recursion depth.
+- List: `addWord` `O(1)`; `search` `O(words × length)`.
+- Trie: `addWord` `O(L)`. `search` is `O(L)` without dots. With `d` dots it can branch up to `26^d` times, but only along paths that exist, so in practice it is far less. Space `O(total characters × 26)`.
 
-## Alternatives to mention
+## Edge cases
 
-- Bucket words by length and compare the pattern against each candidate: simple, but `O(N · L)` per search.
-- Precompute every wildcard variant of each word in a hash set: `O(1)`-ish searches but `O(L²)` or more memory per word — only sensible if dots are rare and the alphabet is tiny.
+- A pattern of only dots: matches any word of that length.
+- A pattern longer than every word: the path runs out.
+- A pattern matching a prefix of a longer word only: rejected by the `isEnd` check.
 
-## Pitfalls
+## Common mistakes
 
-- Matching a prefix is not enough: `"ab"` must not match a stored `"abc"`. Check `isEnd` at the end of the pattern.
-- A pattern of only dots still requires a stored word of exactly that length.
+- Returning `true` when the pattern ends on a node that isn't a word end.
+- Exploring all 26 letters at a dot instead of only existing children.
+- Treating `.` as "zero or more characters". It matches exactly one.
+
+## In the interview
+
+- Explain that the trie limits the wildcard branching to real words.
+- Likely follow-ups:
+  - *Many dots expected?* Group words by length first, or keep tries per length, to prune early.
+  - *`*` matching any sequence?* A harder matcher: DP or a combined trie and backtracking search (related to Wildcard Matching).

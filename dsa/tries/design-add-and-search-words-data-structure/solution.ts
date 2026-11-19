@@ -1,34 +1,54 @@
 class WordNode {
-  children = new Map<string, WordNode>()
-  isEnd = false
+  children: Array<WordNode | null>
+  isEnd: boolean
+
+  constructor() {
+    this.children = new Array(26).fill(null)
+    this.isEnd = false
+  }
 }
 
 class WordDictionary {
-  root = new WordNode()
+  root: WordNode
+
+  constructor() {
+    this.root = new WordNode()
+  }
 
   addWord(word: string): void {
     let node = this.root
-    for (const ch of word) {
-      if (!node.children.has(ch)) node.children.set(ch, new WordNode())
-      node = node.children.get(ch)!
+    for (let i = 0; i < word.length; i++) {
+      const c = word.charCodeAt(i) - 97
+      let child = node.children[c]
+      if (child === null) {
+        child = new WordNode()
+        node.children[c] = child
+      }
+      node = child
     }
     node.isEnd = true
   }
 
-  search(pattern: string): boolean {
-    const dfs = (node: WordNode, i: number): boolean => {
-      if (i === pattern.length) return node.isEnd
-      const ch = pattern[i]
-      if (ch !== '.') {
-        const next = node.children.get(ch)
-        return next !== undefined && dfs(next, i + 1)
-      }
-      // Wildcard: any child may continue the match.
-      for (const child of node.children.values()) {
-        if (dfs(child, i + 1)) return true
+  // Does some stored word, continuing from `node`, match pattern[i..]?
+  matches(node: WordNode, pattern: string, i: number): boolean {
+    if (i === pattern.length) {
+      return node.isEnd
+    }
+    if (pattern[i] === '.') {
+      // A wildcard may continue through any child that exists.
+      for (let c = 0; c < 26; c++) {
+        const child = node.children[c]
+        if (child !== null && this.matches(child, pattern, i + 1)) {
+          return true
+        }
       }
       return false
     }
-    return dfs(this.root, 0)
+    const child = node.children[pattern.charCodeAt(i) - 97]
+    return child !== null && this.matches(child, pattern, i + 1)
+  }
+
+  search(pattern: string): boolean {
+    return this.matches(this.root, pattern, 0)
   }
 }
