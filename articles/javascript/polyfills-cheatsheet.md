@@ -6,6 +6,19 @@ summary: Compact, correct implementations of the utilities interviewers ask for 
 
 "Implement X from scratch" is the most common frontend coding question. The interviewer cares about correctness at the edges (`this`, arguments, holes, cycles, ordering), readable code, and whether you can extend it when asked. Write the simple version first, then add options.
 
+## How to approach any "implement X" question
+
+1. **Pin down the contract.** Ask what the real API does at the edges: does `debounce` fire on the leading edge? Does `flatten` take a depth? Should `deepClone` handle cycles? Saying the questions out loud scores points even if the answer is "keep it simple".
+2. **Write the simplest correct version** for the common case.
+3. **Walk through an example** by hand, including timing for anything with timers.
+4. **List the edge cases** and fix the ones that matter: `this`, argument forwarding, empty input, holes in arrays, cycles, errors, ordering.
+5. **Offer extensions**: options, cancellation, tests with fake timers.
+
+Two habits apply to almost every wrapper below:
+
+- Return a regular `function`, not an arrow, and call the original with `fn.apply(this, args)`, so the wrapper works as a method.
+- Keep state (timers, caches, flags) in the closure created once per wrapped function, not in module-level variables.
+
 ## debounce
 
 Run `fn` only after calls stop for `wait` ms. Use for search inputs and resize handlers.
@@ -21,6 +34,18 @@ function debounce(fn, wait) {
   return debounced
 }
 ```
+
+
+How it behaves with `wait = 100`:
+
+| Time (ms) | Event | Timer after the call | Runs `fn`? |
+| --- | --- | --- | --- |
+| 0 | call A | fires at 100 | – |
+| 40 | call B | cleared, fires at 140 | – |
+| 90 | call C | cleared, fires at 190 | – |
+| 190 | timer fires | – | yes, with C's arguments |
+
+Every call pushes the deadline back, so `fn` runs once, `wait` ms after the **last** call.
 
 Follow-ups: a `leading` option (fire on the first call, then ignore until quiet), `flush()` to run the pending call now, `maxWait` (which turns it into a throttle hybrid), and preserving `this`/args of the **last** call.
 
@@ -52,6 +77,19 @@ function throttle(fn, wait) {
   }
 }
 ```
+
+
+How it behaves with `wait = 100`:
+
+| Time (ms) | Event | What happens |
+| --- | --- | --- |
+| 0 | call A | 100 ms since the last run: runs A now |
+| 30 | call B | 70 ms remaining: schedule a trailing run at 100 |
+| 60 | call C | a trailing run is already scheduled: just remember C's arguments |
+| 100 | timer fires | runs with C's arguments (the latest) |
+| 150 | call D | 50 ms remaining: schedule at 200 |
+
+Throttle guarantees a steady rate during continuous activity, unlike debounce, which waits for silence.
 
 Follow-ups: debounce vs throttle (debounce waits for silence; throttle guarantees a steady rate), why scroll handlers often use `requestAnimationFrame` instead, `leading`/`trailing` flags.
 
@@ -169,6 +207,29 @@ Function.prototype.myBind = function (thisArg, ...preset) {
 }
 ```
 
+
+### call and apply
+
+```js
+Function.prototype.myCall = function (thisArg, ...args) {
+  // Primitives are boxed; null and undefined become the global object (sloppy-mode behaviour).
+  const context = thisArg === null || thisArg === undefined ? globalThis : Object(thisArg)
+  const key = Symbol('fn') // a unique key can't clash with existing properties
+  context[key] = this // `this` is the function being called
+  try {
+    return context[key](...args) // a method call, so `this` inside is `context`
+  } finally {
+    delete context[key]
+  }
+}
+
+Function.prototype.myApply = function (thisArg, args) {
+  return this.myCall(thisArg, ...(args ?? []))
+}
+```
+
+The trick is turning an explicit binding into an implicit one: attach the function to the object, call it as a method, then remove it.
+
 Follow-ups: implement `call` (temporarily attach the function to `thisArg` under a `Symbol` key, invoke, delete) and `apply`; why `new` must win over the bound `this`.
 
 ## Array.prototype.map and reduce
@@ -266,6 +327,81 @@ function promiseAll(iterable) {
 
 Follow-ups: `allSettled`, `any` with `AggregateError`, `race`, and a concurrency-limited version. See the promises article for details.
 
+## compose and pipe
+
+```js
+const pipe = (...fns) => (input) => fns.reduce((value, fn) => fn(value), input)
+const compose = (...fns) => (input) => fns.reduceRight((value, fn) => fn(value), input)
+
+const slugify = pipe(
+  (s) => s.trim(),
+  (s) => s.toLowerCase(),
+  (s) => s.replace(/\s+/g, '-'),
+)
+slugify('  Hello World ') // 'hello-world'
+```
+
+`pipe` runs left to right (reads like a data flow); `compose` runs right to left (matches mathematical notation). Follow-up: an async pipe that awaits each step.
+
+## get (safe nested access)
+
+```js
+function get(obj, path, fallback) {
+  const keys = Array.isArray(path) ? path : path.replace(/\[(\w+)\]/g, '.$1').split('.')
+  let current = obj
+  for (const key of keys) {
+    if (current === null || current === undefined) return fallback
+    current = current[key]
+  }
+  return current === undefined ? fallback : current
+}
+
+get({ a: { b: [{ c: 3 }] } }, 'a.b[0].c') // 3
+get({ a: null }, 'a.b.c', 'none') // 'none'
+```
+
+Follow-ups: the matching `set` that creates missing objects or arrays along the path, and why optional chaining (`a?.b?.[0]?.c`) replaced most uses.
+
+## promisify and sleep
+
+```js
+function promisify(fn) {
+  return function (...args) {
+    return new Promise((resolve, reject) => {
+      fn.call(this, ...args, (err, result) => {
+        if (err) reject(err)
+        else resolve(result)
+      })
+    })
+  }
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+```
+
+`promisify` adapts Node-style "error-first" callbacks. Follow-up: callbacks that pass several results (resolve with an array).
+
+## setInterval with setTimeout
+
+```js
+function interval(fn, ms) {
+  let timer = null
+  let active = true
+  function tick() {
+    if (!active) return
+    fn()
+    timer = setTimeout(tick, ms) // schedule the next run after this one finishes
+  }
+  timer = setTimeout(tick, ms)
+  return () => {
+    active = false
+    clearTimeout(timer)
+  }
+}
+```
+
+Unlike `setInterval`, a chained timeout never stacks runs when `fn` is slow, and the gap between runs is at least `ms`.
+
 ## Common interview questions
 
 **Why `fn.apply(this, args)` instead of `fn(...args)`?**
@@ -287,3 +423,11 @@ Cover `this` preservation, argument passing, edge cases (empty arrays, holes, cy
 - `Promise.all` that pushes results in completion order instead of input order.
 - `curry` that relies on `fn.length` for functions with default parameters.
 - Extending built-in prototypes outside an interview; in production, prefer standalone functions.
+
+## Key takeaways
+
+- Clarify the contract and edge cases before coding; interviewers grade the questions as much as the code.
+- Wrappers should forward `this` and arguments with `fn.apply(this, args)`.
+- Debounce waits for silence; throttle limits the rate; both keep their timer in a closure.
+- `deepClone` needs a `WeakMap` for cycles; `structuredClone` is the production answer.
+- `Promise.all` keeps input order and rejects on the first failure; `call` works by temporarily making the function a method.

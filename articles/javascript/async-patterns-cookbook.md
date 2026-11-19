@@ -208,6 +208,131 @@ for await (const item of paginate((c) => fetchJson(`/api/items?cursor=${c ?? ''}
 
 Pages are fetched lazily, only as the consumer asks for more, which gives natural back-pressure. `Array.fromAsync(paginate(…))` (ES2024) collects everything when you do want it all.
 
+## Latest-only (ignore stale responses)
+
+Typeahead search is the classic race: the request for "re" can finish after the request for "rea", overwriting newer results with older ones. Abort the previous request when a new one starts:
+
+```js
+function latestOnly(fn) {
+  let controller = null
+  return async function (...args) {
+    controller?.abort() // cancel the previous call's work
+    controller = new AbortController()
+    return fn(...args, controller.signal)
+  }
+}
+
+const search = latestOnly((query, signal) =>
+  fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal }).then((r) => r.json()),
+)
+```
+
+Callers of an aborted call see an `AbortError`; ignore it. When the work can't be aborted, use a counter instead: increment it per call, remember the value, and drop the result if the counter has moved on.
+
+## Async mutex
+
+JavaScript runs one piece of code at a time, but an `async` function can be interrupted at every `await`. Two calls that read, await, then write can interleave and lose an update:
+
+```js
+let balance = 100
+async function withdraw(amount) {
+  const current = balance // both calls read 100
+  await audit(amount) // both pause here
+  balance = current - amount // the second write overwrites the first
+}
+```
+
+A mutex makes callers wait their turn by chaining onto a shared promise:
+
+```js
+function createMutex() {
+  let last = Promise.resolve()
+  return function runExclusive(task) {
+    const result = last.then(() => task())
+    last = result.catch(() => {}) // a failed task must not block the queue
+    return result
+  }
+}
+
+const exclusive = createMutex()
+await Promise.all([exclusive(() => withdraw(30)), exclusive(() => withdraw(50))]) // balance 20
+```
+
+## Batching (DataLoader-style)
+
+Many components asking for one user each within the same tick can be served by a single batched request:
+
+```js
+function createBatcher(loadMany) {
+  let pending = new Map() // key -> { promise, resolve, reject }
+  let scheduled = false
+
+  async function flush() {
+    const batch = pending
+    pending = new Map()
+    scheduled = false
+    try {
+      const results = await loadMany([...batch.keys()]) // same order as the keys
+      ;[...batch.values()].forEach((entry, i) => entry.resolve(results[i]))
+    } catch (err) {
+      batch.forEach((entry) => entry.reject(err))
+    }
+  }
+
+  return function load(key) {
+    if (!pending.has(key)) {
+      const { promise, resolve, reject } = Promise.withResolvers()
+      pending.set(key, { promise, resolve, reject })
+    }
+    if (!scheduled) {
+      scheduled = true
+      queueMicrotask(flush) // collect every call made in this tick
+    }
+    return pending.get(key).promise
+  }
+}
+
+const loadUser = createBatcher((ids) => fetch(`/api/users?ids=${ids.join(',')}`).then((r) => r.json()))
+```
+
+Scheduling the flush as a microtask gathers every `load` made during the current synchronous run, then sends one request. Repeated keys in the same tick share a promise, so this also deduplicates.
+
+## Rate limiting with a token bucket
+
+A pool limits how many requests run **at once**; a rate limiter limits how many **start per second**:
+
+```js
+function rateLimit(fn, perSecond) {
+  let tokens = perSecond
+  let lastRefill = Date.now()
+  const queue = []
+
+  function refill() {
+    const now = Date.now()
+    tokens = Math.min(perSecond, tokens + ((now - lastRefill) / 1000) * perSecond)
+    lastRefill = now
+  }
+
+  function drain() {
+    refill()
+    while (queue.length > 0 && tokens >= 1) {
+      tokens -= 1
+      const { args, resolve, reject } = queue.shift()
+      fn(...args).then(resolve, reject)
+    }
+    if (queue.length > 0) setTimeout(drain, 1000 / perSecond)
+  }
+
+  return (...args) =>
+    new Promise((resolve, reject) => {
+      queue.push({ args, resolve, reject })
+      drain()
+    })
+}
+```
+
+Tokens refill continuously up to the bucket size, which allows short bursts while keeping the long-run average at `perSecond`. (A queue with `shift` is fine here: it stays short.)
+
 ## Choosing a pattern
 
 | Need | Pattern |
@@ -222,6 +347,10 @@ Pages are fetched lazily, only as the consumer asks for more, which gives natura
 | Long-running server job | `poll` with backoff |
 | Callback API | `promisify` |
 | Cursor-based API | async generator |
+| Only the newest response matters | latest-only with abort |
+| Read-modify-write across `await`s | async mutex |
+| Many small lookups in one tick | batcher |
+| Requests per second capped | token bucket |
 
 ## Common interview questions
 
@@ -245,3 +374,11 @@ It pulls pages on demand, so breaking out early stops further requests. The cons
 
 **When would you use `Promise.allSettled` inside these utilities?**
 When partial success is acceptable and the caller needs per-item outcomes, like a batch upload report. The pool above returns the same shape so callers can treat it like `allSettled`.
+
+## Key takeaways
+
+- Every async utility must settle exactly once, propagate errors and clean up timers and listeners.
+- Limit concurrency by controlling when work **starts**: accept functions, not promises.
+- Cancellation is cooperative: pass an `AbortSignal` into the work.
+- `await` points are where async code interleaves; use a mutex for read-modify-write sequences.
+- Microtask scheduling is a cheap way to batch everything requested in one tick.

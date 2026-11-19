@@ -162,6 +162,84 @@ task:  t3
 
 Output: `m0 t1 m1 t2 m2 t4 t3`. The key move is re-entering the microtask queue after each task, and appending new timers to the back.
 
+## Worked example 7: closures, `let` and timers together
+
+```js
+for (var i = 0; i < 2; i++) {
+  setTimeout(() => console.log('var', i))
+}
+for (let j = 0; j < 2; j++) {
+  setTimeout(() => console.log('let', j))
+}
+Promise.resolve().then(() => console.log('micro', i))
+```
+
+```text
+sync:  tasks [var-cb, var-cb, let-cb(0), let-cb(1)]; micro [micro]; i is now 2
+micro: micro 2
+tasks: var 2, var 2, let 0, let 1
+```
+
+Output: `micro 2`, `var 2`, `var 2`, `let 0`, `let 1`. Scope decides **which value** each callback sees (one shared `i`, a fresh `j` per iteration); the queues decide **when** it prints.
+
+## Worked example 8: async functions calling each other
+
+```js
+async function inner() {
+  console.log('inner start')
+  await null
+  console.log('inner end')
+}
+async function outer() {
+  console.log('outer start')
+  await inner()
+  console.log('outer end')
+}
+outer()
+console.log('sync')
+```
+
+```text
+sync:  outer start, inner start (both run until their first await)
+       inner pauses: micro [inner-resume]; outer pauses on inner's promise
+       sync
+micro: inner end -> inner's promise fulfils -> micro [outer-resume]
+micro: outer end
+```
+
+Output: `outer start`, `inner start`, `sync`, `inner end`, `outer end`. Calling an async function runs it synchronously up to its first `await`; the caller then waits for the returned promise.
+
+## Worked example 9: an error in the middle of a chain
+
+```js
+Promise.resolve(1)
+  .then((v) => {
+    console.log('a', v)
+    throw new Error('boom')
+  })
+  .then(() => console.log('b'))
+  .catch((e) => {
+    console.log('c', e.message)
+    return 2
+  })
+  .then((v) => console.log('d', v))
+console.log('e')
+```
+
+Output: `e`, `a 1`, `c boom`, `d 2`. The throw rejects the promise returned by the first `then`; `b` is skipped; `catch` recovers with 2, so the chain continues fulfilled.
+
+## Practice set
+
+Try these before reading the answers.
+
+1. `console.log(typeof hoisted); var hoisted = () => {}`
+2. `const o = { n: 1, f() { return () => this.n } }; console.log(o.f()())`
+3. `setTimeout(() => console.log(1)); (async () => { console.log(2); await 0; console.log(3) })(); console.log(4)`
+4. `console.log([1, 2, 3] + [4])`
+5. `new Promise((r) => { console.log('x'); r() }).then(() => console.log('y')); console.log('z')`
+
+Answers: (1) `'undefined'`: the `var` exists but holds `undefined` until assigned. (2) `1`: the arrow takes `this` from `f`, called on `o`. (3) `2 4 3 1`. (4) `'1,2,34'`: both arrays become strings. (5) `x z y`: the executor is synchronous, the `then` is a microtask.
+
 ## The traps
 
 ### `await` of a non-promise still yields
@@ -225,3 +303,11 @@ No, it returns `"undefined"`. But `typeof` on a `let` or `const` in its temporal
 
 **What changes if the snippet isn't in strict mode?**
 Plain function calls get `this === globalThis` instead of `undefined`, and assigning to an undeclared name creates a global instead of throwing. Classes and ES modules are always strict.
+
+## Key takeaways
+
+- Solve in passes: hoisting and scope, then synchronous output, then microtasks, then tasks.
+- Drain the whole microtask queue after the script and after every task.
+- Scope decides which value a callback sees; the queues decide when it runs.
+- Async functions run synchronously until their first `await`; even `await` of a plain value yields.
+- Explain each step as you go: interviewers grade the reasoning, not just the final line.
