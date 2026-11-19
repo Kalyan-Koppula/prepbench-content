@@ -8,6 +8,29 @@
 
 A one-liner works too if you are allowed to use `Promise.all`: `Promise.all(items.map(p => Promise.resolve(p).then(value => ({ status: 'fulfilled', value }), reason => ({ status: 'rejected', reason })))).`
 
+## Walkthrough
+
+`promiseAllSettled([fetchOk(), fetchFails(), 42])`:
+
+| Input | Settles as | Recorded |
+| --- | --- | --- |
+| 0 | fulfils with `{ id: 1 }` | `{ status: 'fulfilled', value: { id: 1 } }` |
+| 1 | rejects with `Error('503')` | `{ status: 'rejected', reason: Error('503') }` |
+| 2 | `42` (plain value) | `{ status: 'fulfilled', value: 42 }` |
+
+The outer promise **never rejects**: it waits for every input and resolves with one outcome object per input, in input order.
+
+## Complexity
+
+`O(n)`; total time is the slowest input.
+
+## Edge cases to test
+
+- Mixed fulfilments and rejections.
+- All rejected: still resolves.
+- Empty input resolves to `[]`.
+- Outcome objects have exactly `status` plus `value` or `reason`.
+
 ## Pitfalls
 
 - Building outcomes as `{ status, value, reason }` with one of them `undefined`; consumers that check `'value' in outcome` get confused.
@@ -19,3 +42,7 @@ A one-liner works too if you are allowed to use `Promise.all`: `Promise.all(item
 - **Partition the results** into `{ values, errors }`.
 - **Add a timeout per input** so one hanging request does not hold up the batch.
 - **When would you use `allSettled` over `all`?** Independent requests on a dashboard, where one failure should not hide the others.
+
+## In the interview
+
+Point out the one structural difference from `all`: both handlers record and decrement, and nothing rejects. Mention when to prefer it (independent requests where partial success is useful).

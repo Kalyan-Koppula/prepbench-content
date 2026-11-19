@@ -9,6 +9,33 @@
 5. **`then`.** Return `new MyPromise((resolve, reject) => …)`. Build `run()` which picks the right handler, passes the result through when the handler is missing, and otherwise calls `resolve(handler(result))` inside `try/catch`. Push `run` if pending, else `queueMicrotask(run)`.
 6. **`catch`** is `then(null, fn)`. **`finally`** is `then` with both handlers running the callback and restoring the original outcome. **Statics** wrap the constructor.
 
+## Walkthrough
+
+How `new MyPromise((resolve) => resolve(1)).then((v) => v + 1).then(console.log)` runs:
+
+| Step | Action |
+| --- | --- |
+| 1 | The executor runs synchronously and calls `resolve(1)`; `1` isn't thenable, so the state becomes fulfilled with 1 |
+| 2 | The first `then` creates promise P2 and schedules its callback as a microtask (already fulfilled) |
+| 3 | The second `then` registers a callback on P2, which is still pending |
+| 4 | Microtask: `v + 1` = 2; P2 is resolved with 2, which queues P2's callbacks |
+| 5 | Microtask: logs 2 |
+
+The pieces interviewers check: callbacks always run asynchronously (`queueMicrotask`), `then` returns a new promise resolved with the handler's return value, thrown errors reject it, missing handlers pass values through, and resolving with a thenable **adopts** its state (calling its `then` exactly once).
+
+## Complexity
+
+`O(1)` per `then` registration; callbacks run once each.
+
+## Edge cases to test
+
+- Handlers run asynchronously, even on already-settled promises.
+- Chaining values and errors; missing handlers pass through.
+- Resolving with another promise or a custom thenable.
+- `resolve` and `reject` after settling are ignored.
+- An executor that throws rejects the promise.
+- A thenable that calls both of its callbacks only counts the first.
+
 ## Pitfalls
 
 - Running callbacks synchronously when the promise is already settled. Then `p.then(log); log('sync')` prints in the wrong order, which is the bug interviewers test first.
@@ -23,3 +50,7 @@
 - **Statics on top:** `MyPromise.all`, `race`, `allSettled`, `any`.
 - **Unhandled rejections:** how would you warn when a rejected promise has no handlers by the end of the turn?
 - **Output prediction:** native promises take extra microtask ticks when a `then` callback returns a promise. Explain why `return Promise.resolve(x)` delays the chain by two ticks.
+
+## In the interview
+
+Build it in stages: states and settle-once, then `then` with a callback list, then asynchronous execution, then thenable adoption. Explaining why each stage exists matters more than reaching full Promises/A+ compliance.

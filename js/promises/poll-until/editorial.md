@@ -10,6 +10,32 @@
 3. A trailing `.catch` sends errors from `fn` *or* the predicate to `finish(reject(error))`.
 4. Call `poll()` once to start.
 
+## Walkthrough
+
+`pollUntil(() => getJob(id), (job) => job.status === 'done', { interval: 500, factor: 2, maxInterval: 4000, timeout: 30000 })`:
+
+| Poll | Status | Wait before next |
+| --- | --- | --- |
+| 1 (t = 0) | queued | 500 ms |
+| 2 (t ≈ 0.5 s) | running | 1000 ms |
+| 3 (t ≈ 1.5 s) | running | 2000 ms |
+| 4 (t ≈ 3.5 s) | running | 4000 ms (capped) |
+| 5 (t ≈ 7.5 s) | done | resolve with the job |
+
+If the predicate never passes within 30 s, the promise rejects with a `TimeoutError` and no further polls are scheduled. A poll that throws (network error) rejects the whole operation in this version.
+
+## Complexity
+
+One call per poll; the number of polls grows roughly logarithmically with time when backing off.
+
+## Edge cases to test
+
+- Resolves on the first poll if the predicate already passes.
+- Interval growth by `factor`, capped by `maxInterval`.
+- Timeout rejects and stops scheduling.
+- An error thrown by `fn` rejects.
+- No timers left behind after settling.
+
 ## Pitfalls
 
 - `setInterval`: it fires on a fixed schedule even while a slow request is still running, so polls overlap and pile up.
@@ -23,3 +49,7 @@
 - **Pause when hidden:** stop while `document.visibilityState === 'hidden'`, resume on `visibilitychange`.
 - **Server hints:** honour a `Retry-After` header instead of the computed wait.
 - **Long polling vs WebSockets vs SSE:** when is polling the right choice?
+
+## In the interview
+
+Discuss when polling is appropriate (no push channel available) and the alternatives (webhooks, SSE, WebSockets). Mention jitter and server hints like `Retry-After`.
