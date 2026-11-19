@@ -94,6 +94,41 @@ Judge by cost per completed task, not per request. A cheaper model that needs re
 | Eval | A scored test set run against a prompt or system |
 | Agent | A loop where the model picks the next action from tool results until a stop condition |
 
+## Worked example: estimating cost and latency for a feature
+
+A support tool summarises each customer ticket thread. Before building, estimate:
+
+| Quantity | Estimate |
+| --- | --- |
+| Tickets per day | 20,000 |
+| Input per ticket | Thread ~1,500 tokens + instructions ~500 tokens = 2,000 tokens |
+| Output per ticket | Summary ~150 tokens |
+| Daily input tokens | 20,000 × 2,000 = 40 million |
+| Daily output tokens | 20,000 × 150 = 3 million |
+
+With illustrative prices of $1 per million input tokens and $5 per million output tokens for a small model, that's $40 + $15 = **$55 a day**. A frontier model at ten times the price would be about $550 a day. Prices change often; the method is what matters: **tokens per request × requests × price per token, separately for input and output.**
+
+Latency, roughly: time to first token (queueing plus processing the 2,000 input tokens, typically a few hundred milliseconds) plus output tokens divided by generation speed (150 tokens at ~100 tokens per second ≈ 1.5 s). Output length dominates, so asking for concise summaries is both cheaper and faster.
+
+Levers this estimate reveals:
+
+- The 500-token instruction block is identical for every ticket: **prompt caching** cuts its cost and latency.
+- Summaries aren't needed instantly: a **batch API** (often around half price) can process them asynchronously.
+- Quality on a sample decides whether the small model is enough; run an eval before paying for the larger one (see [Evals and LLM-as-Judge](/read/evals-and-llm-as-judge)).
+
+## Why the same prompt gives different answers
+
+Each output token is sampled from a probability distribution over the vocabulary. Settings shape that distribution:
+
+| Setting | Effect |
+| --- | --- |
+| Temperature | Scales how peaked the distribution is: low values favour the most likely tokens, high values spread choices |
+| Top-p / top-k | Restrict sampling to the most likely tokens |
+| Max tokens | Hard cap on output length (the response stops mid-sentence if reached) |
+| Stop sequences | End generation when a given string appears |
+
+Even at temperature 0, outputs can vary slightly between calls because of batching and floating-point effects on the provider's hardware. Design for variation: validate outputs, use structured outputs for anything parsed by code, and evaluate on many samples rather than one.
+
 ## Pitfalls
 
 - Estimating tokens from character counts and then being surprised by code, JSON or non-English text.
@@ -125,3 +160,11 @@ Anything after the training cutoff or private to the business must be supplied t
 
 **What is the difference between hallucination and an instruction-following failure?**
 Hallucination is confident fabrication of content; instruction-following failure is ignoring or misapplying a rule you gave it. The first is mitigated with grounding and validation, the second with shorter, consistent prompts and code-level enforcement of the rule.
+
+## Key takeaways
+
+- LLMs predict tokens; cost and latency scale with input and output tokens.
+- The context window bounds input plus output; more context isn't automatically better.
+- Sampling makes outputs vary; validate and evaluate on many runs.
+- Estimate cost as tokens per request × volume × price, and use caching, batching and smaller models as levers.
+- Choose models by measured quality on your task, then cost and latency.

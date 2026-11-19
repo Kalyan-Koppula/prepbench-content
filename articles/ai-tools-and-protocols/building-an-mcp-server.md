@@ -178,6 +178,29 @@ Cursor reads `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global) with 
 - **Skipping the Inspector** and debugging inside a chat UI, where you cannot see the JSON-RPC exchange.
 - **Shipping an HTTP server without `Origin` validation or auth**, which exposes it to DNS rebinding from any web page.
 
+## Worked example: designing an MCP server for an issue tracker
+
+Before writing code, decide what the server exposes and how a model will use it:
+
+| Primitive | Item | Why it's this primitive |
+| --- | --- | --- |
+| Tool | `search_issues(query, status?, assignee?)` | The model decides when to search |
+| Tool | `get_issue(id)` | Fetch full details on demand |
+| Tool | `create_issue(title, body, labels?)` | A side effect: the host should ask the user to approve |
+| Tool | `add_comment(issue_id, body)` | Side effect, same approval rule |
+| Resource | `tracker://projects/{key}/readme` | Reference material the user or host attaches as context |
+| Prompt | `triage_issue` with an `issue_id` argument | A reusable, user-invoked workflow ("triage this issue") |
+
+Design decisions:
+
+- **Few, task-shaped tools** rather than one per REST endpoint: `search_issues` combines several API filters, so the model doesn't chain calls.
+- **Annotations** mark read-only versus destructive tools (`readOnlyHint`, `destructiveHint`), so hosts can apply approval policies.
+- **Output size limits**: search returns the top 20 issues with ids, titles and statuses, not full bodies; `get_issue` returns the detail. That keeps the model's context small.
+- **Errors as results**: "issue ABC-123 not found" is returned with `isError: true`, so the model can correct the id.
+- **Auth**: for a local stdio server, the user's API token comes from an environment variable set by the host configuration; for a remote server, OAuth with the tracker as authorisation server, so each user acts with their own permissions.
+
+Testing plan: exercise each tool in the MCP Inspector, then connect it to a host and run five realistic requests ("find my open bugs about login", "file a bug for …"), checking which tools were chosen and with which arguments. Poor choices usually mean a tool description needs rewriting, not a model change.
+
 ## Common interview questions
 
 **What is the smallest useful MCP server?**
@@ -200,3 +223,11 @@ A precise name, a description that says when to use it and when not to, paramete
 
 **How do hosts decide whether to run a tool?**
 The host applies its own policy: Claude Code uses permission rules keyed on `mcp__server__tool`, Cursor prompts unless allow-listed, and hosted connectors let you enable, disable or defer tools per server. Annotations inform that policy but a host must not trust them from an unknown server.
+
+## Key takeaways
+
+- Design the surface first: tools for model-driven actions, resources for context, prompts for user-invoked workflows.
+- Keep tools few, task-shaped and well described; bound their output size.
+- Mark side-effecting tools so hosts can require approval.
+- Use stdio for local servers and Streamable HTTP with OAuth for remote ones.
+- Test with the MCP Inspector, then with real requests in a host.

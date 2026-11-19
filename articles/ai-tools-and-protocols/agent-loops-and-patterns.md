@@ -108,6 +108,58 @@ Ask all four before building one:
 
 A "no" on any of them means a single call or a workflow. Most production LLM features are not agents.
 
+## Worked example: a bounded agent loop
+
+```ts
+async function runAgent(task: string, tools: ToolRegistry, limits = { maxSteps: 12, maxCostUsd: 0.5 }) {
+  const messages: Message[] = [{ role: 'user', content: task }]
+  let cost = 0
+
+  for (let step = 0; step < limits.maxSteps; step++) {
+    const response = await model.complete({ system: AGENT_PROMPT, messages, tools: tools.definitions() })
+    cost += response.costUsd
+    messages.push({ role: 'assistant', content: response.content })
+
+    const calls = response.toolCalls
+    if (calls.length === 0) return { status: 'done', answer: response.text, steps: step + 1, cost }
+
+    const results = await Promise.all(
+      calls.map(async (call) => {
+        const tool = tools.get(call.name)
+        if (!tool) return errorResult(call.id, `Unknown tool ${call.name}`)
+        if (tool.requiresApproval && !(await askHuman(call))) {
+          return errorResult(call.id, 'The user declined this action.')
+        }
+        try {
+          return okResult(call.id, await tool.run(call.input)) // validated against the schema inside run()
+        } catch (err) {
+          return errorResult(call.id, String(err))
+        }
+      }),
+    )
+    messages.push({ role: 'user', content: results })
+
+    if (cost > limits.maxCostUsd) return { status: 'budget_exceeded', steps: step + 1, cost }
+    if (repeatsLastCalls(messages, calls)) return { status: 'stuck', steps: step + 1, cost } // same call, same args, again
+  }
+  return { status: 'step_limit', steps: limits.maxSteps, cost }
+}
+```
+
+Every exit is explicit: done, budget exceeded, stuck in a loop, step limit. Each is logged with the full trace so you can see **why** a run ended. Approval gates sit in the loop, outside the model, for any tool with side effects.
+
+## Choosing the simplest pattern that works
+
+| Situation | Pattern |
+| --- | --- |
+| Fixed steps known in advance (extract, then classify, then summarise) | A **workflow**: plain code calling the model at each step |
+| One decision among a few paths | **Routing**: one classification call, then fixed code per route |
+| Independent sub-questions | **Fan-out**: parallel calls, then a merge step |
+| A draft that must meet criteria | **Evaluator-optimiser**: generate, critique against a rubric, revise, bounded rounds |
+| Open-ended tasks where the steps depend on what's discovered | An **agent loop** with tools and limits |
+
+Agents cost more, take longer and are harder to test than workflows. Start with the most constrained pattern and move to an agent only when the task genuinely can't be laid out in advance.
+
 ## Common interview questions
 
 **What is an agent, precisely?**
@@ -133,3 +185,19 @@ Per step: model and prompt version, tokens and cache hits, latency, stop reason,
 
 **When should you not build an agent?**
 When the steps can be written as code, when the task's value does not cover the extra cost and latency, when the model cannot reliably do a hard case, or when errors cannot be caught and undone. In those cases a single call or a workflow is the right answer.
+
+## Pitfalls
+
+- Unbounded loops with no step or cost limit.
+- Agents where a three-step workflow would do.
+- Letting context grow with every raw tool result.
+- No trace of why the agent chose each action.
+- Side-effecting tools without approval or idempotency.
+
+## Key takeaways
+
+- An agent is a loop: the model chooses tools, code executes them, results go back, until done.
+- Prefer workflows (fixed steps) when the path is known; use agents for open-ended tasks.
+- Bound every loop with step, cost and time limits, and detect repeated calls.
+- Put human approval and authorisation outside the model for side effects.
+- Trace every step; manage context with summaries and subagents for long tasks.

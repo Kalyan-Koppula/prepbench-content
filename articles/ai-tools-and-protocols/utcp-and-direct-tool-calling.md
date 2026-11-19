@@ -100,6 +100,25 @@ For most teams the honest alternative to MCP inside their own backend is not UTC
 
 In an interview, that reads as: "UTCP is a reasonable idea for direct calls from an agent you control, and a useful lens for the cost of wrapper servers, but in late 2026 MCP is the interoperability standard and the one you should assume when integrating with hosts you do not own."
 
+## Worked example: the same tool both ways
+
+A weather API exists at `GET https://api.weather.example/v1/forecast?city=…&date=…` with an API key header.
+
+**Through an MCP server**, you write and run a small server that defines a `get_forecast` tool and, inside its handler, calls the HTTP API. The host connects to the server; the server holds the API key and makes the call. You own one more process, which can add caching, validation, rate limiting and response shaping.
+
+**With direct calling (the UTCP approach)**, the provider publishes a manual describing the tool and **how to call it** (an HTTP call template: method, URL, parameter mapping, auth scheme). The client reads the manual and calls the API itself; no intermediate server runs.
+
+| Concern | Wrapper server (MCP) | Direct calling (UTCP-style) |
+| --- | --- | --- |
+| Extra infrastructure | A server process per integration | None beyond the existing API |
+| Latency | One extra hop | Direct |
+| Credentials | Held by the server | Held by the client |
+| Shaping and filtering responses | Easy in the server | Limited to what the API returns |
+| Ecosystem and host support | Broad | Smaller |
+| Session features (resources, prompts, notifications) | Yes | Not the focus |
+
+Neither is universally better: wrapping helps when you need to adapt, secure or combine APIs; direct calling avoids overhead when an API is already well shaped. In an interview, show you understand the trade-off rather than picking a side.
+
 ## Common interview questions
 
 **What is UTCP in one sentence?**
@@ -122,3 +141,17 @@ Early: a 1.x spec with one breaking major version behind it, reference clients i
 
 **Where do the credentials live in each model?**
 In MCP the server holds downstream credentials and the host only holds a token scoped to that server. In UTCP the client resolves API keys or OAuth client secrets from its environment and sends them to each native endpoint, which is simpler but widens the blast radius of a compromised agent.
+
+## Pitfalls
+
+- Treating protocol choice as more important than tool design.
+- Exposing raw APIs to models without shaping large responses.
+- Putting long-lived secrets in client-side configurations without scoping.
+
+## Key takeaways
+
+- UTCP describes how to call existing tools directly (call templates per protocol), without a wrapper server.
+- MCP standardises a client–server protocol with tools, resources and prompts.
+- Direct calling reduces hops and infrastructure; wrapping adds control, shaping and security.
+- Judge maturity and host support honestly when choosing.
+- The underlying skills are the same: good tool descriptions, schemas, auth and error handling.

@@ -134,6 +134,41 @@ In the UI, render citations as links to the source chunk with the cited span hig
 - **Routing**: classify whether retrieval is needed at all; chit-chat and follow-ups about the last answer should not hit the index.
 - **Freshness**: a `updated_at` boost or filter when the question implies recency.
 
+## Worked example: one question through the pipeline
+
+An employee asks the internal assistant: *"How many days of parental leave do I get in Germany?"*
+
+| Step | What happens | Output |
+| --- | --- | --- |
+| 1. Query understanding | A small model rewrites the question for search and extracts a filter | Query "parental leave entitlement days Germany"; filter `country = DE` |
+| 2. Access control | The user's groups are added as a filter | `visible_to ∈ {all-staff, de-employees}` |
+| 3. Hybrid retrieval | BM25 and vector search each return 50 chunks; results merged with reciprocal rank fusion | 80 unique candidates |
+| 4. Reranking | A cross-encoder scores each candidate against the query | Top 6 chunks, including "Germany benefits § 4.2 Parental leave" |
+| 5. Context assembly | Chunks inserted with ids, titles and dates inside `<document>` tags | ~3,500 tokens |
+| 6. Generation | The model answers using only the documents and cites ids | "You're entitled to … [doc-4.2]" |
+| 7. Post-checks | Citations must point to provided documents; if none support an answer, say so | Answer with a link to the policy |
+
+Why each step earns its place:
+
+- **Filters before ranking** stop documents the user can't see from ever reaching the model, which is the only reliable way to enforce permissions in RAG.
+- **Hybrid search** catches both exact terms ("§ 4.2", product codes) that embeddings miss, and paraphrases ("time off after having a baby") that keyword search misses.
+- **Reranking** is where most precision comes from: a cross-encoder reads query and chunk together, unlike the embedding comparison.
+- **Citations** let users verify the answer and let you measure groundedness.
+
+If the policy changed last month, freshness metadata (an `updated_at` field and re-indexing on change) decides whether the old or new version is retrieved; storing a version per document and filtering to the current one avoids mixing them.
+
+## Chunking, compared
+
+| Strategy | How | Good for |
+| --- | --- | --- |
+| Fixed size with overlap | 500–1,000 tokens, 10–20% overlap | Uniform text, a quick baseline |
+| Structure-aware | Split on headings, sections, list items | Documentation, policies, wikis |
+| Semantic | Split where embedding similarity between sentences drops | Long unstructured prose |
+| Parent–child | Retrieve small chunks, return their larger parent section | Precise matching with enough context |
+| Contextual | Prepend a short generated summary of the document to each chunk before embedding | Chunks that are ambiguous out of context ("this applies to…") |
+
+Start with structure-aware chunks plus titles in each chunk, measure retrieval recall, and only then try fancier strategies.
+
 ## Common interview questions
 
 **Why not just put every document in the context window?**
@@ -159,3 +194,19 @@ Use API citations that bind each claim to a verified span in a supplied document
 
 **What does contextual retrieval fix?**
 Chunks lose the document-level context needed to match a query, such as which product or period they describe. Prepending a short generated description before embedding and indexing restores it, and cached document prefixes keep the one-time cost low.
+
+## Pitfalls
+
+- Embedding whole documents or tiny fragments without context.
+- Vector search alone for queries with codes, names or exact phrases.
+- Filtering permissions after generation instead of at retrieval.
+- Stuffing dozens of chunks into the prompt instead of reranking to a few.
+- No re-indexing when source documents change.
+
+## Key takeaways
+
+- RAG = retrieve relevant, permitted content, then generate a grounded, cited answer.
+- Chunk by document structure, keep titles and metadata with each chunk.
+- Use hybrid search (keywords plus vectors) and a reranker for precision.
+- Enforce access control as retrieval filters, before anything reaches the model.
+- Measure retrieval and answer quality separately; fix retrieval first.

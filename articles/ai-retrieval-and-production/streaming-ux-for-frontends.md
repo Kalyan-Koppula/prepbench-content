@@ -134,6 +134,61 @@ export async function streamChat(
 
 Using it from React: keep `text` in state, append on `delta`, throttle the markdown render with `requestAnimationFrame`, hold the `AbortController` in a ref, and call `controller.abort()` on Stop and in the effect cleanup. Catch `AbortError` and treat it as a normal stop, not a failure.
 
+## Worked example: a streaming chat message component
+
+```tsx
+function useStreamingAnswer() {
+  const [text, setText] = useState('')
+  const [status, setStatus] = useState<'idle' | 'streaming' | 'done' | 'error' | 'stopped'>('idle')
+  const controllerRef = useRef<AbortController | null>(null)
+
+  async function ask(question: string) {
+    controllerRef.current?.abort()
+    const controller = new AbortController()
+    controllerRef.current = controller
+    setText('')
+    setStatus('streaming')
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }),
+        signal: controller.signal,
+      })
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
+      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
+      let buffer = ''
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += value
+        const events = buffer.split('\n\n') // SSE events are separated by a blank line
+        buffer = events.pop() ?? '' // keep a partial event for the next chunk
+        for (const event of events) {
+          const data = event.replace(/^data: /, '')
+          if (data === '[DONE]') continue
+          const delta = JSON.parse(data) as { text?: string }
+          if (delta.text) setText((t) => t + delta.text)
+        }
+      }
+      setStatus('done')
+    } catch (err) {
+      setStatus((err as Error).name === 'AbortError' ? 'stopped' : 'error')
+    }
+  }
+
+  return { text, status, ask, stop: () => controllerRef.current?.abort() }
+}
+```
+
+UI behaviour to pair with it:
+
+- Render the text through a markdown renderer that tolerates incomplete syntax and **sanitises** HTML; never `innerHTML` raw model output.
+- Show a "Stop" button while streaming; keep the partial text when stopped, marked as incomplete.
+- Batch updates per animation frame if tokens arrive faster than the screen refreshes.
+- Announce completion (not every token) to screen readers via a polite live region, and keep keyboard focus in the composer.
+- On error mid-stream, keep what arrived and offer "Retry", which resends the question rather than resuming.
+
 ## Common interview questions
 
 **Why fetch streaming over EventSource or WebSockets for chat?**
@@ -156,3 +211,19 @@ As collapsible steps with running, done and failed states in arrival order, gate
 
 **Where does XSS come in?**
 Model output and retrieved documents are untrusted. Never inject raw HTML; render through a markdown parser with sanitisation, allowlist URL schemes, and set `rel="noopener"` on links.
+
+## Pitfalls
+
+- Re-rendering the whole message list on every token.
+- Treating each network chunk as one complete event.
+- Inserting model output as raw HTML.
+- Live regions that read out every token.
+- Losing partial output on errors or aborts.
+
+## Key takeaways
+
+- Stream over SSE or fetch with a readable stream; parse events across chunk boundaries.
+- Make every request abortable and show a Stop control.
+- Render partial markdown safely with sanitisation.
+- Batch UI updates and announce completion accessibly, not every token.
+- Design explicit states: idle, streaming, done, stopped, error.

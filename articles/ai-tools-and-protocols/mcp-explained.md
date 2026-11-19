@@ -100,6 +100,39 @@ The core protocol is deliberately small; optional extensions negotiated through 
 - **Authorization URL validation**: only `http(s)` schemes, never open URLs through a shell.
 - **Scope minimisation**: request and grant the smallest scope set, step up on demand.
 
+## Worked example: what happens on the wire
+
+A desktop host connects to a local MCP server for a notes app over stdio. The messages are JSON-RPC 2.0:
+
+```json
+// 1. Client → server: initialise, declaring the client's capabilities
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{"elicitation":{}},"clientInfo":{"name":"desktop-host","version":"1.4.0"}}}
+
+// 2. Server → client: its capabilities and info
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18","capabilities":{"tools":{"listChanged":true},"resources":{}},"serverInfo":{"name":"notes","version":"0.3.0"}}}
+
+// 3. Client → server: ready
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+
+// 4. Client → server: discover tools
+{"jsonrpc":"2.0","id":2,"method":"tools/list"}
+
+// 5. Later, the model asks to search; the host calls the tool
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"search_notes","arguments":{"query":"quarterly goals"}}}
+
+// 6. Server → client: the result, as content blocks
+{"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"Found 2 notes: …"}],"isError":false}}
+```
+
+The flow shows MCP's division of labour:
+
+- The **host** (the application) owns the model, the user interface and approval decisions.
+- The **client** (one per server connection, inside the host) speaks the protocol.
+- The **server** exposes capabilities and knows nothing about which model is used.
+- **Capability negotiation** in steps 1–2 means each side only uses features the other supports, which is how the protocol evolves without breaking older implementations.
+
+Protocol versions are dated; check the current specification for the latest revision and its changes before relying on a specific feature.
+
 ## Common interview questions
 
 **What problem does MCP solve that plain tool calling does not?**
@@ -125,3 +158,18 @@ It needed two endpoints and a long-lived stream per client, which was awkward be
 
 **How does a server ask the user a question mid-tool-call?**
 Elicitation: the tool returns `resultType: "input_required"` with an `elicitation/create` request (a flat form schema or a URL to open), the host collects the answer, and the client retries the original call with `inputResponses`. Secrets must go through URL mode so they never pass through the client.
+
+## Pitfalls
+
+- Installing unreviewed servers with broad access to files or credentials.
+- Assuming tool descriptions from servers are trustworthy (they can contain injected instructions).
+- Passing user tokens through to downstream APIs without proper audience checks.
+- Mixing up the protocol (MCP) with a particular host's configuration format.
+
+## Key takeaways
+
+- MCP standardises how applications give models tools, resources and prompts, over JSON-RPC.
+- Hosts own the model and user consent; servers expose capabilities; clients connect them one-to-one.
+- Sessions start with initialisation and capability negotiation.
+- Transports: stdio for local servers, Streamable HTTP for remote ones, with OAuth-based authorisation.
+- Treat third-party servers as untrusted code and data: review, sandbox and require approval for actions.

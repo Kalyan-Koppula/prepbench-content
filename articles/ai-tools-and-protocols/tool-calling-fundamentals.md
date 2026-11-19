@@ -123,6 +123,50 @@ A tool costs a round trip (full request, history resent) but keeps context small
 - Keep tool ordering deterministic (prompt caching).
 - Evaluate tools with realistic multi-step tasks and read the transcripts.
 
+## Worked example: one request, two tool calls
+
+A user asks a travel assistant: *"Is it going to rain in Lisbon tomorrow, and what's my hotel's check-in time?"* The application offers two tools:
+
+```json
+[
+  {
+    "name": "get_forecast",
+    "description": "Daily weather forecast for a city. Use for questions about future weather.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "city": { "type": "string" },
+        "date": { "type": "string", "format": "date" }
+      },
+      "required": ["city", "date"]
+    }
+  },
+  {
+    "name": "get_booking",
+    "description": "The signed-in user's upcoming hotel booking, including check-in time.",
+    "input_schema": { "type": "object", "properties": {} }
+  }
+]
+```
+
+The exchange:
+
+| Turn | Who | Content |
+| --- | --- | --- |
+| 1 | App → model | System prompt (with today's date), tools, user question |
+| 2 | Model → app | Two tool calls in one response: `get_forecast({city: "Lisbon", date: "2025-06-13"})` and `get_booking({})` |
+| 3 | App | Runs both in parallel; the booking tool uses the **session's** user id, not anything from the model |
+| 4 | App → model | Two tool results, each tagged with its call id |
+| 5 | Model → app | Final answer: "Light rain is likely tomorrow afternoon (70%). Check-in at Hotel Alfama starts at 15:00." |
+
+Points worth narrating in an interview:
+
+- The model never executes anything; it **requests** calls, and your code decides whether and how to run them.
+- Authorisation comes from your session, not from arguments the model chose. `get_booking` takes no user id precisely so the model can't ask for someone else's booking.
+- Parallel calls cut latency when tools are independent.
+- If the forecast service fails, return an error **as the tool result** ("forecast unavailable, try again later"); the model can then answer the booking part and explain the rest.
+- The model needs today's date in context to turn "tomorrow" into a date.
+
 ## Common interview questions
 
 **Walk me through one tool call end to end.**
@@ -145,3 +189,19 @@ When it is small, always relevant and static enough to cache; then it costs noth
 
 **Client tool versus server tool?**
 A client tool is a schema you define and code you run; a server tool runs on the vendor's side (search, code execution) and returns results inline. Server tools save you a loop iteration and infrastructure; client tools give you control and access to your own systems.
+
+## Pitfalls
+
+- Vague tool descriptions that overlap, so the model picks the wrong one.
+- Trusting model-supplied ids for authorisation.
+- Throwing exceptions out of the loop instead of returning error results.
+- Exposing dozens of tools when a few well-designed ones would do.
+- Non-idempotent tools that double-charge or double-send on retries.
+
+## Key takeaways
+
+- A tool is a name, a description and an input schema; descriptions are prompts and deserve care.
+- The model proposes calls; your code validates, authorises and executes them.
+- Return errors as tool results so the model can recover.
+- Run independent calls in parallel; make side-effecting tools idempotent.
+- Keep the tool surface small and purpose-built; never let model-chosen arguments decide authorisation.

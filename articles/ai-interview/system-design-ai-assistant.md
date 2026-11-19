@@ -200,6 +200,32 @@ POST   /api/messages/:id/feedback             { "value": "down", "reason": "wron
 - Redact PII before anything is logged; default to not storing raw prompts; honour deletion by removing messages, traces, memories and derived indexes.
 - Multi-tenant isolation everywhere: retrieval filters, tool credentials, file uploads, caches keyed by tenant.
 
+## Running the interview
+
+A 45-minute plan for this question:
+
+| Minutes | Focus |
+| --- | --- |
+| 0–5 | Requirements: users, data sources, actions allowed, accuracy and latency targets, privacy |
+| 5–15 | Architecture: client, API gateway, orchestrator, retrieval, model gateway, tools, stores |
+| 15–22 | Data model: conversations, messages, documents and chunks, memories, audit log |
+| 22–35 | Deep dives the interviewer picks: retrieval quality, tool safety, streaming, cost |
+| 35–45 | Evals, monitoring, rollout and failure modes |
+
+## Capacity and cost estimate
+
+Assume 50,000 daily active users, 6 questions each per day, about 8,000 input tokens per request after retrieval and history, and 400 output tokens.
+
+| Quantity | Value |
+| --- | --- |
+| Requests per day | 300,000 (about 3.5 per second on average, maybe 20 per second at peak) |
+| Input tokens per day | 2.4 billion |
+| Output tokens per day | 120 million |
+| Cost at $1 / $5 per million (small model) | ~$2,400 + $600 = ~$3,000 per day |
+| With 60% of input served from prompt cache at a tenth of the price | Input cost drops to roughly $1,100 per day |
+
+The numbers drive design decisions: caching the stable prompt prefix matters more than any micro-optimisation; routing simple questions to a small model and hard ones to a larger model can halve cost; and peak concurrency (streaming responses lasting several seconds) sizes connection handling more than requests per second do.
+
 ## Deep-dive questions
 
 **How does a request flow end to end?**
@@ -228,3 +254,11 @@ Per-tenant token budgets with soft degrade to a smaller model, caps on context s
 
 **What would you build first?**
 Gateway with streaming and tracing, one retrieval source with citations, one read-only tool, and the eval harness. Write tools with approvals come after the read path is trusted, because an assistant that reads well is already valuable and far easier to make safe.
+
+## Key takeaways
+
+- Clarify users, data, allowed actions and the cost of mistakes before drawing boxes.
+- Core components: orchestrator, retrieval with access control, model gateway, tools with approvals, conversation and memory stores.
+- Stream responses, cache prompt prefixes, and route by difficulty to control cost.
+- Design safety in: untrusted content handling, least-privilege tools, human approval for side effects.
+- Close with evals, monitoring and a staged rollout.

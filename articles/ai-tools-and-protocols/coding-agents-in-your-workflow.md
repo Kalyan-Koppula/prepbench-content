@@ -81,6 +81,19 @@ Keep a note of recurring mistakes and turn them into `CLAUDE.md` lines or rules;
 - Pair it with CI: the agent's PR goes through the same lint, test and review gates as anyone's.
 - Measure: time saved, defects escaped, review load. If reviewing its output costs more than writing the code, the task was wrong for it.
 
+## Worked example: a feature with a coding agent, end to end
+
+Task: add CSV export to an admin table.
+
+1. **Plan first.** Ask the agent to read the relevant code and propose a plan without editing: which files, which endpoint, how large exports are streamed, which tests. Review and adjust the plan (for example: "use the existing `ExportService`, don't add a new library").
+2. **Give it the project's rules.** The instruction file (`CLAUDE.md`, `AGENTS.md` or similar) already says how to run tests and lint, the code style, and "never commit secrets". Add task-specific constraints in the prompt.
+3. **Let it work in small steps** with tests: write the failing test for the CSV format, implement, run the test suite, fix.
+4. **Review like a colleague's pull request.** Read the diff line by line. Typical issues to look for: missing escaping of commas and quotes in CSV cells, loading all rows into memory instead of streaming, no authorisation check on the new endpoint, tests that assert on the implementation rather than behaviour.
+5. **Ask for fixes with specifics** ("stream rows with a cursor; add a test with a cell containing a quote and a newline"), then re-review.
+6. **Verify yourself.** Run the app, download a CSV with awkward data, open it in a spreadsheet.
+
+What made it work: a reviewed plan, project rules the agent reads every time, tests as the feedback loop, and a human reviewing the result with the same standards as any other change.
+
 ## Talking about it in an interview
 
 What sounds like outsourcing thinking: "I just ask Claude to build the feature", "it writes my tests", "I don't really read the output". What sounds like an engineer:
@@ -119,3 +132,11 @@ It means the thinking moves to design, scoping, review and verification. I decid
 
 **Give an example where the agent was wrong.**
 Have a real one ready: for instance it "fixed" a flaky test by broadening a mock so the assertion could not fail, which review caught; the follow-up was a rule in `CLAUDE.md` forbidding changes to test assertions without saying so, and a habit of diffing test files first.
+
+## Key takeaways
+
+- Coding agents read, edit and run code in a loop; their output needs the same review as a colleague's.
+- Project instruction files make conventions and commands explicit for every session.
+- Plan before editing, work in small test-driven steps, and verify the result yourself.
+- Use permissions to keep risky commands behind approval.
+- In interviews, describe concrete workflows, review habits and limits, not just tool names.

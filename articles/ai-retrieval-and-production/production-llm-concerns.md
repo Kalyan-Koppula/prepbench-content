@@ -102,6 +102,61 @@ Expect: "where does our data go, how long is it kept, is it used for training, w
 - **Your side**: data minimisation in prompts (send the fields the task needs, not the whole record), tenant isolation in retrieval and files, deletion requests propagating to logs, caches, memory stores and vector indexes, and a DPA with the provider.
 - **Audit**: who accessed transcripts, when prompts changed, which model served a given answer.
 
+## Worked example: a resilient model gateway
+
+Most teams put one internal service (or library) between their features and model providers. Its request path:
+
+```ts
+async function complete(request: CompletionRequest, ctx: RequestContext): Promise<CompletionResult> {
+  const cached = await responseCache.get(cacheKey(request)) // exact-match cache for deterministic tasks
+  if (cached) return { ...cached, fromCache: true }
+
+  enforceBudget(ctx.tenantId, estimateTokens(request)) // per-tenant spend and rate limits
+
+  const routes = [primaryModel, fallbackModel] // e.g. a frontier model, then a cheaper or other-provider model
+  let lastError: unknown
+  for (const route of routes) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const started = Date.now()
+        const result = await withTimeout(route.call(request, { idempotencyKey: ctx.requestId }), 30_000)
+        metrics.record({
+          model: route.name,
+          tenant: ctx.tenantId,
+          feature: ctx.feature,
+          inputTokens: result.usage.input,
+          outputTokens: result.usage.output,
+          cachedTokens: result.usage.cacheRead,
+          latencyMs: Date.now() - started,
+        })
+        if (request.schema) validateOrThrow(result.output, request.schema) // structured output guard
+        await responseCache.set(cacheKey(request), result)
+        return result
+      } catch (err) {
+        lastError = err
+        if (!isRetryable(err)) break // 400s and validation errors: don't retry the same route
+        await sleep(backoffWithJitter(attempt, retryAfterHeader(err))) // honour Retry-After on 429s
+      }
+    }
+  }
+  throw new ModelUnavailableError(lastError)
+}
+```
+
+What each piece handles:
+
+| Piece | Production concern |
+| --- | --- |
+| Response cache | Cost and latency for repeated identical requests |
+| Budget enforcement | Runaway spend from a bug or abusive tenant |
+| Retries with backoff and `Retry-After` | Rate limits (429) and overload (529/503) |
+| Timeouts | Hung connections and very long generations |
+| Fallback route | Provider outages; a degraded answer beats none |
+| Usage metrics per feature and tenant | Cost attribution and anomaly alerts |
+| Schema validation | Malformed outputs reaching downstream code |
+
+Logging goes alongside, with prompts and outputs either redacted or stored in a restricted store with retention limits, and a trace id linking the user request, retrieval steps, tool calls and model calls.
+
 ## Common interview questions
 
 **How do you handle a 429 from the model provider?**
@@ -124,3 +179,19 @@ Schema-constrained decoding guarantees the shape, removing a class of parsing fa
 
 **A customer asks whether their data trains the model and where it is stored. What do you say?**
 State the provider's documented policy (API data is not used for training without permission; conversation content is not retained by default except where a model or stateful feature requires it, with zero-retention arrangements for eligible features), explain where your own copies live and how deletion propagates, and offer the region or cloud-marketplace options if residency matters.
+
+## Pitfalls
+
+- Calling providers directly from many places, with no shared limits or metrics.
+- Retrying non-retryable errors, multiplying cost.
+- No timeouts on streaming responses.
+- Logging full prompts with personal data into general-purpose logs.
+- Switching models without re-running evals.
+
+## Key takeaways
+
+- Wrap model calls in one gateway: timeouts, retries with backoff, fallbacks, budgets and metrics in one place.
+- Retry only retryable errors and honour `Retry-After`.
+- Track tokens, cost and latency per feature, tenant and model.
+- Cache at several layers: provider prompt caching, response caching, retrieval caching.
+- Log and trace without leaking personal data; define retention.

@@ -108,6 +108,19 @@ Plausible-looking code that is subtly wrong, licence and secret leakage, depende
 
 Asking these signals that you have thought about production, and the answers tell you how mature the team is.
 
+## Worked answer: "How would you add an AI summary to our product?"
+
+A strong answer covers the full lifecycle in about three minutes:
+
+1. **Clarify the value and the risk.** "Who reads the summary, and what happens if it's wrong? A summary of a support thread for an agent is low risk; a summary of a contract for a customer is high risk and needs citations and review."
+2. **Start without AI cleverness.** "First version: one model call with a clear prompt and a structured output (summary, key points, open questions). No agent, no RAG unless the thread needs external context."
+3. **Define quality before building.** "Collect 100 real threads, write a rubric (faithful, complete, concise), label a set, and measure the model against it. That also tells us whether a smaller, cheaper model is good enough."
+4. **Engineer for production.** "Stream the output, cache by thread version, set timeouts and a fallback, track cost per summary, and redact personal data in logs."
+5. **Handle safety.** "Thread content is untrusted, so it's delimited as data; the summariser has no tools, so injection can at worst produce a bad summary, which users can flag."
+6. **Measure in production.** "Thumbs up/down with reasons, edit rate if agents correct summaries, and a weekly sample reviewed against the rubric."
+
+The interviewer is scoring judgement: matching the solution to the risk, measuring quality, and treating the model as one unreliable component inside an engineered system.
+
 ## Common interview questions
 
 **What is the difference between a workflow and an agent?**
@@ -127,3 +140,11 @@ The unit models read and bill by, roughly three quarters of an English word. Con
 
 **How do you handle a user asking the assistant to ignore its instructions?**
 Keep operator instructions in the system channel the user cannot edit, scope what the assistant can do rather than relying on refusals, and make sure nothing dangerous is reachable even if the instructions were bypassed, because sufficiently creative injection will eventually get through.
+
+## Key takeaways
+
+- Frame AI features by user value and the cost of errors first.
+- Start with the simplest design: one well-specified call with structured output.
+- Define quality with evals before optimising prompts or models.
+- Cover production concerns: streaming, caching, timeouts, cost, privacy.
+- Show honest, concrete experience, including what didn't work.

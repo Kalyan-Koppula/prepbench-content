@@ -114,6 +114,41 @@ const request = {
 }
 ```
 
+## Worked example: budgeting a support assistant's context
+
+A support assistant runs on a model with a 200,000-token window, but quality and cost both favour using far less. A per-request budget:
+
+| Block | Order | Budget (tokens) | Notes |
+| --- | --- | --- | --- |
+| System instructions and policies | 1 | 2,000 | Stable: cached |
+| Tool definitions | 2 | 1,500 | Stable: cached |
+| Customer profile summary | 3 | 300 | Changes per customer |
+| Retrieved help-centre passages | 4 | 4,000 | Top 6 chunks after reranking |
+| Conversation summary (older turns) | 5 | 800 | Updated every 10 turns |
+| Recent turns verbatim | 6 | 3,000 | Last ~6 exchanges |
+| Current user message | 7 | ≤ 1,000 | Truncated with a notice if longer |
+| Reserved for the answer | – | 1,500 | `max_tokens` |
+
+Total input around 12,600 tokens. Why this shape:
+
+- **Stable first**: blocks 1–2 form a cacheable prefix that's identical across every request.
+- **Most relevant last**: the current message and recent turns sit nearest the end, where models attend reliably.
+- **Summaries instead of history**: after 10 turns, older messages are condensed by a cheap model into facts and open questions, which keeps cost flat over long conversations.
+- **Retrieval is capped**: more passages beyond the top few add noise and cost more than they add accuracy.
+
+When a block exceeds its budget, the assembler trims it by rule (drop the lowest-ranked passages, summarise older turns), never by cutting the end of the prompt blindly.
+
+## Long-term memory, concretely
+
+For an assistant that remembers user preferences across sessions:
+
+1. After each conversation, a small model extracts candidate facts: "prefers answers in Spanish", "uses the EU data region".
+2. Each fact is stored with the user id, a source reference and a timestamp, after de-duplication against existing facts.
+3. At the start of a new conversation, the most relevant facts (by recency and by similarity to the first message) are inserted into the profile block.
+4. Users can see and delete their memories, and facts expire or are re-confirmed after a period.
+
+Storing everything verbatim and retrieving it later sounds simpler but grows unbounded, surfaces stale or contradictory facts, and raises privacy questions. Curated memory is smaller, more accurate and easier to govern.
+
 ## Common interview questions
 
 **What is the difference between prompt engineering and context engineering?**
@@ -136,3 +171,18 @@ It rewrites the prefix, so every cache breakpoint after that point misses and th
 
 **How do you decide what to send to a model with a 1M-token window?**
 The same way as with a small one: a large window raises the ceiling, not the quality per token, and attention still degrades with length. Send the minimum high-signal set, use the headroom for genuinely large documents, and keep compaction thresholds below the limit so you never truncate.
+
+## Pitfalls
+
+- Filling the window because it's available, which raises cost and often lowers quality.
+- Putting timestamps or per-request ids at the top of the prompt, breaking cache hits.
+- Keeping every past turn verbatim in long conversations.
+- Storing memories without provenance or expiry.
+
+## Key takeaways
+
+- Treat the context window as a budget: give each block a size and an order.
+- Put stable content first for caching and the most relevant content near the end.
+- Summarise old turns, cap retrieval, and trim by rule rather than truncating blindly.
+- Short-term memory is the conversation; long-term memory is curated, deduplicated facts with provenance.
+- Give users visibility and control over what is remembered.

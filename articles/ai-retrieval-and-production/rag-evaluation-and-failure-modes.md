@@ -119,6 +119,53 @@ Gate the pipeline on aggregates (mean recall@20 above a floor, faithfulness not 
 
 Log per request: the rewritten query, retrieved chunk ids with scores, which ids were cited in the answer, token counts, latency per stage, and user feedback. From these you get "cited rate" (how often retrieved chunks were actually used), empty-retrieval rate, and the questions with thumbs-down to feed back into the golden set. Sample conversations for human review weekly; the golden set only tells you about questions you already thought of.
 
+## Worked example: diagnosing a bad answer
+
+A user reports: "The assistant said our refund window is 14 days. It's 30." Debug it layer by layer using the trace for that request:
+
+1. **Was the right document in the index?** Search the index directly for "refund window": the current policy (30 days) and an archived 2022 policy (14 days) are both there. **Finding: stale content indexed.**
+2. **Was it retrieved?** The trace shows the top 6 reranked chunks: the archived policy ranks 1st, the current one 9th, so it never reached the model. **Retrieval failure.**
+3. **Did the model use what it was given?** It answered faithfully from the archived chunk. **Generation was fine**; the context was wrong.
+
+Fixes, in order: remove or flag archived documents (a `status = current` filter), add `updated_at` to chunks and boost recency for policy content, and add this question to the golden set so it can't regress.
+
+The general rule: classify every failure before fixing it.
+
+| Symptom | Likely layer | Check |
+| --- | --- | --- |
+| Right answer exists, not retrieved | Retrieval | Recall@k for the query; query rewriting; chunking |
+| Retrieved, but the answer ignores it | Generation | Prompt instructions; context order; too many chunks |
+| Answer contradicts the retrieved text | Generation (hallucination) | Groundedness check; ask for citations |
+| Answer from content the user shouldn't see | Access control | Retrieval filters |
+| Outdated answer | Ingestion | Freshness, versioning, re-indexing |
+| "I don't know" when the answer exists | Retrieval or overly strict prompt | Recall@k; abstention instructions |
+
+## A minimal evaluation loop in code
+
+```ts
+type Case = { question: string; relevantDocIds: string[]; referenceAnswer: string }
+
+async function evaluate(cases: Case[]) {
+  let recallHits = 0
+  let grounded = 0
+  for (const c of cases) {
+    const retrieved = await retrieve(c.question, { k: 6 })
+    if (c.relevantDocIds.some((id) => retrieved.some((r) => r.docId === id))) recallHits++
+
+    const answer = await generate(c.question, retrieved)
+    const verdict = await judge({
+      rubric: 'Is every claim in the answer supported by the provided documents? Answer yes or no, then explain.',
+      documents: retrieved,
+      answer,
+    })
+    if (verdict.supported) grounded++
+  }
+  return { recallAt6: recallHits / cases.length, groundedness: grounded / cases.length }
+}
+```
+
+Run it on every change to chunking, embeddings, retrieval parameters, prompts or models, and compare against the last baseline.
+
 ## Common interview questions
 
 **Which metric would you look at first?**
@@ -141,3 +188,18 @@ The golden set does not cover what users actually ask. Pull the thumbs-down conv
 
 **What is faithfulness and why is it separate from correctness?**
 Faithfulness checks that the answer is supported by the retrieved context; correctness checks it matches the truth. An answer can be faithful to a stale document and wrong, or correct from memory and unfaithful, and they need different fixes.
+
+## Pitfalls
+
+- Judging a RAG system only by end-to-end answer quality, which hides where failures happen.
+- Golden sets written by the team instead of drawn from real user questions.
+- Ignoring stale or duplicate documents in the index.
+- Uncalibrated LLM judges.
+
+## Key takeaways
+
+- Evaluate retrieval (recall@k, precision, MRR) and answers (groundedness, correctness, completeness) separately.
+- Build a golden set from real questions with labelled relevant documents.
+- Diagnose failures by layer: ingestion, retrieval, generation, access control.
+- Trace every request so you can see what was retrieved and why.
+- Add every production failure to the golden set to prevent regressions.

@@ -91,6 +91,43 @@ Cost per completed task is the metric; a cheaper call that needs more retries or
 
 Offline evals do not catch everything. In production, log prompt version, model, usage and latency on every request; sample a slice for periodic judge scoring; capture explicit feedback (thumbs) and implicit signals (did the user retry, escalate, abandon); and route new failures back into the offline set.
 
+## Worked example: building an eval for ticket triage
+
+**1. Collect cases.** Sample 200 real tickets (anonymised), stratified so rare-but-important cases (security, outages) are well represented. Add 20 adversarial cases: tickets with injection attempts, empty bodies, other languages.
+
+**2. Label them.** Two people label urgency independently; disagreements are discussed and the rubric is clarified. Inter-annotator agreement tells you the ceiling: if humans agree 90% of the time, don't expect 99% from the model.
+
+**3. Choose graders per field.**
+
+| Field | Grader |
+| --- | --- |
+| `urgency` | Exact match against the label |
+| `product_area` | Exact match |
+| `summary` | LLM judge with a rubric: faithful (no invented facts), mentions the customer's actual problem, under 300 characters |
+| Overall | Schema validity: 100% required |
+
+**4. Run and read the results.** Aggregate numbers hide the story; look at the failures:
+
+```text
+urgency accuracy: 0.86   (high-urgency recall: 0.71)  ← the number that matters
+product_area accuracy: 0.92
+summary faithfulness (judge): 0.95
+schema valid: 1.00
+```
+
+High-urgency recall is the risk: missing an outage is worse than over-flagging a question. Reading the misses shows the model treats "can't log in" as low when it affects one user. The rubric is updated ("any Enterprise customer unable to log in is high"), the eval re-run, and recall rises to 0.93 with a small drop in precision, an acceptable trade.
+
+**5. Gate changes.** The eval runs in CI on every prompt or model change; a drop in high-urgency recall below 0.9 fails the build.
+
+## Calibrating an LLM judge
+
+A judge is itself a model that can be wrong. Before trusting it:
+
+- Have humans grade 50–100 outputs with the same rubric, then measure agreement between the judge and the humans.
+- Ask the judge for its reasoning **before** its score, and for binary or small-scale judgements ("faithful: yes/no") rather than 1–10 scores.
+- Randomise the order when comparing two outputs (judges favour the first or the longer one).
+- Use a different, ideally stronger, model than the one being evaluated, and re-check agreement when you change judge models.
+
 ## Pitfalls
 
 - Grading with the same prompt and model that produced the output, so the judge shares its blind spots.
@@ -122,3 +159,11 @@ Grade the end state (did the ticket get the right label, does the code pass test
 
 **What do you track in production that offline evals miss?**
 Prompt and model versions per request, token usage and latency distributions, tool-call failure rates, user feedback and retry or escalation signals, and a sampled judge score over time. New failures feed back into the offline set.
+
+## Key takeaways
+
+- Build evals from real traffic, labelled against a clear rubric, before tuning prompts.
+- Pick graders per output: exact match, programmatic checks, LLM judges for open-ended text.
+- Track the metric that reflects the real risk (for example, recall on critical cases), not only averages.
+- Calibrate LLM judges against human labels.
+- Run evals in CI and alongside cost and latency; monitor online quality after release.
