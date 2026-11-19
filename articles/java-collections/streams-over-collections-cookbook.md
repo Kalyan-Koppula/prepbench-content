@@ -231,6 +231,71 @@ Map<String, Set<String>> categoriesPerCustomer = orders.stream()
 
 `parallelStream()` splits the source with a `Spliterator` and runs stages on the common `ForkJoinPool`. It helps for CPU-heavy, side-effect-free work over large `ArrayList`s or arrays and hurts for small data, I/O, `LinkedList`, or anything that touches shared mutable state. `forEach` on a parallel stream loses order; `forEachOrdered` keeps it at a cost. The interview answer: "I'd measure, and I'd rather hand I/O-bound work to an executor or virtual threads."
 
+## Worked example: from a log file to a report
+
+Given lines like `2025-03-01T10:15:30Z GET /api/orders 200 123ms`, produce the five slowest endpoints by average latency, considering only successful requests:
+
+```java
+record LogLine(Instant time, String method, String path, int status, long millis) {
+    static Optional<LogLine> parse(String line) {
+        String[] p = line.split(" ");
+        if (p.length != 5) return Optional.empty();
+        try {
+            return Optional.of(new LogLine(
+                Instant.parse(p[0]), p[1], p[2], Integer.parseInt(p[3]),
+                Long.parseLong(p[4].replace("ms", ""))));
+        } catch (RuntimeException e) {
+            return Optional.empty(); // skip malformed lines
+        }
+    }
+}
+
+List<Map.Entry<String, Double>> slowest;
+try (Stream<String> lines = Files.lines(Path.of("access.log"))) { // lazily reads the file
+    slowest = lines
+        .map(LogLine::parse)
+        .flatMap(Optional::stream)                       // drop lines that didn't parse
+        .filter(l -> l.status() >= 200 && l.status() < 300)
+        .collect(Collectors.groupingBy(
+            l -> l.method() + " " + l.path(),
+            Collectors.averagingLong(LogLine::millis)))
+        .entrySet().stream()
+        .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+        .limit(5)
+        .toList();
+}
+```
+
+Patterns worth naming in the interview:
+
+- `Files.lines` streams the file lazily, so a multi-gigabyte log isn't loaded into memory, and `try`-with-resources closes it.
+- `map` to `Optional`, then `flatMap(Optional::stream)`, is the idiomatic "parse and skip failures".
+- `groupingBy` with a downstream collector (`averagingLong`) aggregates in one pass.
+- Streaming the map's `entrySet()` sorts groups by their aggregated value.
+
+## Collecting into the right shape
+
+```java
+// Map with a specific implementation and merge rule
+Map<String, Integer> totals = orders.stream()
+    .collect(Collectors.toMap(Order::customer, Order::amount, Integer::sum, TreeMap::new));
+
+// Group into sets instead of lists
+Map<Status, Set<String>> idsByStatus = orders.stream()
+    .collect(Collectors.groupingBy(Order::status, Collectors.mapping(Order::id, Collectors.toSet())));
+
+// Two aggregates at once (Java 12+)
+var minMax = orders.stream()
+    .collect(Collectors.teeing(
+        Collectors.minBy(Comparator.comparingInt(Order::amount)),
+        Collectors.maxBy(Comparator.comparingInt(Order::amount)),
+        (min, max) -> List.of(min.orElseThrow(), max.orElseThrow())));
+
+// Partition: always exactly two keys, true and false
+Map<Boolean, List<Order>> bigAndSmall = orders.stream()
+    .collect(Collectors.partitioningBy(o -> o.amount() > 1000));
+```
+
 ## Common interview questions
 
 **What is the difference between intermediate and terminal operations?** Intermediate operations (`filter`, `map`, `sorted`, `distinct`, `limit`) are lazy and return a new stream; nothing runs until a terminal operation (`collect`, `reduce`, `forEach`, `count`, `findFirst`) pulls elements through. Short-circuiting terminals like `findFirst` or `anyMatch` stop early.
@@ -248,3 +313,19 @@ Map<String, Set<String>> categoriesPerCustomer = orders.stream()
 **How do you dedupe by a field while keeping the whole object?** `toMap(T::field, o -> o, (a, b) -> a, LinkedHashMap::new)` then `.values()`, or `filter` with a `Set.add` side effect in a sequential stream. `distinct()` alone would compare whole objects.
 
 **Is `sorted()` on a stream stable?** Yes for ordered streams; it uses the same stable sort as `List.sort`. It buffers the entire stream, so it is a full barrier and O(n log n); prefer `min`/`max` or a heap when you only need a few elements.
+
+## Pitfalls
+
+- `Collectors.toMap` without a merge function when keys can repeat.
+- `toList()` (Java 16+) returns an unmodifiable list, unlike `Collectors.toList()`; don't add to it afterwards.
+- Forgetting to close streams from `Files.lines` or `Files.walk`.
+- Stateful lambdas (adding to an external list inside `map`).
+- Nesting streams inside streams where a `Map` lookup would be `O(1)`.
+
+## Key takeaways
+
+- Think in pipelines: source, transformations, one terminal collector.
+- `groupingBy` plus downstream collectors (`counting`, `summingInt`, `averagingLong`, `mapping`, `toSet`) cover most reports.
+- `flatMap(Optional::stream)` filters out failed parses cleanly.
+- Choose the result shape explicitly (`TreeMap::new`, `toSet()`, `teeing`, `partitioningBy`).
+- Stream large files lazily and close them with `try`-with-resources.

@@ -138,3 +138,19 @@ Take one with `jcmd <pid> GC.heap_dump /tmp/h.hprof` (or `jmap -dump:live,format
 **What is `-Xmx` and how do you size it in a container?** Maximum heap. Prefer `-XX:MaxRAMPercentage` so the heap scales with the container limit, leave 25% or more for metaspace, threads and direct memory, and set `-Xms` equal to avoid resize pauses.
 
 **What is a `WeakReference` for?** A reference that does not keep its target alive; `get()` returns null once collected. Use for caches of derivable data, canonical maps (`WeakHashMap`) and listener registries where the lifetime should follow the referent, not the registry.
+
+## Pitfalls
+
+- Tuning GC flags before measuring; most services run well on defaults with a correctly sized heap.
+- Calling `System.gc()` in application code.
+- Static collections and caches without eviction, the most common real leak.
+- `ThreadLocal` values never removed in thread pools.
+- Reading heap usage from the operating system's view instead of GC logs and heap dumps.
+
+## Key takeaways
+
+- Objects live on the heap and die when unreachable from GC roots; stacks hold per-thread frames.
+- Generational collection makes short-lived objects cheap; long-lived churn is expensive.
+- G1 is the default; ZGC targets sub-millisecond pauses on large heaps.
+- Diagnose `OutOfMemoryError` by its kind, then with heap dumps and the dominator tree.
+- Most leaks are unbounded caches, static maps, listeners and thread-locals.

@@ -147,6 +147,47 @@ counts.entrySet().removeIf(e -> e.getValue() == 0);
 
 `compute*` and `merge` on a plain `HashMap` are not atomic; on `ConcurrentHashMap` they are.
 
+## Worked example: tracing collisions and a resize
+
+Use a tiny `HashMap` with capacity 4 (the real minimum is 16, but the mechanics are the same) and keys whose hash codes are known.
+
+1. `put("A", 1)`: hash spreads to some value; `index = hash & (capacity - 1)` gives bucket 1. Bucket 1 is empty, so a node is stored there.
+2. `put("E", 5)`: suppose its index is also 1. The bucket's first node has a different key (`equals` is false), so the new node is appended to bucket 1's chain.
+3. `put("A", 10)`: index 1 again; walking the chain finds a node whose hash matches **and** whose key `equals` `"A"`, so its value is replaced. Size stays 2.
+4. `put("C", 3)`: bucket 3, size 3. The threshold is `capacity × loadFactor = 4 × 0.75 = 3`, so the map **resizes** to capacity 8.
+
+During the resize, each node either stays at its index or moves to `index + oldCapacity`, depending on one extra bit of its hash. No hash codes are recomputed, which makes resizing a single linear pass. This is why capacities are powers of two: `hash & (capacity − 1)` is a cheap modulo, and the split on resize is one bit.
+
+If a single bucket's chain grows beyond 8 nodes (and the table has at least 64 buckets), it is converted to a red-black tree, turning worst-case lookups in that bucket from `O(n)` to `O(log n)`. This protects against poor hash functions and deliberate collision attacks.
+
+## Why the hash is "spread"
+
+`HashMap` doesn't use `key.hashCode()` directly; it computes `h ^ (h >>> 16)`. With small tables only the low bits select the bucket, so hash codes that differ only in their high bits (common for some numeric keys and floats) would all collide. XORing the high half into the low half lets those bits influence the bucket choice at almost no cost.
+
+## Pre-sizing
+
+If you know you'll insert about 10,000 entries, create the map with enough capacity to avoid repeated resizes:
+
+```java
+Map<String, Order> byId = HashMap.newHashMap(10_000); // Java 19+: sizes for 10,000 entries at load factor 0.75
+// before Java 19: new HashMap<>((int) (10_000 / 0.75f) + 1)
+```
+
+`new HashMap<>(10_000)` sets the **capacity**, not the number of entries, so it would still resize once at 7,500 entries.
+
+## `ConcurrentHashMap` in brief
+
+`HashMap` isn't thread-safe: concurrent puts can lose entries, and before Java 8 a concurrent resize could even create a cycle in a chain. `ConcurrentHashMap`:
+
+- Uses the same array-of-bins design, but locks only the **single bin** being modified (and uses compare-and-swap for empty bins), so writers to different bins don't block each other.
+- Reads take no lock at all.
+- Provides atomic compound operations: `computeIfAbsent`, `merge`, `compute`. Use these instead of `get`-then-`put`, which is a race.
+
+```java
+ConcurrentHashMap<String, LongAdder> hits = new ConcurrentHashMap<>();
+hits.computeIfAbsent(path, p -> new LongAdder()).increment(); // atomic and contention-friendly
+```
+
 ## Common interview questions
 
 **Walk me through `HashMap.get`.** Compute and spread `hashCode`, mask it to a bucket index, then walk that bucket comparing stored hash first and `equals` second. Return the matching node's value or null. Expected O(1) because buckets stay short while the load factor holds.
@@ -164,3 +205,19 @@ counts.entrySet().removeIf(e -> e.getValue() == 0);
 **How would you implement an LRU cache?** `LinkedHashMap` in access-order mode with `removeEldestEntry` returning `size() > capacity`. Without it: a `HashMap` from key to a node in a hand-written doubly linked list, moving a node to the tail on access and dropping the head on eviction, all O(1).
 
 **`HashMap` vs `TreeMap` vs `LinkedHashMap` in one sentence each.** `HashMap`: O(1), no order, the default. `TreeMap`: O(log n), sorted keys, range and nearest-key queries. `LinkedHashMap`: O(1), insertion or access order, cheap LRU.
+
+## Pitfalls
+
+- Mutable keys whose `hashCode` changes after insertion.
+- `equals` overridden without `hashCode` (or vice versa).
+- Assuming iteration order, or that `new HashMap<>(n)` holds `n` entries without resizing.
+- `get`-check-`put` sequences on shared maps instead of `computeIfAbsent` or `merge`.
+- Using `Hashtable` or `Collections.synchronizedMap` where `ConcurrentHashMap` scales far better.
+
+## Key takeaways
+
+- A `HashMap` is an array of buckets; `hash & (capacity − 1)` picks the bucket, `equals` finds the key within it.
+- It resizes (doubling) when size exceeds capacity × 0.75; nodes split between two buckets by one hash bit.
+- Long chains become red-black trees, bounding worst-case lookups at `O(log n)`.
+- Keys must have consistent `equals`/`hashCode` and must not change while in the map.
+- Use `ConcurrentHashMap` and its atomic methods for shared maps.

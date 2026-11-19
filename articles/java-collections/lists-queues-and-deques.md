@@ -127,6 +127,63 @@ Need a real copy? `new ArrayList<>(xs.subList(1, 4))` or `List.copyOf(...)`. Sam
 | Random access, append, sort | `ArrayList` |
 | Both ends plus `List` API | `LinkedList`, rarely |
 
+## Worked example: `ArrayList` growth, step by step
+
+`ArrayList` stores elements in an array. When it's full, `add` allocates a bigger array (1.5 times the old capacity) and copies everything across:
+
+| Adds so far | Capacity before | Action |
+| --- | --- | --- |
+| 0 | 0 (empty array) | First add allocates capacity 10 |
+| 10 | 10 | 11th add grows to 15 and copies 10 elements |
+| 15 | 15 | 16th add grows to 22, copies 15 |
+| 22 | 22 | 23rd add grows to 33, copies 22 |
+
+Each copy is `O(n)`, but because capacity grows geometrically, the total copying over `n` adds is `O(n)`, so `add` is **amortised** `O(1)`. If you know the final size, `new ArrayList<>(expectedSize)` avoids the copies entirely.
+
+Inserting or removing in the **middle** shifts every later element: `O(n)`. Removing from the end is `O(1)`, which is why `ArrayList` works well as a stack too (though `ArrayDeque` is the idiomatic choice).
+
+## Worked example: picking structures in a coding round
+
+```java
+// BFS on a grid: FIFO queue
+Deque<int[]> queue = new ArrayDeque<>();
+queue.offer(new int[] {0, 0});
+while (!queue.isEmpty()) {
+    int[] cell = queue.poll();
+    // visit neighbours, queue.offer(...)
+}
+
+// Monotonic stack for "next greater element"
+Deque<Integer> stack = new ArrayDeque<>(); // push/pop/peek at the head
+int[] nextGreater = new int[nums.length];
+Arrays.fill(nextGreater, -1);
+for (int i = 0; i < nums.length; i++) {
+    while (!stack.isEmpty() && nums[stack.peek()] < nums[i]) {
+        nextGreater[stack.pop()] = nums[i];
+    }
+    stack.push(i);
+}
+
+// Top k largest: a min-heap of size k
+PriorityQueue<Integer> heap = new PriorityQueue<>(); // natural order = min-heap
+for (int x : nums) {
+    heap.offer(x);
+    if (heap.size() > k) heap.poll(); // drop the smallest
+}
+
+// Sliding window maximum: a deque of indices with decreasing values
+Deque<Integer> window = new ArrayDeque<>();
+```
+
+`ArrayDeque` is faster than `Stack` (synchronised, extends `Vector`) and `LinkedList` (a node allocation per element and poor cache locality). It rejects `null`, which is rarely a problem and catches bugs.
+
+## `PriorityQueue` details that trip people up
+
+- It is a binary heap in an array: `offer` and `poll` are `O(log n)`, `peek` is `O(1)`, but `remove(Object)` and `contains` are `O(n)`.
+- **Iteration order is not sorted.** Only `poll` returns elements in priority order. To print in order, poll into a list (destroying the queue) or sort a copy.
+- For a max-heap, pass `Comparator.reverseOrder()`; for objects, `Comparator.comparingInt(Task::priority)`.
+- Changing an element's priority while it's inside the queue corrupts the heap. Remove and re-add it, or add a new entry and skip stale ones when polled.
+
 ## Common interview questions
 
 **How does `ArrayList` grow?** When `add` finds the backing array full it allocates a new array 1.5x the size and copies. Each element is copied O(1) times on average, so appends are amortised O(1). Pass an initial capacity if you know the final size.
@@ -144,3 +201,19 @@ Need a real copy? `new ArrayList<>(xs.subList(1, 4))` or `List.copyOf(...)`. Sam
 **What does `subList` return?** A live view of a range of the parent list. Writes through it modify the parent; structural changes to the parent invalidate it. `subList(a, b).clear()` is the standard way to delete a range.
 
 **How do you keep the k largest elements of a stream of n?** A min-heap of capacity k: offer each element, and if the size exceeds k, poll the minimum. O(n log k) time and O(k) space, and the heap holds the answer at the end.
+
+## Pitfalls
+
+- Using `LinkedList` for random access (`get(i)` is `O(n)`).
+- Using `Stack` or `Vector` in new code.
+- Iterating a `PriorityQueue` and expecting sorted order.
+- `list.remove(1)` on a `List<Integer>` removes the element at index 1, not the value 1; use `remove(Integer.valueOf(1))`.
+- Modifying the backing list while holding a `subList` view.
+
+## Key takeaways
+
+- `ArrayList` is the default list: fast random access, amortised `O(1)` appends.
+- `ArrayDeque` is the default stack and queue.
+- `PriorityQueue` is a binary heap: `O(log n)` offer/poll, unsorted iteration.
+- `LinkedList` rarely wins in practice because of allocation and cache misses.
+- Know the views (`subList`, `Arrays.asList`) and their backing-data rules.

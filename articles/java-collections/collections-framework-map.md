@@ -120,6 +120,42 @@ for (Iterator<String> it = xs.iterator(); it.hasNext();) {
 - `List.contains`, `indexOf`, `remove(Object)` use `equals` and are O(n).
 - `List<Integer>.remove(int index)` versus `remove(Object o)`: `list.remove(1)` removes index 1; `list.remove(Integer.valueOf(1))` removes the value 1. Classic trick question.
 
+## Worked example: choosing collections for a real feature
+
+A course platform tracks enrolments. Requirements, and the collection each one points to:
+
+| Requirement | Access pattern | Choice | Why |
+| --- | --- | --- | --- |
+| Look up a student by id | Key → value, no order | `HashMap<StudentId, Student>` | `O(1)` average lookups |
+| Students enrolled in a course, no duplicates | Membership tests | `HashSet<StudentId>` per course | Fast `contains`, no duplicates |
+| Show a course's students alphabetically | Sorted iteration | `TreeSet<Student>` with a name comparator, or sort a list on demand | Sorted on insert, or sort only when displaying |
+| Recently viewed courses, newest first, max 10 | Ordered, bounded, move-to-front | `LinkedHashMap` in access order with `removeEldestEntry` | LRU behaviour built in |
+| Waitlist in arrival order | FIFO | `ArrayDeque<StudentId>` | `O(1)` add and remove at both ends |
+| Grading queue by priority | Always take the most urgent | `PriorityQueue<Submission>` | `O(log n)` insert and poll |
+| Course codes known at startup | Read-only | `Set.of(...)` / `Map.copyOf(...)` | Immutable, compact, thread-safe |
+| Leaderboard: students between scores 80 and 90 | Range queries | `TreeMap<Integer, List<Student>>` with `subMap` | Navigable, sorted keys |
+
+The method: write down the operations you need and how often, then pick the structure that makes the frequent operations cheap. Declaring fields by interface (`Map`, `Set`, `Deque`) keeps the choice easy to change.
+
+## Sequenced collections (Java 21)
+
+Java 21 added `SequencedCollection`, `SequencedSet` and `SequencedMap`, interfaces for collections with a defined encounter order. They give every ordered collection the same methods:
+
+```java
+List<String> list = new ArrayList<>(List.of("a", "b", "c"));
+list.getFirst();   // "a"  (before: list.get(0))
+list.getLast();    // "c"  (before: list.get(list.size() - 1))
+list.reversed();   // a reversed view
+
+LinkedHashMap<String, Integer> map = new LinkedHashMap<>();
+map.put("x", 1);
+map.put("y", 2);
+map.firstEntry();  // x=1
+map.pollLastEntry(); // removes and returns y=2
+```
+
+`LinkedHashSet`, `TreeSet`, `Deque` implementations and `LinkedHashMap` all implement them, which removes many small utility methods and awkward index arithmetic.
+
 ## Common interview questions
 
 **When would you choose `LinkedList` over `ArrayList`?** Almost never. Its theoretical O(1) insert at an iterator position is outweighed by per-node allocation, poor cache locality and O(n) positional access. For queue/stack behaviour use `ArrayDeque`; for middle inserts on large lists consider whether you need a different data structure altogether.
@@ -137,3 +173,19 @@ for (Iterator<String> it = xs.iterator(); it.hasNext();) {
 **What happens if you store a key in a `HashSet` and then mutate it?** Its hash no longer matches the bucket it lives in, so `contains` returns false and `remove` fails while `size()` still counts it. Keys must be effectively immutable in the fields that feed `hashCode`.
 
 **How does `TreeMap` decide two keys are equal?** Solely by `compareTo`/`Comparator` returning 0; it never calls `equals`. A comparator inconsistent with `equals` can silently merge keys.
+
+## Pitfalls
+
+- Declaring variables with implementation types (`ArrayList<String> x`) instead of interfaces.
+- Modifying a collection while iterating over it with a for-each loop (`ConcurrentModificationException`); use `removeIf` or an explicit iterator.
+- Expecting `HashMap` or `HashSet` iteration order to be stable.
+- Calling `add` on `List.of(...)` or `Arrays.asList(...)` results.
+- `null` keys or values in `Map.of`, `Set.of` and `ConcurrentHashMap` (all reject them).
+
+## Key takeaways
+
+- Pick collections by access pattern: lookup (hash), order (linked or tree), priority (heap), FIFO/LIFO (deque).
+- Program to interfaces: `List`, `Set`, `Map`, `Deque`, `Queue`.
+- `List.of` and friends are immutable and reject `null`; `Arrays.asList` is fixed-size and backed by the array.
+- For-each iteration is fail-fast: don't structurally modify during it.
+- Collections rely on correct `equals`, `hashCode` and `compareTo`.
