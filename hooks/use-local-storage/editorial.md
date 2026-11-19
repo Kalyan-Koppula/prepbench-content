@@ -6,6 +6,30 @@ Initialise state lazily with `read(key, initialValue)`, which returns the fallba
 
 A common alternative is to dispatch a synthetic `new StorageEvent('storage', { key, newValue })` on `window` after writing, so one listener handles both cases. It works in a normal page, but it fakes a browser event, and other code listening for `storage` will see it too.
 
+## Walkthrough
+
+```jsx
+const [theme, setTheme] = useLocalStorage('theme', 'light')
+setTheme('dark')
+```
+
+| Step | Effect |
+| --- | --- |
+| first render | read and `JSON.parse` the stored value; fall back to `'light'` if missing, invalid or storage is unavailable |
+| `setTheme('dark')` | update state, write `JSON.stringify('dark')` |
+| another component using the same key | notified through a module-level subscriber set, so it updates too |
+| another tab changes the key | the `storage` event updates this tab |
+
+Storage can throw (private mode, quota, sandboxed iframes), so every access is wrapped in `try`/`catch` and the hook degrades to in-memory state.
+
+## What to test
+
+- Initial value from storage, or the fallback.
+- Writes persist and serialise correctly.
+- Functional updates.
+- Corrupt JSON falls back.
+- Same-key hooks in one tab stay in sync; cross-tab via the `storage` event.
+
 ## Pitfalls
 
 - Reading storage in the component body on every render instead of in a lazy initialiser.
@@ -19,3 +43,7 @@ A common alternative is to dispatch a synthetic `new StorageEvent('storage', { k
 - Handle `key` changing (re-read the new key).
 - Make it SSR-safe (no `window` during server render) and rewrite it with `useSyncExternalStore`, whose `subscribe` is exactly the subscriber set plus the `storage` listener.
 - Add a `remove()` function, or `serialize`/`deserialize` options for `Date`, `Map`, etc.
+
+## In the interview
+
+Mention SSR (no `localStorage` on the server), not storing secrets, size limits (~5 MB), and `useSyncExternalStore` as the modern way to subscribe to an external source.

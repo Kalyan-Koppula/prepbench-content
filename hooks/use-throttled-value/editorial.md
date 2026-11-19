@@ -4,6 +4,28 @@
 
 State holds the shown value; refs hold a copy of it and the timestamp of the last time it changed (initialised at mount). An effect on `[value, interval]` returns early if `value` is already the shown one (on mount, or when the input flips back), otherwise computes `elapsed`. If `elapsed >= interval` it records the time and sets the value right away. Otherwise it schedules `setTimeout(..., interval - elapsed)` that does the same. The cleanup clears that timer, so when another value arrives during the window the old scheduled update is replaced by one carrying the newer value, still aimed at the same deadline. Unmount runs the cleanup too.
 
+## Walkthrough
+
+`useThrottledValue(scrollY, 100)` while scrolling continuously:
+
+| Time | New `value` | Since last shown | Action |
+| --- | --- | --- | --- |
+| 0 | 0 | (mount) | shown: 0 |
+| 30 | 40 | 30 ms | schedule an update at 100 |
+| 60 | 90 | 60 ms | reschedule with the latest value |
+| 100 | – | – | show 90 |
+| 130 | 150 | 30 ms | schedule at 200 |
+| 200 | – | – | show 150 |
+
+The throttled value updates at most once per interval during continuous change, and the final value always lands (trailing update).
+
+## What to test
+
+- First change after a quiet period shows immediately.
+- Continuous changes update at most once per interval.
+- The last value is eventually shown.
+- Timers are cleaned up on unmount and on changes.
+
 ## Pitfalls
 
 - Scheduling a fresh full `interval` on every change (`setTimeout(..., interval)` with cleanup) turns it into a debounce: nothing shows until the input stops.
@@ -17,3 +39,7 @@ State holds the shown value; refs hold a copy of it and the timestamp of the las
 - `useThrottledCallback(fn, interval)` with the same leading + trailing behaviour.
 - Throttle to animation frames instead of a fixed interval (`requestAnimationFrame`).
 - When would you pick throttle over debounce? (Continuous feedback such as scroll, resize, drag; versus "act once it settles", such as search.)
+
+## In the interview
+
+Contrast with the debounced value (waits for silence) and mention that scroll-linked visuals are often better served by `requestAnimationFrame`, CSS scroll-driven animations or `IntersectionObserver`.

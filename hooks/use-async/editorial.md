@@ -4,6 +4,27 @@
 
 One state object `{ status, data, error }`. Refs hold the latest `asyncFn`, a counter `latest` and a `mounted` flag. `run` (a `useCallback` with no deps) takes `id = ++latest.current`, sets `status: 'pending'` (keeping data and error), calls `fnRef.current(...args)` wrapped in `Promise.resolve` with a try/catch so a synchronous throw becomes a rejection, and in both `then` branches writes state only if `mounted.current && id === latest.current`. The rejection handler swallows the error into state, so `run` never produces an unhandled rejection.
 
+## Walkthrough
+
+```jsx
+const { status, data, error, run } = useAsync(searchUsers)
+<input onChange={(e) => run(e.target.value)} />
+```
+
+| Call | Request id | Result arrives | Applied? |
+| --- | --- | --- | --- |
+| `run('a')` | 1 | at 400 ms | no: id 2 is newer |
+| `run('ab')` | 2 | at 250 ms | yes |
+
+Each `run` increments a counter; only the latest call may update state, and nothing updates after unmount. `run` returns the promise, so callers can still `await` it.
+
+## What to test
+
+- Status transitions: idle → pending → success or error.
+- Out-of-order responses: only the latest applies.
+- No state updates after unmount.
+- The latest `asyncFn` is used (ref).
+
 ## Pitfalls
 
 - No request tagging: type "re", then "react"; if "re" responds last, the list shows results for the wrong query.
@@ -17,3 +38,7 @@ One state object `{ status, data, error }`. Refs hold the latest `asyncFn`, a co
 - Return a promise from `run` that resolves with the result, or with nothing when superseded.
 - Actually cancel the stale request with `AbortController` (see `useFetch`).
 - An `immediate` option / dependency array to run automatically, as React Query and SWR do.
+
+## In the interview
+
+Compare with `useFetch` (abort-based) and with React 19 actions (`useActionState`, `useTransition` with async functions), which now cover many "run an async thing and track its state" cases.

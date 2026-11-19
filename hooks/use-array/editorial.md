@@ -4,6 +4,25 @@
 
 `useState(initial)`, then each helper is a `useCallback(..., [])` that calls `setArray(prev => ...)`: spread for `push`, `filter` by index for `remove`, `map` for `update`, a fresh `[]` for `clear`. For an index outside `0..length-1`, return `prev` itself; React sees the same reference and skips the render.
 
+## Walkthrough
+
+```jsx
+const { array, push, remove, update } = useArray(['a'])
+push('b', 'c')     // ['a', 'b', 'c']
+update(1, 'B')     // ['a', 'B', 'c']
+remove(0)          // ['B', 'c']
+remove(9)          // unchanged: out of range returns the same array, so no re-render
+```
+
+Every operation uses the **functional** form of `setArray`, so two calls in the same event (`push('x'); push('y')`) both apply, and each creates a new array rather than mutating, so React sees the change. Wrapping the helpers in `useCallback` with empty dependencies keeps their identity stable, which lets children wrapped in `memo` skip re-rendering.
+
+## What to test
+
+- Each helper produces the expected array without mutating the old one.
+- Two pushes in one event both apply.
+- Out-of-range `remove`/`update` leave state unchanged (same reference).
+- Helper functions keep the same identity across renders.
+
 ## Pitfalls
 
 - `array.push(x); setArray(array)`: mutates state, and because the reference didn't change React may not re-render at all.
@@ -17,3 +36,7 @@
 - Add `insertAt(index, item)`, `move(from, to)` and `filter(predicate)`.
 - Why are index keys (`key={i}`) a problem for this list, and what would you use instead?
 - Implement it with `useReducer` and discuss when that's clearer.
+
+## In the interview
+
+Explain immutability (React compares by reference) and functional updates (batched calls see the latest state). These two ideas carry over to every state hook.
