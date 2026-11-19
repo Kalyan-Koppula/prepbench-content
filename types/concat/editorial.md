@@ -10,7 +10,25 @@ The `readonly unknown[]` constraints accept `as const` tuples and reject non-arr
 
 Spreading a non-tuple array produces a rest element, so `Concat<string[], [0]>` is `[...string[], 0]`. TypeScript normalises spreads, so `[...string[], ...number[]]` becomes `(string | number)[]`.
 
+## Step by step
+
+| Expression | Result |
+| --- | --- |
+| `Concat<[1], [2, 3]>` | `[1, 2, 3]` |
+| `Concat<[], []>` | `[]` |
+| `Concat<readonly ['a'], ['b']>` | `['a', 'b']` |
+
+The `readonly unknown[]` constraints accept `as const` tuples; spreading produces a mutable result tuple.
+
+## Pitfalls
+
+- Constraining to `unknown[]` only, which rejects readonly tuples.
+
 ## Follow-ups
 
 - Type a runtime `concat<A extends unknown[], B extends unknown[]>(a: [...A], b: [...B])` so the result is `[...A, ...B]`. Why does `[...A]` in the parameter make TypeScript infer a tuple instead of an array?
 - Write `Flatten` for one level of nesting (see the `FlattenTuple` challenge).
+
+## In the interview
+
+Point out the `readonly` constraint unprompted; it's the detail that separates a working answer from a complete one.

@@ -19,7 +19,27 @@ type RequiredKeys<T> = Exclude<keyof T, OptionalKeys<T>>
 
 **Why not check the value?** `undefined extends T[K]` can't tell `label?: string` from `onClose: X | undefined`; both include `undefined` when read.
 
+## Step by step
+
+`OptionalKeys<{ id: number; name?: string; email?: string }>`:
+
+| Key `K` | `Pick<T, K>` | `{} extends Pick<T, K>`? | Mapped value |
+| --- | --- | --- | --- |
+| `id` | `{ id: number }` | no: `{}` lacks `id` | `never` |
+| `name` | `{ name?: string }` | yes: `{}` satisfies it | `'name'` |
+| `email` | `{ email?: string }` | yes | `'email'` |
+
+Indexing the mapped type with `[keyof T]` collects the values: `'name' | 'email'`. `-?` ensures the mapped values aren't widened with `undefined`. `RequiredKeys` is the complement.
+
+## Pitfalls
+
+- Checking `T[K] extends undefined`, which misreads required properties whose type includes `undefined`.
+
 ## Follow-ups
 
 - Write `GetOptional<T>` that returns the object of only the optional properties.
 - How does `exactOptionalPropertyTypes` change `T[K]` for an optional key, and does this solution still work?
+
+## In the interview
+
+The `{} extends Pick<T, K>` test is the insight: an empty object satisfies a type exactly when every key in it is optional.

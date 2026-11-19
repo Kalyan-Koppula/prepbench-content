@@ -19,7 +19,29 @@ type CamelCase<S extends string> = S extends `${infer C}${infer Rest}`
 
 **The tempting shortcut.** ``S extends `${infer H}${'-' | '_'}${infer R}` `` looks shorter, but a union between two `infer`s is matched once per member and per possible split. For `'get-user_by-id'` that produces a union of ten different strings. Walking character by character avoids the ambiguity.
 
+## Step by step
+
+`CamelCase<'get-user_name'>`:
+
+| Remaining | First char | Action | Output so far |
+| --- | --- | --- | --- |
+| `get-user_name` | `g` | keep | `g` |
+| `et-user_name` … | `e`, `t` | keep | `get` |
+| `-user_name` | `-` | drop it, capitalise the rest | `get` + `CamelCase<'User_name'>` |
+| `User_name` … | `U`, `s`, `e`, `r` | keep | `getUser` |
+| `_name` | `_` | drop, capitalise | `getUserName` |
+
+Result: `'getUserName'`. `${infer C}${infer Rest}` splits off one character at a time; `Uppercase` is a built-in intrinsic type.
+
+## Pitfalls
+
+- Consecutive separators (`a--b`) and trailing separators need a decision.
+
 ## Follow-ups
 
 - Write `KebabCase<S>` (the reverse): `'backgroundColor'` → `'background-color'`. How do you detect an uppercase letter? (`C extends Lowercase<C> ? ... : ...`)
 - Write `CamelCaseKeys<T>`, which renames every key of an object with key remapping: `[K in keyof T as CamelCase<K & string>]`.
+
+## In the interview
+
+Explain single-character `infer` splitting; it's the basic move in every string-manipulation type.

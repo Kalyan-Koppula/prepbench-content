@@ -30,8 +30,27 @@ type PathValue<T, P extends Paths<T>> = Get<T, P>
 
 Putting `P extends Paths<T>` on `PathValue` and on `get` is what turns a typo into an error. It also gives editor autocomplete for the path string.
 
+## Step by step
+
+`Paths<{ user: { name: string; address: { city: string } } }>`:
+
+| Key | Child paths | Contributed |
+| --- | --- | --- |
+| `user` | `name`, `address`, `address.city` | `'user'`, `'user.name'`, `'user.address'`, `'user.address.city'` |
+
+So `get(obj, 'user.address.city')` can be typed to accept only valid paths, and a companion `PathValue<T, P>` splits the path on dots with template literal `infer` to return `string`. Arrays and functions are treated as leaves to keep the union finite.
+
+## Pitfalls
+
+- Unbounded recursion on recursive types (add a depth limit).
+- Including symbol or number keys without converting them.
+
 ## Follow-ups
 
 - Support array indices: `'items.0.name'` or `` `items.${number}.name` ``.
 - Very large or recursive types (e.g. a tree node that references itself) make `Paths` hit the instantiation depth limit. Add a depth counter that stops after, say, 5 levels.
 - Type the matching `set(obj, path, value)` so `value` must be `PathValue<T, P>`.
+
+## In the interview
+
+Show how template literal types parse strings at the type level, and mention compile-time cost: very large unions slow editors, so libraries cap depth.

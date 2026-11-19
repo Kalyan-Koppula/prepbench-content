@@ -10,7 +10,25 @@ TypeScript models a tuple like `['a', 'b']` as an array type whose `length` is t
 
 The constraint is what turns `'hello'` and `{ length: 2 }` into errors. Without it, `T['length']` would happily return `number` and `2`. `readonly unknown[]` accepts both mutable and `readonly` tuples.
 
+## Step by step
+
+| Input | `T['length']` |
+| --- | --- |
+| `['a', 'b', 'c']` (a tuple) | `3` |
+| `readonly [1, 2]` | `2` |
+| `string[]` (an array) | `number` |
+
+Tuples have a literal `length` property type; plain arrays only know `number`.
+
+## Pitfalls
+
+- Forgetting `readonly` in the constraint, which rejects `as const` tuples.
+
 ## Follow-ups
 
 - Tuple length is how type-level counting works: build a tuple of `N` elements and read its `length`. Use it to write `Add<A, B>` for small non-negative numbers.
 - Write `IsTuple<T>` that's `true` for `[1, 2]` and `false` for `number[]`. (Hint: `number extends T['length']`.)
+
+## In the interview
+
+A one-liner; the point is that tuple types carry their length as a literal. Mention that type-level arithmetic is often done by building tuples and reading `length`.

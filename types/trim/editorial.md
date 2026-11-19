@@ -15,7 +15,26 @@ Each step removes one whitespace character, and the recursion repeats until the 
 
 `Ws` is a union inside the template. That's fine here because it's a single character at a known end. A union in the *middle* of a pattern, between two `infer`s, is risky: TypeScript tries each member and you can get a union of several splits (see `CamelCase`).
 
+## Step by step
+
+`Trim<'  hi \n'>`:
+
+| Step | Matches | Remaining |
+| --- | --- | --- |
+| `TrimStart` | `' '` then `' '` | `'hi \n'` |
+| `TrimEnd` | `'\n'` then `' '` | `'hi'` |
+
+Each step peels one whitespace character with a template literal pattern and recurses until nothing matches.
+
+## Pitfalls
+
+- Forgetting tabs and newlines in the whitespace union.
+
 ## Follow-ups
 
 - Implement `Split<S, Sep>` that turns `'a,b,c'` into `['a', 'b', 'c']`.
 - Type a runtime `trim<S extends string>(s: S): Trim<S>`. Why do you need a cast in the body?
+
+## In the interview
+
+Small and clear; good for showing recursive template literal patterns from both ends.

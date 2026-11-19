@@ -17,7 +17,25 @@ Common near-misses:
 - `T extends [] ? never : T[0]`: misses `readonly []` (which isn't assignable to `[]`), and there's no index-based equivalent for `Last`; `T[T['length'] - 1]` isn't valid TypeScript, because type-level arithmetic doesn't exist.
 - Checking `T[0] extends undefined` to detect emptiness: wrong for `[undefined, 1]`.
 
+## Step by step
+
+| Input | `First` | `Last` |
+| --- | --- | --- |
+| `[1, 2, 3]` | `1` | `3` |
+| `['only']` | `'only'` | `'only'` |
+| `[]` | `never` | `never` |
+
+Variadic tuple patterns do the work: `[infer H, ...unknown[]]` captures the head, `[...unknown[], infer L]` captures the tail. Matching on patterns (instead of `T[0]`) returns `never` for empty tuples rather than `undefined`.
+
+## Pitfalls
+
+- `T[0]` gives `undefined` for `[]` and `unknown` behaviour for arrays; decide which is wanted.
+
 ## Follow-ups
 
 - Write `Pop<T>` and `Shift<T>` that return the tuple *without* its last or first element.
 - What should `First<string[]>` be, and what does each version above return for it?
+
+## In the interview
+
+Mention the alternatives (`T[0]`, `T extends [] ? never : T[0]`) and why the pattern version handles the empty case cleanly.

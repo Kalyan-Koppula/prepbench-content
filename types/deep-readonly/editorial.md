@@ -16,7 +16,29 @@ type DeepReadonly<T> = T extends (...args: any[]) => any
 
 A common near-miss is `keyof T extends never ? T : { readonly [K in keyof T]: DeepReadonly<T[K]> }`. It treats functions correctly (no keys), but a union like `{ id: string } | null` is looked at as a whole instead of member by member, so `selected` comes out wrong.
 
+## Step by step
+
+`DeepReadonly<{ user: { tags: string[] }; save: () => void }>`:
+
+| Property | Type | Branch | Result |
+| --- | --- | --- | --- |
+| `user` | object | recurse | `readonly user: { readonly tags: readonly string[] }` |
+| `tags` | array | object branch: arrays are objects | `readonly string[]` (mapped arrays stay arrays) |
+| `save` | function | kept as is | `readonly save: () => void` |
+
+Functions are excluded from recursion because mapping over a function type would lose its call signature.
+
+## Pitfalls
+
+- Recursing into functions.
+- Stopping at one level.
+- Forgetting that primitives must be returned unchanged.
+
 ## Follow-ups
 
 - What happens to `Date`, `Map` or a class instance? Add an escape hatch (e.g. a `Builtin` union that passes through unchanged).
 - Write `DeepMutable<T>` with `-readonly`.
+
+## In the interview
+
+Mention that mapped types over arrays and tuples produce arrays and tuples (homomorphic mapping), which is why one object branch handles them.

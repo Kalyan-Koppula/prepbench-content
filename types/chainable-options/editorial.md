@@ -18,8 +18,33 @@ type Chainable<T = {}> = {
 
 A common alternative builds with `Omit<T, K> & Record<K, V>` and wraps the result in a `Simplify<X> = { [P in keyof X]: X[P] }` helper. That works too; the important part is flattening before `get()`.
 
+## Step by step
+
+```ts
+declare const config: Chainable
+const result = config.option('host', 'localhost').option('port', 8080).get()
+// { host: string; port: number }
+config.option('host', 'a').option('host', 'b') // error: key already set
+```
+
+| Call | `T` before | `K` | Allowed? | `T` after |
+| --- | --- | --- | --- | --- |
+| 1 | `{}` | `'host'` | yes | `{ host: string }` |
+| 2 | `{ host: string }` | `'port'` | yes | `{ host: string; port: number }` |
+| repeat `'host'` | `{ host: string }` | `'host'` | parameter type becomes `never`: error | – |
+
+Each call returns a new `Chainable` whose `T` is extended with the new key, so `get()` knows every option. Mapping over `keyof T | K` lets a key be re-declared with a new type in variants of the challenge.
+
+## Pitfalls
+
+- Returning `Chainable<T & Record<K, V>>`, which produces intersections that are harder to read and don't allow overriding.
+
 ## Follow-ups
 
 - Allow overriding a key only when the new value type differs, or only via a separate `override(key, value)` method.
 - Make `get()` available only after a required key (say `'url'`) has been set.
 - How would you implement this builder at runtime so its JS matches these types?
+
+## In the interview
+
+This shows how builders get typed: the type parameter accumulates information across calls. Mention typed builders in real libraries (query builders, router definitions).
