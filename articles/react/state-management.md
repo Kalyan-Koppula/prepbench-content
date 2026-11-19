@@ -152,6 +152,82 @@ const selected = items.find((i) => i.id === selectedId) ?? null
 
 Signs of redundant state: an effect whose only job is to `setX` from other state; two pieces of state that must be updated together; storing a prop in state ("mirroring") and then wondering why it doesn't update.
 
+## Worked example: a product search page
+
+A page lists products with a search box, category filter, sort order, pagination, a "compare" tray the user adds products to, and a details drawer. Classifying each piece first:
+
+| Piece | Kind | Home | Why |
+| --- | --- | --- | --- |
+| Search text, category, sort, page | URL | `?q=&category=&sort=&page=` | Shareable, survives refresh, back button works |
+| Product list for those filters | Server | Query cache keyed by the filters | Fetched, cached, refetched, shared across components |
+| Search box draft while typing | Local | `useState` in the search box | Commits to the URL on submit or after a debounce |
+| Compare tray | Client, app-wide | Small store or context + reducer | Used by product cards and the tray; changes often |
+| Drawer open + selected id | URL or local | `?selected=42` if linkable, else local | Decide by whether a link should open it |
+| "N results", "no results" | Derived | Computed from the query result | Never stored separately |
+
+Nothing here needs a global store for server data, and the URL replaces what would otherwise be a filters slice. The result is less code and fewer synchronisation bugs.
+
+## Reducer plus context
+
+For moderate shared client state, `useReducer` and context cover most needs without a library:
+
+```tsx
+type CompareState = { ids: string[] }
+type CompareAction = { type: 'add'; id: string } | { type: 'remove'; id: string } | { type: 'clear' }
+
+function compareReducer(state: CompareState, action: CompareAction): CompareState {
+  switch (action.type) {
+    case 'add':
+      if (state.ids.includes(action.id) || state.ids.length >= 4) return state
+      return { ids: [...state.ids, action.id] }
+    case 'remove':
+      return { ids: state.ids.filter((id) => id !== action.id) }
+    case 'clear':
+      return { ids: [] }
+  }
+}
+
+const CompareStateContext = createContext<CompareState>({ ids: [] })
+const CompareDispatchContext = createContext<React.Dispatch<CompareAction>>(() => {})
+
+export function CompareProvider({ children }: { children: React.ReactNode }) {
+  const [state, dispatch] = useReducer(compareReducer, { ids: [] })
+  return (
+    <CompareDispatchContext value={dispatch}>
+      <CompareStateContext value={state}>{children}</CompareStateContext>
+    </CompareDispatchContext>
+  )
+}
+```
+
+Splitting state and dispatch into two contexts means components that only dispatch (an "Add to compare" button on every card) never re-render when the tray changes, because `dispatch` is stable.
+
+## Comparing the external stores
+
+| Library | Model | Strengths | Watch out for |
+| --- | --- | --- | --- |
+| Redux Toolkit | One store, reducers ("slices"), actions | Predictable, great DevTools, middleware, RTK Query for server data | More ceremony than the alternatives |
+| Zustand | A hook around a small store; select what you read | Tiny API, selectors prevent unneeded renders, no provider | Easy to grow an unstructured global bag |
+| Jotai | Atoms combined bottom-up | Fine-grained updates, derived atoms | Many tiny atoms can be hard to trace |
+| XState | Statecharts (explicit states and transitions) | Complex flows: wizards, media players, checkout | Learning curve |
+| MobX | Observable objects, automatic tracking | Little boilerplate, fine-grained | Mutable style differs from React's defaults |
+
+In an interview, the strongest answer is rarely a library name. It is the classification first, then the smallest tool that fits each class.
+
+## Normalised state
+
+When the same entity appears in several places (a user in a list, in a detail view and as a comment author), store it **once**, keyed by id, and refer to it by id elsewhere:
+
+```ts
+type State = {
+  usersById: Record<string, User>
+  postIds: string[]
+  postsById: Record<string, Post & { authorId: string }>
+}
+```
+
+Updating a user's name then updates every view, and there are no copies to fall out of sync. Server-state libraries do a version of this through their cache keys; Redux Toolkit provides `createEntityAdapter` for it.
+
 ## How to choose
 
 1. Can it be derived? Then it isn't state.
@@ -192,3 +268,12 @@ Split the context by concern and update frequency, separate setters from values,
 - Store selectors that return a new array/object each call (endless re-renders or wasted ones).
 - Server data duplicated into a client store and drifting out of date.
 - Losing filters on reload because they lived in component state instead of the URL.
+
+## Key takeaways
+
+- Classify state before choosing a tool: local, shared UI, app-wide client, server, URL, form, derived.
+- Most apps need a server-state cache and a little local state, not a global store.
+- Context passes values down; split it (or the value and dispatch) to limit re-renders.
+- Put shareable view state in the URL.
+- Derived values are computed during render, never stored.
+- Normalise entities that appear in more than one place.

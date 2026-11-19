@@ -154,6 +154,86 @@ Limits: transitions don't make slow code faster; they keep the UI responsive whi
 
 Throttle CPU (4x/6x) in DevTools to approximate mid-range phones.
 
+## Why did this re-render?
+
+A component renders when one of these happens:
+
+1. Its own state changed.
+2. Its parent rendered (unless it is wrapped in `memo` and its props are shallowly equal).
+3. A context it reads changed value.
+4. A store it subscribes to (through `useSyncExternalStore` or a library hook) reported a change to the slice it selects.
+
+React DevTools can show this directly: enable "Highlight updates when components render" and, in the Profiler settings, "Record why each component rendered".
+
+## Structural fixes before memoisation
+
+Two restructurings remove unnecessary renders without any `memo`:
+
+**Move state down.** If only one part of a big component uses a piece of state, extract that part:
+
+```tsx
+// Before: typing re-renders the whole page, including the expensive chart
+function Page() {
+  const [draft, setDraft] = useState('')
+  return (
+    <>
+      <input value={draft} onChange={(e) => setDraft(e.target.value)} />
+      <ExpensiveChart />
+    </>
+  )
+}
+
+// After: only CommentBox re-renders while typing
+function CommentBox() {
+  const [draft, setDraft] = useState('')
+  return <input value={draft} onChange={(e) => setDraft(e.target.value)} />
+}
+function Page() {
+  return (
+    <>
+      <CommentBox />
+      <ExpensiveChart />
+    </>
+  )
+}
+```
+
+**Lift content up (pass `children`).** When a wrapper must own changing state, pass the expensive part in as `children`. Elements created by the parent don't change when the wrapper re-renders:
+
+```tsx
+function ScrollTracker({ children }: { children: React.ReactNode }) {
+  const [scrollY, setScrollY] = useState(0)
+  // ... subscribe to scroll and setScrollY
+  return <div data-scrolled={scrollY > 0}>{children}</div>
+}
+
+<ScrollTracker>
+  <ExpensiveChart /> {/* created by the parent: not re-rendered on scroll */}
+</ScrollTracker>
+```
+
+## Context without re-render storms
+
+Every consumer re-renders when the provider's `value` changes identity. Three fixes, in order of effort:
+
+1. **Memoise the value** so it only changes when its contents do: `const value = useMemo(() => ({ user, logout }), [user, logout])`.
+2. **Split the context** by how often parts change: a stable "actions" context and a changing "state" context.
+3. **Use a store with selectors** for high-frequency state, so each component subscribes only to the slice it reads.
+
+## A profiling session, end to end
+
+The complaint: typing in a filter box on a table of 2,000 rows feels laggy.
+
+1. Open React DevTools → Profiler, start recording, type five characters, stop.
+2. The flame graph shows each keystroke commits in about 120 ms; `Table` and all 2,000 `Row` components rendered every time.
+3. "Why did this render?" says `Row`'s props `onSelect` and `style` changed: the parent creates a new function and a new style object per render.
+4. Fixes: wrap `Row` in `memo`, stabilise `onSelect` with `useCallback` (or let the React Compiler do it), hoist the constant style object out of the component.
+5. Re-record: rows no longer render, commits drop to about 15 ms, but filtering itself still blocks typing.
+6. Wrap the filter value in `useDeferredValue` so the input updates immediately and the table catches up; or virtualise the table so only about 30 rows exist at once.
+7. Confirm in the Chrome Performance panel that the long tasks are gone and Interaction to Next Paint is under 200 ms.
+
+The order matters: measure, remove wasted renders, make the remaining work non-urgent or smaller, then measure again.
+
 ## Other techniques worth naming
 
 - Avoid creating components or contexts inside render.
@@ -191,3 +271,11 @@ Profile a production build with the React Profiler and the Performance panel und
 - Calling `lazy()` inside a component.
 - Profiling the development build and optimising StrictMode double renders.
 - Using transitions to hide an O(n²) loop.
+
+## Key takeaways
+
+- A component renders because of its own state, its parent, a context or a store subscription; find out which before optimising.
+- Restructure first: move state down, pass expensive subtrees as `children`.
+- `memo` only helps when props are stable; `useMemo` and `useCallback` (or the React Compiler) provide that stability.
+- Virtualise long lists, split code by route, and mark heavy updates as transitions.
+- Always measure with the Profiler before and after.

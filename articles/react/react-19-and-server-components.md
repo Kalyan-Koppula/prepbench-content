@@ -180,6 +180,117 @@ export default function Page() {
 
 Hydration mismatches happen when the server and client render different output: `Date.now()`, `Math.random()`, `typeof window` branches, locale formatting, invalid HTML nesting (`<div>` in `<p>`). Fix by rendering deterministic output and moving client-only values into an effect or `useSyncExternalStore` with a server snapshot. `suppressHydrationWarning` is for single unavoidable text differences like timestamps.
 
+## End to end: a comment form with a Server Function
+
+Putting the pieces together. The server side:
+
+```tsx
+// actions.ts
+'use server'
+
+import { z } from 'zod'
+
+const CommentInput = z.object({
+  postId: z.string().uuid(),
+  body: z.string().trim().min(1).max(2000),
+})
+
+export async function addComment(prevState: { error?: string }, formData: FormData) {
+  const session = await getSession() // 1. authenticate: this is a public endpoint
+  if (!session) return { error: 'Please sign in' }
+
+  const parsed = CommentInput.safeParse({
+    postId: formData.get('postId'),
+    body: formData.get('body'),
+  }) // 2. validate: never trust FormData
+  if (!parsed.success) return { error: 'Comment must be 1–2000 characters' }
+
+  const allowed = await canComment(session.userId, parsed.data.postId) // 3. authorise
+  if (!allowed) return { error: 'Not allowed' }
+
+  await db.comment.create({ data: { ...parsed.data, authorId: session.userId } })
+  revalidatePath(`/posts/${parsed.data.postId}`) // 4. refresh cached server output
+  return {}
+}
+```
+
+The client side:
+
+```tsx
+'use client'
+
+import { useActionState, useOptimistic } from 'react'
+import { addComment } from './actions'
+
+export function CommentForm({ postId, comments }: { postId: string; comments: Comment[] }) {
+  const [state, formAction, isPending] = useActionState(addComment, {})
+  const [optimistic, addOptimistic] = useOptimistic(comments, (list, body: string) => [
+    ...list,
+    { id: 'pending', body, pending: true },
+  ])
+
+  return (
+    <>
+      <ul>
+        {optimistic.map((c) => (
+          <li key={c.id} style={{ opacity: c.pending ? 0.5 : 1 }}>
+            {c.body}
+          </li>
+        ))}
+      </ul>
+      <form
+        action={(formData) => {
+          addOptimistic(String(formData.get('body')))
+          return formAction(formData)
+        }}
+      >
+        <input type="hidden" name="postId" value={postId} />
+        <textarea name="body" required maxLength={2000} />
+        <button disabled={isPending}>{isPending ? 'Posting…' : 'Post'}</button>
+        {state.error && <p role="alert">{state.error}</p>}
+      </form>
+    </>
+  )
+}
+```
+
+What happens on submit:
+
+| Step | Where | What |
+| --- | --- | --- |
+| 1 | Client | The optimistic comment appears at half opacity; the button shows "Posting…" |
+| 2 | Network | React posts the form data to the server function's endpoint |
+| 3 | Server | Authenticate, validate, authorise, write, revalidate the post page |
+| 4 | Client | The new server output streams in with the real comment; the optimistic copy is replaced |
+| 5 | Client | On an error, the optimistic entry disappears and `state.error` is shown |
+
+Before JavaScript has loaded, the same form still submits as a normal HTML form post: progressive enhancement for free.
+
+## Securing Server Functions
+
+`'use server'` turns a function into an HTTP endpoint that anyone can call with any arguments, not only your form. Treat each one like an API route:
+
+- **Authenticate and authorise inside the function**, every time. Hiding the button doesn't protect the endpoint.
+- **Validate every argument** with a schema; `FormData` values are untrusted strings.
+- **Don't return more than needed**; return values are serialised to the client.
+- **Mark server-only modules** with `import 'server-only'` so importing them into a Client Component fails the build.
+- **Pass secrets through the server environment**, never as props to Client Components, where they become part of the payload.
+- Rely on the framework's CSRF protection (Server Functions only accept POST and check the origin), but understand it exists.
+
+## Caching and revalidation
+
+Server Components shift the question from "when do I fetch?" to "how long is this output valid?". Frameworks differ in the details, but the concepts are shared:
+
+| Concept | Meaning |
+| --- | --- |
+| Static rendering | Output generated at build time or on first request, then reused |
+| Dynamic rendering | Output generated per request (uses cookies, headers or uncached data) |
+| Time-based revalidation | Regenerate cached output after N seconds |
+| On-demand revalidation | Invalidate by path or tag after a mutation (`revalidatePath`, `revalidateTag`) |
+| Request deduplication | The same fetch in several components during one render runs once |
+
+A good default: static or cached for content that is the same for everyone, dynamic for anything personal, and on-demand revalidation after every mutation that changes cached output.
+
 ## Trade-offs
 
 Benefits:
@@ -223,3 +334,11 @@ No. They are reachable over HTTP by anyone. Validate input, check auth and autho
 - Fetching sequentially in nested Server Components (server-side waterfall); start promises early and pass them down.
 - Creating promises in Client Component render for `use`.
 - Trusting form data in a Server Function.
+
+## Key takeaways
+
+- Actions are async transitions: React tracks pending state, errors and optimistic updates for them.
+- `useActionState` keeps an action's latest result; `useOptimistic` shows the expected result until the real one arrives.
+- Server Components render on the server and send a serialised tree; Client Components are marked with `'use client'` and hydrate.
+- Server Functions are public endpoints: authenticate, authorise and validate inside each one.
+- Streaming with Suspense shows content as it becomes ready; caching and revalidation decide how fresh it is.

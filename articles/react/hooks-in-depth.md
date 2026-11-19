@@ -22,6 +22,17 @@ function Bad({ show }: { show: boolean }) {
 }
 ```
 
+### How hooks are stored
+
+For each component instance, React keeps a list of hook slots on its fiber. On the first render, each hook call appends a slot (`useState` stores the state and an update queue, `useEffect` stores the effect and its dependencies). On later renders, React walks the same list in order and hands each call the slot at the same position:
+
+```
+render 1:  useState(0) → slot 0    useEffect(…) → slot 1    useRef(null) → slot 2
+render 2:  useState    → slot 0    useEffect    → slot 1    useRef      → slot 2
+```
+
+That's the whole reason for the rules: the slot is found by position, so the sequence of calls must be identical on every render.
+
 Exception: `use(promiseOrContext)` in React 19 may be called conditionally and inside loops, because it does not allocate a persistent slot in the same way. It still must be called during render.
 
 Enforce with `eslint-plugin-react-hooks` (`rules-of-hooks` and `exhaustive-deps`; the newer recommended config also includes compiler-aligned rules).
@@ -61,6 +72,105 @@ useEffect(() => {
   return () => clearInterval(id)
 }, []) // effect events are not dependencies
 ```
+
+## `useState` in depth
+
+`setState` doesn't change the variable you're reading. It **queues** an update and schedules a re-render; the new value appears only in the next render's call to `useState`.
+
+```tsx
+function Counter() {
+  const [count, setCount] = useState(0)
+  function handleClick() {
+    setCount(count + 1)
+    setCount(count + 1)
+    setCount(count + 1)
+    console.log(count) // still 0: this render's value
+  }
+  // after the click, count is 1, not 3
+}
+```
+
+All three calls read the same `count` (0) and queue "set to 1". Functional updates queue **functions** instead, which React applies in order to the latest value:
+
+| Queued update | Input | Output |
+| --- | --- | --- |
+| `c => c + 1` | 0 | 1 |
+| `c => c + 1` | 1 | 2 |
+| `c => c + 1` | 2 | 3 |
+
+Rules of thumb:
+
+- Use the functional form whenever the next state depends on the previous one.
+- Updates inside one event (and, since React 18, inside promises and timeouts too) are **batched** into one render.
+- Setting the same value (by `Object.is`) bails out of the re-render.
+- `useState(expensive())` calls `expensive` on every render; pass a function, `useState(() => expensive())`, to run it only once.
+- State is replaced, not merged: `setUser({ ...user, name })` for objects.
+
+## `useReducer`
+
+When several pieces of state change together, or the next state depends on the previous one in non-trivial ways, a reducer puts all transitions in one pure function:
+
+```tsx
+type State = { status: 'idle' | 'loading' | 'error' | 'done'; items: Item[]; error?: string }
+type Action =
+  | { type: 'start' }
+  | { type: 'success'; items: Item[] }
+  | { type: 'failure'; error: string }
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case 'start':
+      return { ...state, status: 'loading', error: undefined }
+    case 'success':
+      return { status: 'done', items: action.items }
+    case 'failure':
+      return { ...state, status: 'error', error: action.error }
+  }
+}
+
+const [state, dispatch] = useReducer(reducer, { status: 'idle', items: [] })
+```
+
+Benefits: impossible combinations (loading **and** error) are easier to rule out, the logic is testable without rendering, and `dispatch` is stable, so passing it down never breaks memoisation.
+
+## The effect lifecycle, step by step
+
+```tsx
+useEffect(() => {
+  const connection = connect(roomId)
+  return () => connection.close()
+}, [roomId])
+```
+
+| Event | What runs |
+| --- | --- |
+| First render commits, browser paints | effect: connect to room A |
+| Re-render with the same `roomId` | nothing |
+| Re-render with `roomId` = B | cleanup from A (close), then effect for B (connect) |
+| Component unmounts | cleanup from B |
+
+Think of an effect as **synchronising** with something outside React, not as "run on mount". The cleanup undoes exactly what its own effect did, using the values of the render that created it. In development, StrictMode mounts, unmounts and mounts again to check that the cleanup really does undo the effect.
+
+### Fetching in an effect without races
+
+```tsx
+useEffect(() => {
+  const controller = new AbortController()
+  setStatus('loading')
+  fetch(`/api/users/${userId}`, { signal: controller.signal })
+    .then((r) => r.json())
+    .then((user) => {
+      setUser(user)
+      setStatus('done')
+    })
+    .catch((err) => {
+      if (err.name !== 'AbortError') setStatus('error')
+    })
+  return () => controller.abort() // a newer userId cancels the old request
+}, [userId])
+```
+
+Without the abort, switching quickly from user 1 to user 2 can show user 1's data if that response arrives last. In real apps, a data library (TanStack Query, SWR) or a framework loader handles caching, deduplication and races for you.
 
 ## `useEffect`: dependencies and cleanup
 
@@ -188,6 +298,17 @@ Effects are for synchronising with things **outside** React. Most "effect smells
 
 Rule of thumb: if the code runs *because the user did something*, it belongs in an event handler. If it runs *because the component is on screen*, it may be an effect.
 
+## Hooks for the less common cases
+
+| Hook | Use it for |
+| --- | --- |
+| `useId` | Stable unique IDs for `htmlFor`/`aria-*`, the same on server and client |
+| `useImperativeHandle` | Exposing a small imperative API (`focus()`, `scrollToItem()`) through a ref |
+| `useSyncExternalStore` | Subscribing to an external store (browser APIs, state libraries) safely under concurrent rendering |
+| `useDebugValue` | A label for a custom hook in React DevTools |
+| `useInsertionEffect` | CSS-in-JS libraries injecting styles before layout effects |
+| `useTransition`, `useDeferredValue` | Marking updates as non-urgent (see [React Performance](/read/react-performance)) |
+
 ## Common interview questions
 
 **Why can't hooks be called conditionally?**
@@ -218,3 +339,12 @@ It causes an extra render with stale values in between and duplicates the source
 - Async functions passed directly to `useEffect` (it must return a cleanup or nothing); define the async function inside.
 - Reading `ref.current` during render and expecting the UI to update when it changes.
 - Effects that call `setState` unconditionally with a new object (infinite loop).
+
+## Key takeaways
+
+- Hooks are matched to their state by call order; that's why they can't be conditional.
+- `setState` queues an update for the next render; use functional updates when the next value depends on the last.
+- `useReducer` centralises related transitions and gives you a stable `dispatch`.
+- Effects synchronise with external systems; the cleanup undoes the effect for that render's values.
+- Every function created during render sees that render's values; stale closures come from callbacks that outlive their render.
+- Prefer computing during render, event handlers, or data libraries over effects that copy or fetch data.

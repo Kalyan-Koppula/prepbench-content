@@ -6,6 +6,28 @@ summary: What makes a component render, how React turns renders into DOM updates
 
 Almost every React interview probes the render model, because every performance or "why is this stale" question reduces to it. Be able to say precisely what triggers a render, what a render is (and isn't), and how React decides what to change in the DOM.
 
+## The mental model: UI as a function of state
+
+A component is a function from props and state to a description of UI. "Rendering" means calling that function to get a new description (React elements: plain objects like `{ type: 'li', props: { children: 'Milk' } }`). React then compares the new description with the previous one and changes the DOM only where they differ.
+
+Three consequences follow, and most interview questions test one of them:
+
+1. **Rendering is not painting.** A component can render without any DOM change if its output is the same.
+2. **Rendering must be pure.** React may call your component more than once, pause it, or throw the result away (concurrent rendering, StrictMode). Side effects belong in event handlers and effects.
+3. **State belongs to a position in the tree**, not to the component function. Keep the same type at the same position and state survives; change it and state resets.
+
+## Fiber and the work loop
+
+Internally, React keeps a tree of **fibers**, one per component instance or host element. A fiber records the component type, its props, its state (the hooks list), its position (parent, child, sibling) and the effects to apply.
+
+When an update is scheduled:
+
+1. React marks the fiber that called `setState` and its ancestors as needing work.
+2. In the **render phase** it walks the tree, calling components whose props, state or context changed, and building a "work-in-progress" tree. This work is split into small units, so it can be paused for more urgent updates.
+3. In the **commit phase**, which can't be interrupted, it applies all DOM changes at once, updates refs, runs layout effects, and lets the browser paint. Passive effects (`useEffect`) run after that.
+
+Because the render phase is interruptible and the commit phase isn't, the user never sees a half-updated screen.
+
 ## What triggers a render
 
 A component renders when:
@@ -78,6 +100,72 @@ function Form() {
 | `Math.random()` / `crypto.randomUUID()` in render | Every render remounts every item: lost state, lost focus, slow. |
 
 Keys only need to be unique among siblings. They are also a deliberate reset tool: `<Profile key={userId} />` throws away all state when the user changes, which is usually better than an effect that resets state.
+
+## A render, step by step
+
+```jsx
+function App() {
+  const [query, setQuery] = useState('')
+  return (
+    <>
+      <SearchBox value={query} onChange={setQuery} />
+      <Results query={query} />
+      <Footer />
+    </>
+  )
+}
+```
+
+The user types "a":
+
+| Step | What happens |
+| --- | --- |
+| 1 | The input's change handler calls `setQuery('a')`; React queues the update on `App`'s fiber |
+| 2 | Render phase: `App` runs again with `query = 'a'` |
+| 3 | `SearchBox` and `Results` get new props, so they render |
+| 4 | `Footer` renders too: a parent re-render re-renders all children by default, even with no props |
+| 5 | React diffs the new elements against the old: only the input's value and the results list differ |
+| 6 | Commit phase: those DOM nodes are updated; `Footer`'s DOM is untouched |
+| 7 | Effects whose dependencies changed (for example in `Results`) run after paint |
+
+Step 4 surprises people. To skip `Footer`, either wrap it in `memo`, or restructure so it isn't a child of the state owner (see [React Performance](/read/react-performance)).
+
+## Reconciliation, worked: inserting at the top of a list
+
+```jsx
+<ul>
+  {items.map((item, index) => (
+    <TodoRow key={index} item={item} />
+  ))}
+</ul>
+```
+
+Each `TodoRow` has a local "editing" state. The list is `[Milk, Eggs]` and the user is editing "Eggs". Then "Bread" is inserted at the top:
+
+| Position | Key (index) | Before | After | What React does |
+| --- | --- | --- | --- | --- |
+| 0 | 0 | Milk | Bread | Same key: reuses the row, updates its props. Its state (not editing) stays. |
+| 1 | 1 | Eggs (editing) | Milk | Same key: reuses the **editing** row for Milk |
+| 2 | 2 | – | Eggs | New key: creates a fresh row |
+
+The editing state is now attached to "Milk": index keys tie state to positions, not to items. With `key={item.id}`, React matches rows by identity, moves the "Eggs" row (with its state) to position 2, and creates one new row for "Bread".
+
+## Preserving and resetting state
+
+State lives at a position in the tree, identified by the component type and its key.
+
+```jsx
+// Same position, same type: state is preserved when isAdmin flips
+{isAdmin ? <Profile role="admin" /> : <Profile role="user" />}
+
+// Different types at the same position: state resets
+{isAdmin ? <AdminProfile /> : <UserProfile />}
+
+// Force a reset when the identity changes
+<ChatThread key={contactId} contactId={contactId} />
+```
+
+The `key` trick is the clean way to reset a subtree, for example clearing a form's draft when switching to a different record, instead of an effect that copies props into state.
 
 ## Batching
 
@@ -181,3 +269,11 @@ It auto-memoises values, callbacks and JSX at build time, so manual memoisation 
 - Side effects in the render body (run more than once, run for discarded renders).
 - Random keys, or index keys on lists that reorder or filter.
 - "Fixing" StrictMode double effects with a ref guard instead of a cleanup.
+
+## Key takeaways
+
+- Rendering calls components to produce elements; committing changes the DOM. A render isn't necessarily a DOM update.
+- A state change re-renders the owner and, by default, all of its descendants.
+- The render phase is interruptible and must be pure; the commit phase is atomic.
+- Reconciliation matches elements by type and key; keys should be stable identities, not indices.
+- State belongs to a tree position: keep the type and key to preserve it, change the key to reset it.

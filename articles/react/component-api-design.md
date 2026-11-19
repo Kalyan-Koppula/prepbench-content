@@ -175,6 +175,77 @@ function composeHandlers<E>(theirs?: (e: E) => void, ours?: (e: E) => void) {
 }
 ```
 
+## Headless components and hooks
+
+A headless component provides behaviour and state (keyboard handling, focus management, ARIA wiring) and leaves all markup and styling to the caller. It is the most flexible API shape for design-system primitives: menus, comboboxes, tabs, date pickers.
+
+```tsx
+function useDisclosure(initial = false) {
+  const [open, setOpen] = useState(initial)
+  const id = useId()
+  return {
+    open,
+    toggle: () => setOpen((o) => !o),
+    close: () => setOpen(false),
+    buttonProps: { 'aria-expanded': open, 'aria-controls': id, onClick: () => setOpen((o) => !o) },
+    panelProps: { id, hidden: !open },
+  }
+}
+
+function Faq({ question, answer }: { question: string; answer: string }) {
+  const { buttonProps, panelProps } = useDisclosure()
+  return (
+    <div>
+      <button {...buttonProps}>{question}</button>
+      <div {...panelProps}>{answer}</div>
+    </div>
+  )
+}
+```
+
+The "prop getter" objects (`buttonProps`, `panelProps`) bundle the accessibility wiring so callers can't forget it, while the caller still owns the elements. Libraries such as Radix UI, React Aria and Headless UI are built this way.
+
+## Slots: `children` versus named props
+
+| Shape | Example | Good for |
+| --- | --- | --- |
+| `children` | `<Card>…</Card>` | One main content area |
+| Named element props | `<Card header={<h2 />} footer={<Actions />}>` | A few fixed regions |
+| Compound components | `<Card><Card.Header /><Card.Body /></Card>` | Many optional regions the caller arranges |
+| Render prop | `<List renderItem={(item) => …} />` | The parent must supply data per item |
+
+Prefer the simplest shape that covers real use. Compound components are powerful but add a context and a learning cost; named props are explicit and easy to type.
+
+## Naming and typing conventions
+
+- **Events** use `on` + past-tense or present verb: `onChange`, `onOpenChange`, `onSelect`. The value comes first: `onChange(value, event)`.
+- **Booleans** read as adjectives, default to `false`: `disabled`, `required`, `loading`. Avoid negatives like `notClickable`.
+- **Controlled pairs** follow `value`/`onChange`, `open`/`onOpenChange`, with `defaultValue`/`defaultOpen` for uncontrolled use.
+- **Extend native props** for wrappers around elements so callers get every attribute for free:
+
+```tsx
+type ButtonProps = React.ComponentPropsWithoutRef<'button'> & {
+  variant?: 'primary' | 'secondary' | 'danger'
+  size?: 'sm' | 'md'
+}
+
+function Button({ variant = 'primary', size = 'md', className, ...rest }: ButtonProps) {
+  return <button className={cx('btn', `btn-${variant}`, `btn-${size}`, className)} {...rest} />
+}
+```
+
+- **Variants over booleans.** `variant="danger"` scales better than `danger primary small` booleans that can conflict.
+- **Merge, don't replace**, caller-provided `className`, `style` and event handlers.
+
+## Versioning a shared component
+
+Component APIs are public contracts once other teams use them:
+
+- Add props in a backwards-compatible way, with defaults that preserve the old behaviour.
+- Deprecate before removing: log a development-only warning and document the replacement.
+- Keep visual changes behind a new variant when consumers depend on exact layout.
+- Write a story (Storybook) and a test for each documented use case, so changes that break callers are caught.
+
 ## API design checklist
 
 - Is every prop necessary? Could it be children instead?
@@ -212,3 +283,12 @@ Start with native elements, require an accessible name, generate ids with `useId
 - Hard-coded ids that collide across instances.
 - `div` with `onClick` instead of `button`.
 - Boolean prop explosions (`primary`, `secondary`, `danger` together) instead of one `variant` union.
+
+## Key takeaways
+
+- Start from how the component will be used; design the smallest API that covers real cases.
+- Support controlled and uncontrolled use with the `value`/`defaultValue`/`onChange` convention.
+- Compound components and headless hooks give flexibility; named props give explicitness.
+- Extend native element props and forward refs so wrappers behave like the elements they wrap.
+- Accessibility belongs inside the component, not in each caller.
+- Treat shared components as versioned public APIs.
