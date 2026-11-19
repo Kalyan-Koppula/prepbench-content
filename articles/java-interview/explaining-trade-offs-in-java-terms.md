@@ -139,6 +139,21 @@ Java specifics: `spring-kafka` gives `KafkaTemplate` to publish and `@KafkaListe
 
 Say: "Outbox to Kafka, keyed by aggregate id, idempotent consumers, DLT for poison messages, and a replayable topic when a second consumer shows up."
 
+## A template for any trade-off answer
+
+Strong trade-off answers follow the same four beats:
+
+1. **Context**: what the system needs (latency target, consistency needs, team skills, traffic shape).
+2. **Options**: two or three realistic choices, named concretely.
+3. **Criteria**: how they differ on what matters here (correctness, latency, complexity, cost, operability).
+4. **Decision and reversal point**: what you'd pick now, and what signal would make you change.
+
+Applied to "Should we cache product prices?":
+
+> "Prices are read on every page view, about 2,000 per second, but change a few times a day, and showing a price that's a minute old is acceptable except at checkout. Options: no cache, a local Caffeine cache per instance, or a shared Redis cache. Local caching gives the biggest latency win with no new infrastructure, but instances can disagree for up to the TTL; Redis keeps instances consistent but adds a network hop and something to operate. I'd start with a local cache with a 60-second TTL and always read the authoritative price at checkout. If we add flash sales where prices must change everywhere instantly, I'd add explicit invalidation through a message on price change, or move to Redis."
+
+The answer names numbers, rejects nothing dogmatically, and states when it would change its mind.
+
 ## Common interview questions
 
 **When would you turn on virtual threads?**
@@ -164,3 +179,11 @@ Offset when users need page numbers and tables are modest; keyset when the list 
 
 **When is Kafka the wrong answer?**
 When one service needs one consumer to do one job later: a jobs table with `select for update skip locked` is simpler, transactional with the business data, and observable with SQL. Kafka earns its operational cost with multiple consumers, replay, or high volume.
+
+## Key takeaways
+
+- Frame every trade-off as context, options, criteria, decision and reversal point.
+- Know the Java-specific levers: thread pools versus virtual threads, `@Transactional` boundaries, caching layers, idempotency keys.
+- Prefer the simplest option that meets today's requirements; say what would make you revisit it.
+- Back claims with numbers: throughput, latency, consistency windows.
+- Observability is part of every design choice: you can't trade off what you can't measure.

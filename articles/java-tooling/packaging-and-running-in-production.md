@@ -152,6 +152,61 @@ SPRING_CONFIG_IMPORT=optional:configtree:/run/secrets/     # each file under the
 | Logs | write to stdout as JSON; the platform ships them |
 | Admin processes | Flyway/Liquibase migrations on startup or a one-off job; Actuator for inspection |
 
+## Worked example: a production-ready container, end to end
+
+```dockerfile
+# Build stage
+FROM eclipse-temurin:21-jdk AS build
+WORKDIR /app
+COPY .mvn .mvn
+COPY mvnw pom.xml ./
+RUN ./mvnw -q dependency:go-offline        # cached layer: dependencies change rarely
+COPY src src
+RUN ./mvnw -q package -DskipTests && \
+    java -Djarmode=tools -jar target/app.jar extract --layers --launcher --destination extracted
+
+# Runtime stage
+FROM eclipse-temurin:21-jre
+RUN useradd --system --uid 1001 app
+USER app
+WORKDIR /app
+COPY --from=build /app/extracted/dependencies/ ./
+COPY --from=build /app/extracted/spring-boot-loader/ ./
+COPY --from=build /app/extracted/snapshot-dependencies/ ./
+COPY --from=build /app/extracted/application/ ./
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+EXPOSE 8080
+ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]
+```
+
+With matching application settings:
+
+```yaml
+server:
+  shutdown: graceful                 # finish in-flight requests on SIGTERM
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true                # /actuator/health/liveness and /readiness
+```
+
+Why each choice:
+
+| Choice | Benefit |
+| --- | --- |
+| Multi-stage build, JRE runtime image | Small image without build tools |
+| Layered extraction | Dependency layers are cached; a code change only rebuilds the small application layer |
+| Non-root user | Limits damage if the process is compromised |
+| `MaxRAMPercentage` | Heap scales with the container's memory limit |
+| `ExitOnOutOfMemoryError` | A broken JVM exits so the orchestrator restarts it, instead of limping |
+| Graceful shutdown and probes | Rolling deploys without dropped requests; traffic only reaches ready instances |
+
+Configuration and secrets come from the environment (environment variables, mounted files, a secrets manager), never from the image, so the same image runs in every environment.
+
 ## Common interview questions
 
 **Walk me through how your service goes from a commit to running in production.**
@@ -182,3 +237,11 @@ They are never in the jar or the Dockerfile; they arrive at run time via mounted
 - A readiness probe that hits the database: one DB hiccup and the whole deployment is unready at once.
 - Running Flyway on every replica's startup against a locked schema without a lock timeout. Flyway takes a lock, but ten replicas starting at once still serialise and slow deploys; consider a migration job.
 - Logging to a file inside the container. Write to stdout; files vanish with the pod.
+
+## Key takeaways
+
+- Ship a Spring Boot fat jar or layered image; build with multi-stage Dockerfiles or buildpacks.
+- Size the heap relative to the container (`MaxRAMPercentage`), not with fixed `-Xmx` guesses.
+- Expose liveness and readiness probes and enable graceful shutdown.
+- Run as non-root and keep configuration and secrets outside the image.
+- Follow 12-factor principles: one build, many environments.

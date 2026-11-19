@@ -114,6 +114,32 @@ jstat -gcutil 41234 1000       # GC utilisation every second
 
 Millions of `OrderLine` in a service that should hold a few hundred = something is caching or collecting without bound. Compare two histograms minutes apart; the class that keeps growing is the leak. For the "who holds them" answer you need a heap dump and MAT's dominator tree.
 
+## Worked example: diagnosing `NoSuchMethodError`
+
+A service starts fine but fails on the first request with:
+
+```text
+java.lang.NoSuchMethodError: 'com.fasterxml.jackson.core.JsonParser
+    com.fasterxml.jackson.databind.ObjectMapper.createParser(java.io.Reader)'
+```
+
+The code **compiled**, so the method existed at compile time. At runtime a **different version** of the library is on the classpath. Steps:
+
+1. Find which JAR the class came from at runtime: run with `-verbose:class` (or `-Xlog:class+load`) and search for `ObjectMapper`, or log `ObjectMapper.class.getProtectionDomain().getCodeSource().getLocation()`.
+2. Find why that version won: `mvn dependency:tree -Dverbose -Dincludes=com.fasterxml.jackson.core` shows every path that brings Jackson in and which version Maven's "nearest wins" rule picked.
+3. Fix it by aligning versions: import the library's BOM (`jackson-bom`) in `dependencyManagement`, or exclude the transitive dependency that drags in the old version.
+4. Prevent recurrence with the Maven Enforcer plugin's `dependencyConvergence` rule, which fails the build when versions conflict.
+
+The related errors, and what they usually mean:
+
+| Error | Typical cause |
+| --- | --- |
+| `ClassNotFoundException` | A class loaded by name (reflection, `Class.forName`) isn't on the classpath |
+| `NoClassDefFoundError` | The class was present at compile time but is missing at runtime, or its static initialiser failed earlier |
+| `NoSuchMethodError` / `NoSuchFieldError` | Version mismatch between compile time and runtime |
+| `IncompatibleClassChangeError` | A class changed between versions (class became interface, static became instance) |
+| `UnsupportedClassVersionError` | Compiled for a newer Java than the runtime (class file version 69 = Java 25) |
+
 ## Common interview questions
 
 **What is the difference between the JDK, JRE and JVM?**
@@ -143,3 +169,11 @@ HotSpot interprets bytecode first and compiles hot methods to native code as it 
 - Reading `RUNNABLE` as "busy": a thread blocked in a socket read is also `RUNNABLE`.
 - Shading a library that has `META-INF/services` files without a transformer: service loading silently picks one provider.
 - Compiling with a newer JDK than production without `--release`; it works locally and dies with `UnsupportedClassVersionError` on deploy.
+
+## Key takeaways
+
+- `javac` compiles to bytecode; `java` runs it on the JVM using a classpath (or module path).
+- Classes are loaded lazily through delegating class loaders.
+- Most runtime linkage errors are version conflicts: inspect with `dependency:tree`, fix with BOMs and exclusions.
+- Know the JDK tools: `jcmd`, `jstack`, `jmap`, `jfr`, `jdeps`, `jlink`.
+- Match the compile target (`--release`) to the runtime version.

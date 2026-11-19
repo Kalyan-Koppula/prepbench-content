@@ -222,6 +222,21 @@ Trade-offs to volunteer before they are asked:
 - No caching: reads are owner-scoped and cheap; the first cache I'd add is Caffeine on tag counts with eviction on write, not Redis.
 - What I'd change next: an outbox and an event when a bookmark is created, a rate limit on login, and OpenAPI generation for the contract.
 
+## Extending the capstone under questioning
+
+Interviewers often take a finished project and ask "what would you change if…". Prepared answers for this service:
+
+| Question | Answer outline |
+| --- | --- |
+| Ten times more traffic? | Measure first; add read caching for popular bookmarks (Caffeine locally, Redis shared), database indexes on `(user_id, created_at)`, connection pool tuning, horizontal scaling behind a load balancer since the service is stateless |
+| Users want full-text search? | Start with PostgreSQL full-text search (`tsvector` column with a GIN index); move to OpenSearch only when ranking or scale demands it |
+| Import 50,000 bookmarks at once? | Accept the file, return `202 Accepted` with a job id, process asynchronously in batches, expose job status; idempotency key so retries don't double-import |
+| Tags should be shared across users? | Normalise tags into their own table with a join table; unique constraint on the tag name |
+| Prevent duplicate bookmarks? | Unique constraint on `(user_id, normalised_url)`; map the constraint violation to `409 Conflict` |
+| Audit who changed what? | Domain events on create/update/delete written to an outbox table in the same transaction, published to a log or message broker |
+
+Answering in this shape (what to measure, the simplest change, and when you'd go further) shows judgement rather than a list of technologies.
+
 ## Common interview questions
 
 **Why Spring Boot for this?**
@@ -252,3 +267,11 @@ The persistence context. Coming from client-side state, the idea that a managed 
 - A README without curl examples; the hiring manager may actually run it.
 - Secrets in `application.yml` in the public repo.
 - Not being able to explain one line in your own `SecurityConfig`.
+
+## Key takeaways
+
+- Build the capstone in vertical slices: domain, persistence, API, then tests at each level.
+- Be able to reproduce the core code (entity, repository, service, controller, exception handler) from memory.
+- Test with unit tests, slice tests (`@WebMvcTest`, `@DataJpaTest`) and one integration test with Testcontainers.
+- Narrate design decisions: validation, error format, pagination, transactions.
+- Prepare "what if" answers about scale, search, imports and auditing.

@@ -174,6 +174,41 @@ for (int i = 0; i < n; i++) a[i] = Integer.parseInt(st.nextToken());
 
 Runtime traps: integer division truncates (`7 / 2 == 3`), `%` of a negative is negative, `Integer.MAX_VALUE + 1` wraps (use `long` for sums and products), `s.charAt(i) == "a"` compares a char to a String (compile error), `array[i]` out of bounds throws instead of returning `undefined`, and `/` by zero on ints throws while on doubles gives `Infinity`.
 
+## Worked example: "Group anagrams" in idiomatic Java
+
+```java
+import java.util.*;
+
+class Solution {
+    public List<List<String>> groupAnagrams(String[] words) {
+        Map<String, List<String>> groups = new HashMap<>();
+        for (String word : words) {
+            char[] chars = word.toCharArray();
+            Arrays.sort(chars);
+            String key = new String(chars); // anagrams share the same sorted letters
+            groups.computeIfAbsent(key, k -> new ArrayList<>()).add(word);
+        }
+        return new ArrayList<>(groups.values());
+    }
+}
+```
+
+Idioms on display:
+
+- `computeIfAbsent` replaces the "get, check for null, put a new list" dance.
+- `char[]` plus `Arrays.sort` plus `new String(chars)` is the standard way to build a canonical key.
+- Returning `new ArrayList<>(groups.values())` converts the map's view into an independent list of the required type.
+
+For only lowercase letters, a counting key avoids the sort (`O(L)` instead of `O(L log L)` per word):
+
+```java
+int[] counts = new int[26];
+for (char c : word.toCharArray()) counts[c - 'a']++;
+String key = Arrays.toString(counts); // e.g. "[1, 0, 0, …]"
+```
+
+Mention both, state the complexity of each, and pick based on the constraints.
+
 ## Common interview questions
 
 **Why use `StringBuilder` instead of string concatenation?**
@@ -204,3 +239,11 @@ Local type inference since Java 10; the variable still has a fixed static type. 
 - `for (int i = 0; i < s.length(); i++)` recomputes nothing expensive, but `s.substring` in the loop allocates each time.
 - Forgetting that `HashMap` iteration order is not insertion order when the problem says "in the order they appear".
 - Modifying a collection while iterating it (`ConcurrentModificationException`); use `removeIf` or an iterator.
+
+## Key takeaways
+
+- Know the fast setups: `HashMap` with `getOrDefault`/`merge`/`computeIfAbsent`, `ArrayDeque`, `PriorityQueue` with comparators.
+- Convert between arrays, lists and strings fluently (`toCharArray`, `Arrays.sort`, `String.valueOf`, `List.of`).
+- Use records as tuples and `Integer.compare` in comparators.
+- Prefer clear loops when control flow matters; streams for simple transformations.
+- Watch for `int` overflow, integer division and `char` arithmetic.

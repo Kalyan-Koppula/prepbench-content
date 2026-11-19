@@ -212,6 +212,57 @@ Gradle (Kotlin DSL) is the other build you'll meet, especially at Android-heavy 
 
 Gradle is a program, Maven is a declaration. Gradle is faster and more flexible; Maven is more predictable and easier to read in a code review. Say that and move on.
 
+## Worked example: a multi-module build
+
+A service split into modules:
+
+```
+shop/
+├── pom.xml            (parent: packaging pom, dependencyManagement, plugin versions)
+├── shop-domain/       (pure Java: entities, value objects, no Spring)
+├── shop-persistence/  (Spring Data repositories; depends on shop-domain)
+└── shop-api/          (Spring Boot app, REST controllers; depends on both)
+```
+
+The parent's key parts:
+
+```xml
+<modules>
+  <module>shop-domain</module>
+  <module>shop-persistence</module>
+  <module>shop-api</module>
+</modules>
+
+<dependencyManagement>
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-dependencies</artifactId>
+      <version>${spring-boot.version}</version>
+      <type>pom</type>
+      <scope>import</scope>  <!-- the BOM: one place for library versions -->
+    </dependency>
+    <dependency>
+      <groupId>com.example</groupId>
+      <artifactId>shop-domain</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+  </dependencies>
+</dependencyManagement>
+```
+
+Commands worth knowing:
+
+| Command | Effect |
+| --- | --- |
+| `mvn -pl shop-api -am verify` | Build `shop-api` and the modules it depends on (`-am`), run tests |
+| `mvn -T 1C install` | Parallel build, one thread per core |
+| `mvn dependency:tree -pl shop-api` | Resolved dependencies for one module |
+| `mvn versions:display-dependency-updates` | Available library upgrades |
+| `./mvnw …` | The Maven wrapper: everyone uses the same Maven version |
+
+Modules enforce architecture: `shop-domain` can't accidentally import Spring or JPA if it doesn't depend on them, which the compiler checks for free.
+
 ## Common interview questions
 
 **Two libraries you use both depend on different versions of Jackson. Which one does Maven pick?**
@@ -245,3 +296,11 @@ Gradle picks the highest requested version of a conflicting dependency and suppo
 - Running `mvn test` and wondering why `*IT` classes didn't run. They're failsafe's, bound to `verify`.
 - Putting Lombok at `compile` scope without `optional`: consumers of your library now depend on Lombok.
 - Hunting a "missing class at runtime" bug in code when it's a `provided`-scope dependency that was never packaged.
+
+## Key takeaways
+
+- Maven is declarative: coordinates, dependencies with scopes, and plugins bound to lifecycle phases.
+- `mvn verify` runs compile, test, package and integration checks in order.
+- Manage versions centrally with `dependencyManagement` and BOMs; nearest-wins decides conflicts otherwise.
+- Use modules to enforce boundaries and `-pl`/`-am` to build parts quickly.
+- Commit the Maven wrapper for reproducible builds.

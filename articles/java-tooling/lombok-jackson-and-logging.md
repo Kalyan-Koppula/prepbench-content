@@ -180,6 +180,47 @@ public Order(Customer customer, List<Line> lines) {
 
 Null-safety annotations: Spring 7 / Boot 4 adopt JSpecify (`@NullMarked` packages, `@Nullable`); in Boot 3 you'll see `org.springframework.lang.Nullable` or Jakarta's. Return `Optional` from finders, never pass it as a parameter, and never return `null` collections.
 
+## Worked example: a request DTO from JSON to validated object
+
+```java
+public record CreateUserRequest(
+    @NotBlank @Email String email,
+    @NotBlank @Size(max = 100) String name,
+    @JsonProperty("date_of_birth") @Past LocalDate dateOfBirth,
+    @NotNull Role role) {}
+
+@PostMapping("/users")
+ResponseEntity<UserResponse> create(@Valid @RequestBody CreateUserRequest request) {
+    log.info("Creating user role={}", request.role()); // parameterised, no PII like the email
+    User user = users.create(request);
+    return ResponseEntity.status(HttpStatus.CREATED).body(UserResponse.from(user));
+}
+```
+
+The request travels through three tools:
+
+1. **Jackson** reads `{"email": "...", "name": "...", "date_of_birth": "1990-05-01", "role": "ADMIN"}` into the record (records are supported natively; `@JsonProperty` maps the snake-case field; the JavaTimeModule, registered by Spring Boot, parses the `LocalDate`). Unknown properties are ignored by Spring Boot's default configuration; an invalid enum value becomes a 400 error.
+2. **Bean Validation** (`@Valid`) checks the constraints and, on failure, Spring returns a 400 with the field errors before your code runs.
+3. **Logging** through SLF4J records the event with placeholders, which avoid building strings when the level is disabled and keep personal data out of logs.
+
+A record replaces the Lombok `@Data` class this would once have been. Lombok remains useful for builders on large classes and for `@Slf4j`, but records cover most DTOs without an annotation processor.
+
+## Structured logging in production
+
+Plain-text logs are hard to query. Most production setups log JSON with consistent fields, plus a correlation id per request:
+
+```java
+try (var ignored = MDC.putCloseable("requestId", requestId)) {
+    log.info("Order placed orderId={} amount={}", order.id(), order.amount());
+}
+```
+
+```json
+{"ts":"2025-03-01T10:15:30Z","level":"INFO","logger":"OrderService","msg":"Order placed orderId=42 amount=19.99","requestId":"a1b2c3"}
+```
+
+The MDC (mapped diagnostic context) attaches the request id to every log line in that thread, so one request can be followed across services when the id is passed in a header. Spring Boot 3.4+ supports structured JSON logging with a single property, and tracing (Micrometer Tracing) adds trace and span ids automatically.
+
 ## Common interview questions
 
 **Why do people say not to use `@Data` on JPA entities?**
@@ -210,3 +251,11 @@ At the edge for shape (Bean Validation on request DTOs, giving 400s) and inside 
 - Forgetting `MDC.clear()` in a filter's `finally`: the next request on that pooled thread logs the previous request's id.
 - `@JsonFormat` with a timezone on `Instant`; keep wire timestamps in UTC ISO-8601 and let clients format.
 - `fail-on-unknown-properties: true` on a public API: every client upgrade becomes a 400 outage.
+
+## Key takeaways
+
+- Prefer records for DTOs; use Lombok selectively (builders, `@Slf4j`), never `@Data` on JPA entities.
+- Configure Jackson once (Spring Boot does sensible defaults); map names with annotations, not manual parsing.
+- Validate at the boundary with Bean Validation and `@Valid`.
+- Log with SLF4J placeholders, at the right level, without secrets or personal data.
+- Use structured JSON logs and correlation ids in production.

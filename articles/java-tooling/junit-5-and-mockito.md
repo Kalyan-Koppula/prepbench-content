@@ -197,6 +197,66 @@ Interviewers ask "what makes a test flaky and how do you fix it?" because flakin
 
 The model answer: unit-test domain logic exhaustively with no Spring; test the web layer with `@WebMvcTest` and the persistence layer with `@DataJpaTest` + Testcontainers; keep one or two `@SpringBootTest` happy-path tests to prove wiring; push journeys to a thin E2E suite. If a unit test needs five mocks, the class has too many collaborators — that's a design signal, not a mocking problem. Mention contract tests (Pact, Spring Cloud Contract) if the role is microservices-heavy.
 
+## Worked example: testing a service with a mocked dependency
+
+```java
+class TransferService {
+    private final AccountRepository accounts;
+    private final Clock clock;
+
+    TransferService(AccountRepository accounts, Clock clock) {
+        this.accounts = accounts;
+        this.clock = clock;
+    }
+
+    Transfer transfer(long fromId, long toId, BigDecimal amount) {
+        Account from = accounts.findById(fromId).orElseThrow(() -> new NotFoundException("account " + fromId));
+        Account to = accounts.findById(toId).orElseThrow(() -> new NotFoundException("account " + toId));
+        if (from.balance().compareTo(amount) < 0) throw new InsufficientFundsException(fromId);
+        accounts.save(from.withBalance(from.balance().subtract(amount)));
+        accounts.save(to.withBalance(to.balance().add(amount)));
+        return new Transfer(fromId, toId, amount, Instant.now(clock));
+    }
+}
+
+@ExtendWith(MockitoExtension.class)
+class TransferServiceTest {
+    @Mock AccountRepository accounts;
+    Clock clock = Clock.fixed(Instant.parse("2025-01-01T00:00:00Z"), ZoneOffset.UTC);
+    TransferService service;
+
+    @BeforeEach
+    void setUp() { service = new TransferService(accounts, clock); }
+
+    @Test
+    void movesMoneyBetweenAccounts() {
+        when(accounts.findById(1L)).thenReturn(Optional.of(new Account(1L, new BigDecimal("100"))));
+        when(accounts.findById(2L)).thenReturn(Optional.of(new Account(2L, new BigDecimal("5"))));
+
+        Transfer t = service.transfer(1L, 2L, new BigDecimal("30"));
+
+        ArgumentCaptor<Account> saved = ArgumentCaptor.forClass(Account.class);
+        verify(accounts, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues())
+            .extracting(Account::balance)
+            .containsExactly(new BigDecimal("70"), new BigDecimal("35"));
+        assertThat(t.at()).isEqualTo(Instant.parse("2025-01-01T00:00:00Z"));
+    }
+
+    @Test
+    void rejectsInsufficientFunds() {
+        when(accounts.findById(1L)).thenReturn(Optional.of(new Account(1L, new BigDecimal("10"))));
+        when(accounts.findById(2L)).thenReturn(Optional.of(new Account(2L, BigDecimal.ZERO)));
+
+        assertThatThrownBy(() -> service.transfer(1L, 2L, new BigDecimal("30")))
+            .isInstanceOf(InsufficientFundsException.class);
+        verify(accounts, never()).save(any());
+    }
+}
+```
+
+What makes these tests good: constructor injection makes the service trivially testable; the `Clock` is injected so time is deterministic; each test checks one behaviour with arrange, act, assert; `ArgumentCaptor` checks what was saved rather than how many internal calls happened; and the failure test verifies that **nothing** was saved. With `MockitoExtension`'s strict stubs, an unused `when(...)` fails the test, which keeps stubbing honest.
+
 ## Common interview questions
 
 **Why does JUnit create a new test class instance per method?**
@@ -230,3 +290,11 @@ Unit-test the body synchronously by calling it directly. For the async wiring, u
 - Asserting with `==` on `Integer` or `String`; use `equals`-based assertions.
 - Stubbing `repo.findById(1L)` while the code calls `findById(1)`: `int` autoboxes to `Integer`, which doesn't equal `Long`; stub never matches.
 - Expecting `@BeforeEach` state to survive across tests, or `@AfterAll` to be non-static.
+
+## Key takeaways
+
+- JUnit 5 structures tests with `@Test`, lifecycle hooks, `@Nested`, `@DisplayName` and parameterised tests.
+- AssertJ gives fluent, readable assertions with good failure messages.
+- Mock only what you own at boundaries; inject collaborators and clocks through constructors.
+- Verify outcomes and important interactions, not every internal call.
+- Fix flaky tests at the cause: time, order, shared state, concurrency.

@@ -112,6 +112,19 @@ Tick each when you can answer it out loud in under a minute without notes.
 - Set up the coding environment you will use (IDE, `jshell`, a `Main.java` template) and run it once.
 - Sleep. The Java rounds reward recall, and recall is the first thing fatigue removes.
 
+## Answering "Tell me about a system you built"
+
+This question appears in almost every backend loop, and most candidates ramble. A reliable structure takes about three minutes:
+
+1. **The problem, in one sentence, with a number.** "Our checkout service timed out at peak, losing about 2% of orders."
+2. **Your role.** "I led the backend changes with one other engineer."
+3. **The design, at the level of boxes.** "Synchronous calls to inventory, pricing and payments in sequence. We parallelised inventory and pricing, made payment calls idempotent with keys, and moved confirmation emails to a queue."
+4. **One deep decision.** "The hardest part was retries: without idempotency keys, a retried payment could charge twice, so we stored keys with the payment result in the same transaction."
+5. **Result, with a number.** "p99 latency went from 2.4 s to 600 ms and timeout-related order loss dropped to near zero."
+6. **What you'd do differently.** "I'd add load tests to CI earlier; we found the bottleneck in production."
+
+Prepare two or three such stories in advance, each highlighting a different skill (performance, reliability, data modelling, collaboration). Interviewers will interrupt with "why" questions; the deep decision in step 4 is where you want them to dig.
+
 ## Common interview questions
 
 **Why move from frontend to backend?**
@@ -128,3 +141,11 @@ Thinking in threads instead of an event loop: every blocking call holds a thread
 
 **How do you learn a new stack quickly?**
 Build something real with tests, read one good source end to end instead of ten tutorials, keep a list of things I could not explain, and get my code reviewed by someone who knows the idioms.
+
+## Key takeaways
+
+- Know the loop: coding, Java and Spring fundamentals, system design, and behavioural rounds.
+- Prepare on a schedule: fundamentals, then Spring and data, then design and mock interviews.
+- Frame a frontend-to-backend move around transferable strengths: APIs, performance, testing, user impact.
+- Rehearse two or three project stories with numbers and one deep technical decision each.
+- In the final week, review notes and mistakes logs rather than learning new topics.
