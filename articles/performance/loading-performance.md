@@ -149,6 +149,51 @@ Hydration is the hidden cost of SSR: the page looks ready but isn't interactive 
 
 Often the largest single cost. Audit each one; load with `async`/`defer` or after interaction; self-host where licensing allows; use facades (a static thumbnail instead of a YouTube iframe until clicked); move to a Web Worker (Partytown-style) where feasible.
 
+## Setting a performance budget
+
+A budget turns "make it fast" into a rule that a build can check:
+
+| Budget | Example limit | Enforced by |
+| --- | --- | --- |
+| JavaScript per route (compressed) | 170 KB | Bundler size checks (size-limit, bundlesize) in CI |
+| LCP on a mid-range phone, 4G | 2.5 s | Lighthouse CI against preview deploys |
+| Number of third-party origins | 5 | Code review, a CSP allowlist |
+| Image weight above the fold | 200 KB | Image CDN settings, linting |
+
+Budgets matter because performance usually regresses one small dependency at a time. A failing CI check at the moment someone adds a 90 KB date library is far cheaper than a later audit.
+
+## Worked example: auditing a slow route
+
+A dashboard's first load takes 6 seconds on a mid-range phone. The steps:
+
+1. **Lighthouse and the Performance panel** (with CPU and network throttling) show 1.4 MB of JavaScript and a 2.3 s long task during hydration.
+2. **Bundle analysis** (`vite-bundle-visualizer`, `webpack-bundle-analyzer`, or source-map-explorer) shows a charting library (400 KB), a full icon set (250 KB) and moment.js with all locales (230 KB).
+3. **Fixes**:
+   - Load the chart with dynamic `import()` when the chart section scrolls into view.
+   - Import icons individually so tree shaking can drop the rest.
+   - Replace moment with `Intl.DateTimeFormat` or a small library.
+   - Split the route so the settings panel's code isn't in the dashboard bundle.
+4. **Result**: 380 KB of JavaScript on first load, the hydration long task under 300 ms, and the page interactive in about 2 seconds.
+
+The lesson: the biggest wins usually come from **not shipping** code, before any micro-optimisation.
+
+## Priorities and the network
+
+Browsers assign each request a priority. HTML, CSS in the head and synchronous scripts are highest; images start low and are raised when they turn out to be in the viewport; `async` and `defer` scripts are lower. You can influence this:
+
+```html
+<img src="/hero.avif" fetchpriority="high" alt="…" />          <!-- the LCP image -->
+<img src="/carousel-2.avif" fetchpriority="low" alt="…" />     <!-- not visible yet -->
+<link rel="preload" href="/fonts/inter.woff2" as="font" type="font/woff2" crossorigin />
+<script src="/analytics.js" defer fetchpriority="low"></script>
+```
+
+Use priority hints sparingly: if everything is high priority, nothing is. `preload` everything that the HTML can't reveal early (fonts in CSS, the LCP image in JavaScript-rendered markup), and nothing else.
+
+## The 103 Early Hints response
+
+While the server is still generating the HTML (querying the database, rendering), it can send an informational `103 Early Hints` response with `Link: </app.css>; rel=preload; as=style` headers. The browser starts downloading critical resources during the server's think time, which directly reduces LCP on dynamically rendered pages. CDNs can generate these hints automatically from previous responses.
+
 ## Common interview questions
 
 **`defer` vs `async`?**
@@ -176,3 +221,11 @@ WOFF2, subset, preload the critical file, `font-display: swap` or `optional`, an
 - Lazy loading above-the-fold images.
 - One giant vendor chunk invalidated by any dependency bump.
 - SSR with a huge hydration bundle: fast paint, slow interactivity.
+
+## Key takeaways
+
+- Shorten the critical path: small HTML, critical CSS early, deferred scripts.
+- Ship less JavaScript: split by route and interaction, tree-shake, replace heavy dependencies.
+- Images and fonts are usually the heaviest bytes: modern formats, correct sizes, `fetchpriority` for the LCP image, `font-display`.
+- Choose rendering strategies (SSR, SSG, streaming) by how dynamic the content is.
+- Cache fingerprinted assets forever; set budgets and enforce them in CI.

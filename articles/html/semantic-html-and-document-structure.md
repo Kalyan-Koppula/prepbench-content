@@ -159,6 +159,90 @@ Headings are the main navigation tool for screen reader users: many list heading
 - Never lazy-load the LCP image; give it `fetchpriority="high"` instead.
 - `<video>` needs `controls` (or custom accessible controls), `<track kind="captions">` for speech, and `muted playsinline` for autoplay on mobile.
 
+## Worked example: from div soup to semantic markup
+
+Before:
+
+```html
+<div class="header">
+  <div class="logo" onclick="goHome()">Acme</div>
+  <div class="menu">
+    <div class="item" onclick="go('/docs')">Docs</div>
+    <div class="item" onclick="go('/pricing')">Pricing</div>
+  </div>
+</div>
+<div class="content">
+  <div class="title">Pricing</div>
+  <div class="card">
+    <div class="card-title">Pro</div>
+    <div class="btn" onclick="buy()">Buy</div>
+  </div>
+</div>
+```
+
+After:
+
+```html
+<header>
+  <a href="/" class="logo">Acme</a>
+  <nav aria-label="Main">
+    <ul>
+      <li><a href="/docs">Docs</a></li>
+      <li><a href="/pricing" aria-current="page">Pricing</a></li>
+    </ul>
+  </nav>
+</header>
+<main>
+  <h1>Pricing</h1>
+  <article class="card">
+    <h2>Pro</h2>
+    <button type="button">Buy</button>
+  </article>
+</main>
+```
+
+What changed, and what it gives users for free:
+
+| Change | Benefit |
+| --- | --- |
+| `div` with `onclick` → `<a href>` | Keyboard focus, Enter to activate, open in new tab, right-click menu, crawlable links |
+| `div.btn` → `<button>` | Focusable, Space and Enter activate it, announced as a button |
+| `header`, `nav`, `main` | Landmarks screen-reader users can jump between |
+| `div.title` → `h1`, `h2` | A heading outline for navigation and SEO |
+| List of links in `ul` | "List, 2 items" tells users how many choices there are |
+| `aria-current="page"` | Announces which link is the current page |
+
+None of this needs extra JavaScript or CSS; the browser and assistive technology provide it.
+
+## Choosing between `<a>` and `<button>`
+
+| If clicking it… | Use |
+| --- | --- |
+| Goes to another URL (a page, a section, a file) | `<a href>` |
+| Does something on the current page (opens, submits, toggles, deletes) | `<button>` |
+
+A link that looks like a button is fine; a `button` that navigates, or an `a` without `href` used as a button, breaks expectations for keyboard and screen-reader users (and loses "open in new tab").
+
+## Structured data and metadata
+
+Search engines and social platforms read metadata beyond the visible page:
+
+```html
+<link rel="canonical" href="https://example.com/pricing" />
+<meta property="og:title" content="Pricing — Acme" />
+<meta property="og:image" content="https://example.com/og/pricing.png" />
+<script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "Acme Pro",
+    "offers": { "@type": "Offer", "price": "29.00", "priceCurrency": "USD" }
+  }
+</script>
+```
+
+The canonical URL prevents duplicate-content issues across query strings; Open Graph tags shape link previews; JSON-LD structured data can enable rich search results.
+
 ## What interviewers check
 
 - Buttons are `<button>`, links are `<a href>`, and the two aren't swapped.
@@ -193,3 +277,12 @@ Not required by the spec, but one `h1` naming the page is the widely recommended
 
 **Why do social preview tags need server rendering?**
 Link-preview crawlers usually fetch the HTML and don't run JavaScript. Tags injected client-side are never seen, so the preview falls back to defaults.
+
+## Key takeaways
+
+- Start every page from a valid skeleton: `lang`, charset, viewport, title.
+- Landmarks (`header`, `nav`, `main`, `footer`) and one logical heading outline make pages navigable.
+- Use the element that matches the meaning: links navigate, buttons act, lists list.
+- Native `<dialog>`, `<details>` and form controls bring keyboard and screen-reader support for free.
+- Images need `alt` (empty for decoration), dimensions and lazy loading below the fold.
+- Metadata and structured data shape search results and link previews.

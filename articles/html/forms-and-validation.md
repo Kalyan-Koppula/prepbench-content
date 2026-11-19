@@ -158,6 +158,96 @@ The default `type="submit"` is the classic bug: a "Show password" or "Add row" b
 
 Start with a form that works as plain HTML posting to a server endpoint, then enhance: client validation messages, inline async checks, optimistic UI. React 19 fits this model: `<form action={fn}>` accepts a function, `useActionState` tracks the result and pending state, and `useFormStatus` reads the parent form's pending state from a child button. With server actions, the form can submit before hydration finishes.
 
+## Worked example: a signup form, end to end
+
+```html
+<form id="signup" action="/signup" method="post" novalidate>
+  <div class="field">
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" autocomplete="email" required
+           aria-describedby="email-error" />
+    <p id="email-error" class="error" hidden></p>
+  </div>
+
+  <div class="field">
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="new-password"
+           required minlength="12" aria-describedby="password-hint password-error" />
+    <p id="password-hint">At least 12 characters.</p>
+    <p id="password-error" class="error" hidden></p>
+  </div>
+
+  <fieldset>
+    <legend>Plan</legend>
+    <label><input type="radio" name="plan" value="free" checked /> Free</label>
+    <label><input type="radio" name="plan" value="pro" /> Pro</label>
+  </fieldset>
+
+  <button type="submit">Create account</button>
+</form>
+```
+
+Each choice is deliberate:
+
+- `action` and `method` mean the form works without JavaScript; `novalidate` turns off the browser's bubbles only because the script below shows its own messages, using the **same** constraints.
+- `autocomplete` values let password managers and autofill work, and `new-password` triggers strong-password suggestions.
+- `aria-describedby` links the hint and error text so screen readers read them with the field.
+- Radio buttons share a `name` and sit in a `fieldset` whose `legend` names the group.
+
+The script reuses native validation instead of re-implementing it:
+
+```js
+const form = document.querySelector('#signup')
+
+function showError(input) {
+  const error = document.getElementById(`${input.id}-error`)
+  if (input.validity.valid) {
+    error.hidden = true
+    input.removeAttribute('aria-invalid')
+    return
+  }
+  if (input.validity.valueMissing) error.textContent = 'This field is required.'
+  else if (input.validity.typeMismatch) error.textContent = 'Enter an email like name@example.com.'
+  else if (input.validity.tooShort) error.textContent = `Use at least ${input.minLength} characters.`
+  error.hidden = false
+  input.setAttribute('aria-invalid', 'true')
+}
+
+form.addEventListener('blur', (event) => {
+  if (event.target.matches('input')) showError(event.target)
+}, true) // capture, because blur doesn't bubble
+
+form.addEventListener('submit', async (event) => {
+  const invalid = [...form.elements].filter((el) => el.willValidate && !el.checkValidity())
+  invalid.forEach(showError)
+  if (invalid.length > 0) {
+    event.preventDefault()
+    invalid[0].focus() // take the user to the first problem
+    return
+  }
+  event.preventDefault()
+  const response = await fetch(form.action, { method: 'POST', body: new FormData(form) })
+  if (!response.ok) {
+    const { field, message } = await response.json() // e.g. "email already registered"
+    const input = form.elements.namedItem(field)
+    input.setCustomValidity(message)
+    showError(input)
+    input.addEventListener('input', () => input.setCustomValidity(''), { once: true })
+  }
+})
+```
+
+Validation timing matters for usability: validate a field when the user **leaves** it (not on every keystroke while they're still typing), re-validate on input once an error is showing, and validate everything on submit. Server-side validation is always required; client-side validation is a convenience.
+
+## Forms in React
+
+The same principles apply in React. Two styles exist:
+
+- **Uncontrolled with `FormData`**: inputs keep their own state; read everything on submit. Less code and fewer re-renders, and it works with React 19 form actions.
+- **Controlled**: each input's value lives in state. Needed for live formatting, dependent fields, or instant validation as the user types.
+
+Form libraries (React Hook Form, Conform) combine uncontrolled inputs with schema validation (Zod) so the same rules run on the client and the server.
+
 ## Common accessibility failures in forms
 
 - Inputs with only a placeholder or a visually adjacent `div` as the "label".
@@ -191,3 +281,12 @@ Every successful control with a `name`: enabled inputs, checked checkboxes and r
 
 **What does progressive enhancement mean for a form?**
 The form works with plain HTML and a server endpoint, and JavaScript improves the experience rather than being required. It protects against failed script loads and slow hydration, and it usually produces better semantics.
+
+## Key takeaways
+
+- Every input needs a programmatic label; group related controls with `fieldset` and `legend`.
+- Pick the right `type`, `autocomplete` and `inputmode`; they shape keyboards and autofill.
+- Native constraints (`required`, `minlength`, `pattern`, `type`) plus the Constraint Validation API cover most validation.
+- Show errors next to fields, link them with `aria-describedby`, mark fields `aria-invalid`, and move focus to the first error on submit.
+- Forms should work without JavaScript; enhance with `fetch` and `FormData`.
+- Always validate again on the server.

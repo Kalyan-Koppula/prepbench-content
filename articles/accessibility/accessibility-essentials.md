@@ -217,6 +217,68 @@ The region must **exist in the DOM before** content changes; inserting a region 
 - Respect `prefers-reduced-motion`; avoid flashing content.
 - Target size at least 24×24 CSS px (WCAG 2.2 AA).
 
+## Worked example: making a custom dropdown accessible
+
+A design calls for a styled "Sort by" dropdown, built from `div`s. An audit finds: it can't be reached with Tab, opens only on mouse click, the screen reader announces "clickable, Newest", and the open list traps nothing and announces nothing.
+
+First question: **does it need to be custom?** A native `<select>` is accessible by default and can now be styled extensively (including `appearance: base-select` where supported). If a native control fits, use it.
+
+If it must be custom, it's a **listbox** pattern (or a menu-button, if the items are actions):
+
+```html
+<label id="sort-label">Sort by</label>
+<button id="sort-button" aria-haspopup="listbox" aria-expanded="false"
+        aria-labelledby="sort-label sort-button">Newest</button>
+<ul id="sort-list" role="listbox" aria-labelledby="sort-label" tabindex="-1" hidden>
+  <li id="opt-newest" role="option" aria-selected="true">Newest</li>
+  <li id="opt-price" role="option" aria-selected="false">Price: low to high</li>
+  <li id="opt-rating" role="option" aria-selected="false">Rating</li>
+</ul>
+```
+
+Behaviour to implement:
+
+| Key or action | Expected behaviour |
+| --- | --- |
+| Enter, Space or ↓ on the button | Open the list, focus it, highlight the selected option |
+| ↑ / ↓ | Move the active option (`aria-activedescendant` on the list points at it) |
+| Home / End | First / last option |
+| Typing letters | Jump to the next option starting with those letters |
+| Enter | Select the active option, close, return focus to the button, update its text |
+| Escape | Close without changing, return focus to the button |
+| Tab | Close and move on normally |
+| Click outside | Close |
+
+Then verify: tab to it, operate it with only the keyboard, listen with a screen reader (VoiceOver, NVDA) and check that the name, role, state ("collapsed", "expanded") and selected value are announced. This amount of work for one widget is the best argument for native elements and well-tested component libraries.
+
+## The WCAG principles in practice
+
+WCAG organises its success criteria under four principles, POUR:
+
+| Principle | Meaning | Typical checks |
+| --- | --- | --- |
+| Perceivable | Users can perceive the content | Text alternatives, captions, contrast (4.5:1 for body text), no information by colour alone |
+| Operable | Users can operate the interface | Everything works with a keyboard, visible focus, no keyboard traps, enough time, targets at least 24×24 px |
+| Understandable | Users can understand content and behaviour | Labels and instructions, predictable navigation, helpful error messages, page language set |
+| Robust | Works with assistive technologies | Valid semantics, correct names, roles and states for custom widgets |
+
+Most teams target WCAG 2.2 level AA, which is also what most accessibility laws reference.
+
+## Accessibility in a single-page app
+
+Client-side routing breaks two things the browser normally does on navigation: it announces the new page and resets focus. Restore both:
+
+```js
+function onRouteChange(title) {
+  document.title = `${title} — Acme`
+  const heading = document.querySelector('main h1')
+  heading.setAttribute('tabindex', '-1') // focusable by script, not by Tab
+  heading.focus() // screen readers announce the new page's heading
+}
+```
+
+Other SPA concerns: announce async results ("12 results loaded") through a polite live region, keep focus stable when content re-renders, and make loading states perceivable (`aria-busy` on the region, not just a spinner).
+
 ## Testing
 
 1. **Automated**: axe-core (browser extension, `@axe-core/playwright`, `jest-axe`), Lighthouse. Catches roughly a third of issues: missing alt/labels, contrast, invalid ARIA.
@@ -255,3 +317,12 @@ No. They catch a minority of issues. Keyboard and screen reader testing are requ
 - Live region added at the same moment as its message.
 - Icon buttons with no accessible name.
 - Modal that doesn't return focus to its trigger.
+
+## Key takeaways
+
+- Native HTML elements carry roles, names, states and keyboard behaviour; use them first.
+- Every control needs an accessible name; check it in the accessibility tree.
+- ARIA changes what is announced, not how things behave; custom widgets need keyboard support you write yourself.
+- Manage focus deliberately: dialogs, route changes and deleted content.
+- Announce dynamic updates with live regions; never rely on colour alone.
+- Test with the keyboard, a screen reader and automated tools; automation finds only part of the problems.

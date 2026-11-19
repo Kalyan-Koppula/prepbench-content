@@ -144,6 +144,78 @@ onCLS(send)
 4. Fix, then verify in lab, then confirm in field data over the following weeks.
 5. Add budgets (Lighthouse CI, bundle size checks) to stop regressions.
 
+## Worked example: fixing a slow LCP
+
+A product page has an LCP of 4.1 s at the 75th percentile on mobile (target: 2.5 s). The LCP element is the hero image. Break the time into its four parts using the field data breakdown (or the Performance panel's LCP phases):
+
+| Phase | Measured | What it means |
+| --- | --- | --- |
+| Time to first byte | 0.9 s | Server and network until the HTML starts arriving |
+| Resource load delay | 1.6 s | From TTFB until the browser **starts** fetching the image |
+| Resource load duration | 1.2 s | Downloading the image |
+| Element render delay | 0.4 s | From download until it is painted |
+
+The biggest phase is the **load delay**: the image isn't discovered until JavaScript renders the carousel. Fixes, in order of impact:
+
+1. Render the first slide in the server HTML as a real `<img>`, so the preload scanner finds it immediately (or add `<link rel="preload" as="image" fetchpriority="high">`).
+2. Add `fetchpriority="high"` to that image and remove `loading="lazy"` from it (lazy loading the LCP image is a common self-inflicted delay).
+3. Serve a correctly sized AVIF or WebP via `srcset`/`sizes`: the download drops from 1.2 s to about 0.4 s.
+4. Cache the HTML at the CDN edge to bring TTFB down.
+
+After the changes: TTFB 0.5 s, load delay 0.1 s, load duration 0.4 s, render delay 0.2 s, for an LCP of about 1.2 s.
+
+## Worked example: fixing a poor INP
+
+Typing in a filter box on an orders page feels sluggish; INP is 480 ms. A Performance panel recording of one keystroke shows:
+
+| Part | Time | Cause |
+| --- | --- | --- |
+| Input delay | 120 ms | An analytics script's long task was running when the key was pressed |
+| Processing time | 290 ms | The `input` handler filters 5,000 orders and re-renders the whole table |
+| Presentation delay | 70 ms | Style and layout for thousands of table rows |
+
+Fixes:
+
+- **Input delay**: defer the analytics script, and break its work into chunks that yield.
+- **Processing**: update the input immediately and treat the filtering as non-urgent (`useDeferredValue` or `startTransition` in React; otherwise debounce and yield). Memoise the filtering.
+- **Presentation**: virtualise the table so only visible rows exist; use `content-visibility: auto` for off-screen sections.
+
+The keystroke now paints in under 100 ms, and the table follows a moment later.
+
+## Worked example: removing layout shifts
+
+A news article has a CLS of 0.27. The Layout Shift Regions overlay and the Performance panel's "Layout shifts" track show three culprits:
+
+1. An ad slot that grows from 0 to 250px tall when the ad loads. Fix: reserve the space with `min-height: 250px` on the slot (and show a placeholder if no ad fills it).
+2. Images without dimensions. Fix: add `width` and `height` attributes (the browser derives the aspect ratio) or CSS `aspect-ratio`.
+3. A web font swap that changes line heights. Fix: `font-display: optional` or a fallback font adjusted with `size-adjust` and `ascent-override` so both fonts take the same space.
+
+Shifts within 500 ms of a user's input don't count, so expanding an accordion on click is fine; content that moves on its own is what CLS measures.
+
+## Measuring in the field
+
+```js
+import { onLCP, onINP, onCLS } from 'web-vitals/attribution'
+
+function send(metric) {
+  const body = JSON.stringify({
+    name: metric.name,
+    value: metric.value,
+    rating: metric.rating, // 'good' | 'needs-improvement' | 'poor'
+    id: metric.id,
+    page: location.pathname,
+    attribution: metric.attribution, // e.g. the LCP element, the slow interaction's target
+  })
+  navigator.sendBeacon('/analytics/vitals', body)
+}
+
+onLCP(send)
+onINP(send)
+onCLS(send)
+```
+
+The attribution build tells you **which** element or interaction caused a poor score, which is what turns a dashboard number into a fix. Aggregate at the 75th percentile, split by page type and device class.
+
 ## SPAs and soft navigations
 
 Core Web Vitals are measured per **page load**. In a single-page app, client-side route changes don't start a new LCP, while CLS and INP accumulate across the whole session on one URL. A sluggish SPA therefore shows up mostly as bad INP. Chrome has been experimenting with soft navigation measurement, but don't rely on it in interviews as standard.
@@ -175,3 +247,11 @@ It reflects the experience of most users, including slower devices, while being 
 - Optimising Lighthouse score only, ignoring field data.
 - Treating TBT as INP; it's a lab proxy, not the same metric.
 - Animating layout properties and blaming the framework for CLS.
+
+## Key takeaways
+
+- LCP (loading), INP (responsiveness) and CLS (visual stability) are judged at the 75th percentile of real users.
+- Break LCP into TTFB, load delay, load duration and render delay; fix the biggest part first.
+- INP is input delay plus processing plus presentation; keep handlers short and yield to the browser.
+- CLS comes from content without reserved space: images, ads, embeds and fonts.
+- Lab tools find causes; field data (with attribution) tells you what users actually experience.
