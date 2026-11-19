@@ -1,26 +1,64 @@
 function nextPermutation(nums: number[]): void {
-  // Enumerate every distinct ordering, sort them, and pick the successor.
-  const perms = new Set<string>()
-  const used = new Array(nums.length).fill(false)
-  const cur: number[] = []
-  const go = () => {
-    if (cur.length === nums.length) return void perms.add(cur.join(','))
-    for (let i = 0; i < nums.length; i++) {
-      if (used[i]) continue
-      used[i] = true
-      cur.push(nums[i])
-      go()
-      cur.pop()
-      used[i] = false
+  const n = nums.length
+  const current = nums.slice()
+  const sorted = nums.slice()
+  sorted.sort((a, b) => a - b)
+
+  // Generate every distinct ordering in lexicographic order by always trying
+  // the smaller unused value first. The ordering produced right after the
+  // current one is the answer.
+  const used = new Array(n).fill(false)
+  const built: number[] = []
+  let seenCurrent = false
+  let answer: number[] = []
+
+  function sameAsCurrent(): boolean {
+    for (let i = 0; i < n; i++) {
+      if (built[i] !== current[i]) {
+        return false
+      }
     }
+    return true
   }
-  go()
-  const cmp = (a: number[], b: number[]) => {
-    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i]
-    return 0
+
+  // Returns true once the answer has been found, to stop the search.
+  function generate(): boolean {
+    if (built.length === n) {
+      if (seenCurrent) {
+        answer = built.slice()
+        return true
+      }
+      if (sameAsCurrent()) {
+        seenCurrent = true
+      }
+      return false
+    }
+    for (let i = 0; i < n; i++) {
+      if (used[i]) {
+        continue
+      }
+      // Equal values in the same slot give the same ordering; use only the first unused copy.
+      if (i > 0 && sorted[i] === sorted[i - 1] && !used[i - 1]) {
+        continue
+      }
+      used[i] = true
+      built.push(sorted[i])
+      const done = generate()
+      built.pop()
+      used[i] = false
+      if (done) {
+        return true
+      }
+    }
+    return false
   }
-  const all = [...perms].map((p) => p.split(',').map(Number)).sort(cmp)
-  const idx = all.findIndex((p) => cmp(p, nums) === 0)
-  const next = all[(idx + 1) % all.length]
-  for (let i = 0; i < nums.length; i++) nums[i] = next[i]
+
+  generate()
+  if (answer.length === 0) {
+    // The current ordering was the last one, so wrap to the first (ascending).
+    answer = sorted
+  }
+  for (let i = 0; i < n; i++) {
+    nums[i] = answer[i]
+  }
 }

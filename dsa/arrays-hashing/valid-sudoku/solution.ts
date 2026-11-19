@@ -1,17 +1,28 @@
 function isValidSudoku(board: string[][]): boolean {
-  const rows = Array.from({ length: 9 }, () => new Set<string>())
-  const cols = Array.from({ length: 9 }, () => new Set<string>())
-  const boxes = Array.from({ length: 9 }, () => new Set<string>())
+  // seenRow[r][d] is true once digit d has appeared in row r (same for columns and boxes).
+  const seenRow: boolean[][] = []
+  const seenCol: boolean[][] = []
+  const seenBox: boolean[][] = []
+  for (let i = 0; i < 9; i++) {
+    seenRow.push(new Array(10).fill(false))
+    seenCol.push(new Array(10).fill(false))
+    seenBox.push(new Array(10).fill(false))
+  }
 
   for (let r = 0; r < 9; r++) {
     for (let c = 0; c < 9; c++) {
-      const d = board[r][c]
-      if (d === '.') continue
+      if (board[r][c] === '.') {
+        continue
+      }
+      const d = board[r][c].charCodeAt(0) - 48 // '1'..'9' -> 1..9
+      // Boxes are numbered 0..8, left to right, top to bottom.
       const b = Math.floor(r / 3) * 3 + Math.floor(c / 3)
-      if (rows[r].has(d) || cols[c].has(d) || boxes[b].has(d)) return false
-      rows[r].add(d)
-      cols[c].add(d)
-      boxes[b].add(d)
+      if (seenRow[r][d] || seenCol[c][d] || seenBox[b][d]) {
+        return false
+      }
+      seenRow[r][d] = true
+      seenCol[c][d] = true
+      seenBox[b][d] = true
     }
   }
   return true

@@ -1,15 +1,34 @@
 function nextPermutation(nums: number[]): void {
-  const reverse = (from: number) => {
-    for (let l = from, r = nums.length - 1; l < r; l++, r--) [nums[l], nums[r]] = [nums[r], nums[l]]
+  const n = nums.length
+
+  // The pivot is the rightmost i with nums[i] < nums[i + 1].
+  // Everything after it is non-increasing, so that suffix cannot grow by itself.
+  let pivot = n - 2
+  while (pivot >= 0 && nums[pivot] >= nums[pivot + 1]) {
+    pivot--
   }
 
-  let i = nums.length - 2
-  while (i >= 0 && nums[i] >= nums[i + 1]) i--
-  if (i >= 0) {
-    // smallest value to the right that is still larger than nums[i]
-    let j = nums.length - 1
-    while (nums[j] <= nums[i]) j--
-    ;[nums[i], nums[j]] = [nums[j], nums[i]]
+  if (pivot >= 0) {
+    // The suffix is non-increasing, so the first value from the right that beats
+    // the pivot is the smallest such value (and the rightmost copy of it).
+    let swapWith = n - 1
+    while (nums[swapWith] <= nums[pivot]) {
+      swapWith--
+    }
+    const temp = nums[pivot]
+    nums[pivot] = nums[swapWith]
+    nums[swapWith] = temp
   }
-  reverse(i + 1) // suffix is non-increasing; reversing makes it ascending
+
+  // The suffix is still non-increasing; reversing it makes it the smallest arrangement.
+  // With no pivot this reverses the whole array, which wraps to ascending order.
+  let left = pivot + 1
+  let right = n - 1
+  while (left < right) {
+    const temp = nums[left]
+    nums[left] = nums[right]
+    nums[right] = temp
+    left++
+    right--
+  }
 }

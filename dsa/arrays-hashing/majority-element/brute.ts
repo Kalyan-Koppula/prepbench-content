@@ -1,8 +1,14 @@
 function majorityElement(nums: number[]): number {
-  for (const x of nums) {
-    let c = 0
-    for (const y of nums) if (y === x) c++
-    if (c > nums.length / 2) return x
+  for (let i = 0; i < nums.length; i++) {
+    let count = 0
+    for (let j = 0; j < nums.length; j++) {
+      if (nums[j] === nums[i]) {
+        count++
+      }
+    }
+    if (count > Math.floor(nums.length / 2)) {
+      return nums[i]
+    }
   }
-  return -1
+  return -1 // unreachable: a majority always exists
 }
