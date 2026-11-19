@@ -1,55 +1,113 @@
+class LfuNode {
+  key: number
+  value: number
+  count: number
+  prev: LfuNode | null
+  next: LfuNode | null
+
+  constructor(key: number, value: number) {
+    this.key = key
+    this.value = value
+    this.count = 1
+    this.prev = null
+    this.next = null
+  }
+}
+
+// Doubly linked list with sentinels; oldest node right after head.
+class NodeList {
+  head: LfuNode
+  tail: LfuNode
+  size: number
+
+  constructor() {
+    this.head = new LfuNode(0, 0)
+    this.tail = new LfuNode(0, 0)
+    this.head.next = this.tail
+    this.tail.prev = this.head
+    this.size = 0
+  }
+
+  addToEnd(node: LfuNode): void {
+    const last = this.tail.prev as LfuNode
+    last.next = node
+    node.prev = last
+    node.next = this.tail
+    this.tail.prev = node
+    this.size++
+  }
+
+  remove(node: LfuNode): void {
+    const before = node.prev as LfuNode
+    const after = node.next as LfuNode
+    before.next = after
+    after.prev = before
+    this.size--
+  }
+
+  oldest(): LfuNode {
+    return this.head.next as LfuNode
+  }
+}
+
 class LFUCache {
   capacity: number
-  values = new Map<number, number>()
-  freq = new Map<number, number>()
-  // count -> keys with that count, oldest first (Set keeps insertion order)
-  buckets = new Map<number, Set<number>>()
-  minFreq = 0
+  nodes: Map<number, LfuNode> // key -> node
+  lists: Map<number, NodeList> // use count -> nodes with that count, by recency
+  minCount: number
 
   constructor(capacity: number) {
     this.capacity = capacity
+    this.nodes = new Map()
+    this.lists = new Map()
+    this.minCount = 0
+  }
+
+  listFor(count: number): NodeList {
+    let list = this.lists.get(count)
+    if (list === undefined) {
+      list = new NodeList()
+      this.lists.set(count, list)
+    }
+    return list
+  }
+
+  // Move a node from its count's list to the next count's list.
+  touch(node: LfuNode): void {
+    const list = this.listFor(node.count)
+    list.remove(node)
+    if (list.size === 0 && this.minCount === node.count) {
+      this.minCount = node.count + 1
+    }
+    node.count++
+    this.listFor(node.count).addToEnd(node)
   }
 
   get(key: number): number {
-    if (!this.values.has(key)) return -1
-    this.touch(key)
-    return this.values.get(key)!
+    const node = this.nodes.get(key)
+    if (node === undefined) {
+      return -1
+    }
+    this.touch(node)
+    return node.value
   }
 
   put(key: number, value: number): void {
-    if (this.values.has(key)) {
-      this.values.set(key, value)
-      this.touch(key)
+    const existing = this.nodes.get(key)
+    if (existing !== undefined) {
+      existing.value = value
+      this.touch(existing)
       return
     }
-    if (this.values.size >= this.capacity) {
-      const bucket = this.buckets.get(this.minFreq)!
-      const victim = bucket.values().next().value!
-      bucket.delete(victim)
-      if (bucket.size === 0) this.buckets.delete(this.minFreq)
-      this.values.delete(victim)
-      this.freq.delete(victim)
+    if (this.nodes.size >= this.capacity) {
+      // Least frequent, and among those the least recently used.
+      const victim = this.listFor(this.minCount).oldest()
+      this.listFor(this.minCount).remove(victim)
+      this.nodes.delete(victim.key)
     }
-    this.values.set(key, value)
-    this.freq.set(key, 1)
-    this.addToBucket(1, key)
-    this.minFreq = 1
-  }
-
-  touch(key: number): void {
-    const f = this.freq.get(key)!
-    const bucket = this.buckets.get(f)!
-    bucket.delete(key)
-    if (bucket.size === 0) {
-      this.buckets.delete(f)
-      if (this.minFreq === f) this.minFreq = f + 1
-    }
-    this.freq.set(key, f + 1)
-    this.addToBucket(f + 1, key)
-  }
-
-  addToBucket(f: number, key: number): void {
-    if (!this.buckets.has(f)) this.buckets.set(f, new Set())
-    this.buckets.get(f)!.add(key)
+    const node = new LfuNode(key, value)
+    this.nodes.set(key, node)
+    this.listFor(1).addToEnd(node)
+    this.minCount = 1 // a brand-new key always has the lowest count
   }
 }

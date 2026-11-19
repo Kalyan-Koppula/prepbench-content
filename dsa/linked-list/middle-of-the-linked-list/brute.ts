@@ -1,5 +1,16 @@
 function middleNode(head: ListNode | null): ListNode | null {
-  const nodes: ListNode[] = []
-  for (let cur = head; cur; cur = cur.next) nodes.push(cur)
-  return nodes[Math.floor(nodes.length / 2)]
+  // Count the nodes, then walk to index floor(count / 2).
+  let count = 0
+  let current = head
+  while (current !== null) {
+    count++
+    current = current.next
+  }
+  current = head
+  for (let i = 0; i < Math.floor(count / 2); i++) {
+    if (current !== null) {
+      current = current.next
+    }
+  }
+  return current
 }

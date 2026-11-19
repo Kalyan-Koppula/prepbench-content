@@ -1,5 +1,19 @@
 function isPalindrome(head: ListNode | null): boolean {
+  // Copy the values to an array and compare from both ends. O(n) extra space.
   const values: number[] = []
-  for (let cur = head; cur; cur = cur.next) values.push(cur.val)
-  return values.join(',') === [...values].reverse().join(',')
+  let current = head
+  while (current !== null) {
+    values.push(current.val)
+    current = current.next
+  }
+  let i = 0
+  let j = values.length - 1
+  while (i < j) {
+    if (values[i] !== values[j]) {
+      return false
+    }
+    i++
+    j--
+  }
+  return true
 }

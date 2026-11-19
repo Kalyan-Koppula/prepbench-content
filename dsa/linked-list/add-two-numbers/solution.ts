@@ -1,14 +1,23 @@
 function addTwoNumbers(l1: ListNode | null, l2: ListNode | null): ListNode | null {
-  const dummy = new ListNode()
+  const dummy = new ListNode(0)
   let tail = dummy
+  let a = l1
+  let b = l2
   let carry = 0
-  while (l1 || l2 || carry) {
-    const sum = (l1?.val ?? 0) + (l2?.val ?? 0) + carry
+  // Digits are stored ones-first, so add from the heads like column addition.
+  while (a !== null || b !== null || carry !== 0) {
+    let sum = carry
+    if (a !== null) {
+      sum += a.val
+      a = a.next
+    }
+    if (b !== null) {
+      sum += b.val
+      b = b.next
+    }
     tail.next = new ListNode(sum % 10)
     tail = tail.next
     carry = Math.floor(sum / 10)
-    l1 = l1?.next ?? null
-    l2 = l2?.next ?? null
   }
   return dummy.next
 }

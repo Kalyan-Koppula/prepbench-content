@@ -1,30 +1,39 @@
-function sortList(head: ListNode | null): ListNode | null {
-  if (!head || !head.next) return head
+function mergeSorted(a: ListNode | null, b: ListNode | null): ListNode | null {
+  const dummy = new ListNode(0)
+  let tail = dummy
+  let x = a
+  let y = b
+  while (x !== null && y !== null) {
+    if (x.val <= y.val) {
+      tail.next = x
+      x = x.next
+    } else {
+      tail.next = y
+      y = y.next
+    }
+    tail = tail.next
+  }
+  if (x !== null) {
+    tail.next = x
+  } else {
+    tail.next = y
+  }
+  return dummy.next
+}
 
-  // Cut after the first middle so a two-node list splits into 1 + 1
-  let slow = head
-  let fast = head
-  while (fast.next && fast.next.next) {
-    slow = slow.next!
+function sortList(head: ListNode | null): ListNode | null {
+  if (head === null || head.next === null) {
+    return head
+  }
+  // Split after the first middle, so a two-node list becomes 1 + 1.
+  let slow: ListNode = head
+  let fast: ListNode = head
+  while (fast.next !== null && fast.next.next !== null) {
+    slow = slow.next as ListNode
     fast = fast.next.next
   }
   const right = slow.next
   slow.next = null
-
-  let a = sortList(head)
-  let b = sortList(right)
-  const dummy = new ListNode()
-  let tail = dummy
-  while (a && b) {
-    if (a.val <= b.val) {
-      tail.next = a
-      a = a.next
-    } else {
-      tail.next = b
-      b = b.next
-    }
-    tail = tail.next
-  }
-  tail.next = a ?? b
-  return dummy.next
+  // Sort each half, then merge them.
+  return mergeSorted(sortList(head), sortList(right))
 }

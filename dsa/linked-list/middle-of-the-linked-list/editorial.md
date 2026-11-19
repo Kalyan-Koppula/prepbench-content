@@ -1,23 +1,60 @@
-**Key insight:** a fast pointer moving two steps for every one step of a slow pointer covers the list twice as fast — when it falls off the end, the slow pointer is halfway.
+**Key idea:** move a `fast` pointer two steps for every one step of a `slow` pointer. When `fast` reaches the end, `slow` has gone exactly half as far: it is at the middle.
 
-## Approach
+## Recognising the pattern
 
-1. `slow = fast = head`.
-2. While `fast` and `fast.next` both exist: `slow = slow.next`, `fast = fast.next.next`.
+You don't know the length, and a list can't be indexed. "Find a position relative to the length in one pass" is the fast/slow pointer technique from the [Linked List](/problems/patterns/linked-list) sheet. The same two pointers detect cycles and split lists in half for merge sort.
+
+## Brute force
+
+Count the nodes in one pass, then walk `floor(count / 2)` steps from the head in a second pass. That is the reference brute force below.
+
+Correct and `O(n)` time, `O(1)` space, but it reads the list twice. (Storing all nodes in an array and indexing the middle is one pass but `O(n)` space.)
+
+## Optimal: fast and slow pointers
+
+1. `slow = head`, `fast = head`.
+2. While `fast` and `fast.next` are not null:
+   1. `slow = slow.next`.
+   2. `fast = fast.next.next`.
 3. Return `slow`.
 
-With the loop condition `fast && fast.next`, an even-length list stops with `slow` on the **second** middle. For the first middle (needed when splitting a list in half, e.g. Sort List), loop while `fast.next && fast.next.next` instead.
+After `k` iterations, `slow` is at index `k` and `fast` at index `2k`. The loop stops when `fast` is at the last node (odd length) or just past it (even length). For a list of length `n`, that happens after `floor(n / 2)` steps, so `slow` ends at index `floor(n / 2)`, which is the second middle for even lengths, as required.
+
+**Which middle?** The loop condition decides it. To get the **first** middle for even lengths, which you need when splitting a list into halves, stop one step earlier: loop while `fast.next` and `fast.next.next` are not null.
+
+## Walkthrough
+
+`1 → 2 → 3 → 4 → 5 → 6`
+
+| step | slow | fast |
+| --- | --- | --- |
+| start | 1 | 1 |
+| 1 | 2 | 3 |
+| 2 | 3 | 5 |
+| 3 | 4 | null (past 6) |
+
+`fast` is null, so return `slow = 4`, the second of the two middles (3 and 4). For `1 → 2 → 3 → 4 → 5`, `fast` stops on 5 after two steps and `slow` is on 3.
 
 ## Complexity
 
-- Time `O(n)`, space `O(1)`.
+- Count then walk: time `O(n)`, space `O(1)`, two passes.
+- Array of nodes: time `O(n)`, space `O(n)`.
+- Fast and slow: time `O(n)`, one pass. Space `O(1)`.
 
-## Alternatives to mention
+## Edge cases
 
-- Two passes: count `n`, then walk `⌊n / 2⌋` steps. Same complexity; the one-pass version is the expected answer.
-- Copy nodes into an array and index the middle: `O(n)` extra space.
+- One node: the loop doesn't run, and that node is the middle.
+- Two nodes: one step, returning the second node.
 
-## Pitfalls
+## Common mistakes
 
-- Checking only `fast.next` and then reading `fast.next.next` on a `null` fast.
-- Mixing up which middle the problem wants — state your choice and the loop condition that gives it.
+- Checking only `fast !== null` and then reading `fast.next.next` when `fast.next` is null.
+- Returning the first middle when the problem wants the second, or the other way round.
+
+## In the interview
+
+- Explain the 2:1 speed argument and how the loop condition picks the first or second middle.
+- Likely follow-ups:
+  - *Detect a cycle?* The same pointers: if `fast` ever meets `slow`, there is a cycle (Linked List Cycle).
+  - *Delete the middle node?* Track the node before `slow` and unlink `slow`.
+  - *Split for merge sort?* Use the first-middle condition, then cut after `slow`.

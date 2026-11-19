@@ -1,13 +1,32 @@
 function reverseKGroup(head: ListNode | null, k: number): ListNode | null {
-  const values: number[] = []
-  for (let cur = head; cur; cur = cur.next) values.push(cur.val)
-  const out: number[] = []
-  for (let i = 0; i < values.length; i += k) {
-    const chunk = values.slice(i, i + k)
-    out.push(...(chunk.length === k ? chunk.reverse() : chunk))
+  // Collect the nodes, reverse each full block of k in the array, then relink.
+  // O(n) extra space.
+  const nodes: ListNode[] = []
+  let current = head
+  while (current !== null) {
+    nodes.push(current)
+    current = current.next
   }
-  const dummy = new ListNode()
-  let tail = dummy
-  for (const v of out) tail = tail.next = new ListNode(v)
-  return dummy.next
+  for (let start = 0; start + k <= nodes.length; start += k) {
+    let i = start
+    let j = start + k - 1
+    while (i < j) {
+      const temp = nodes[i]
+      nodes[i] = nodes[j]
+      nodes[j] = temp
+      i++
+      j--
+    }
+  }
+  for (let i = 0; i < nodes.length; i++) {
+    if (i + 1 < nodes.length) {
+      nodes[i].next = nodes[i + 1]
+    } else {
+      nodes[i].next = null
+    }
+  }
+  if (nodes.length === 0) {
+    return null
+  }
+  return nodes[0]
 }

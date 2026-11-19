@@ -1,39 +1,57 @@
 class LFUCache {
   capacity: number
-  clock = 0
-  entries = new Map<number, { value: number; count: number; lastUsed: number }>()
+  clock: number
+  values: Map<number, number>
+  counts: Map<number, number>
+  lastUsed: Map<number, number>
 
   constructor(capacity: number) {
     this.capacity = capacity
+    this.clock = 0
+    this.values = new Map()
+    this.counts = new Map()
+    this.lastUsed = new Map()
   }
 
   get(key: number): number {
-    const e = this.entries.get(key)
-    if (!e) return -1
-    e.count++
-    e.lastUsed = ++this.clock
-    return e.value
+    const value = this.values.get(key)
+    if (value === undefined) {
+      return -1
+    }
+    this.counts.set(key, (this.counts.get(key) as number) + 1)
+    this.clock++
+    this.lastUsed.set(key, this.clock)
+    return value
   }
 
   put(key: number, value: number): void {
-    const e = this.entries.get(key)
-    if (e) {
-      e.value = value
-      e.count++
-      e.lastUsed = ++this.clock
+    this.clock++
+    if (this.values.has(key)) {
+      this.values.set(key, value)
+      this.counts.set(key, (this.counts.get(key) as number) + 1)
+      this.lastUsed.set(key, this.clock)
       return
     }
-    if (this.entries.size >= this.capacity) {
+    if (this.values.size >= this.capacity) {
+      // O(capacity): scan for the lowest count, oldest use on ties.
       let victim = -1
-      let best: { count: number; lastUsed: number } | null = null
-      for (const [k, x] of this.entries) {
-        if (!best || x.count < best.count || (x.count === best.count && x.lastUsed < best.lastUsed)) {
-          best = x
+      let victimCount = Infinity
+      let victimTime = Infinity
+      for (const k of this.values.keys()) {
+        const c = this.counts.get(k) as number
+        const t = this.lastUsed.get(k) as number
+        if (c < victimCount || (c === victimCount && t < victimTime)) {
           victim = k
+          victimCount = c
+          victimTime = t
         }
       }
-      this.entries.delete(victim)
+      this.values.delete(victim)
+      this.counts.delete(victim)
+      this.lastUsed.delete(victim)
     }
-    this.entries.set(key, { value, count: 1, lastUsed: ++this.clock })
+    this.values.set(key, value)
+    this.counts.set(key, 1)
+    this.lastUsed.set(key, this.clock)
   }
 }

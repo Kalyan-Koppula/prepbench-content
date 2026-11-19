@@ -1,9 +1,17 @@
 function sortList(head: ListNode | null): ListNode | null {
-  const values: number[] = []
-  for (let cur = head; cur; cur = cur.next) values.push(cur.val)
-  values.sort((x, y) => x - y)
-  const dummy = new ListNode()
-  let tail = dummy
-  for (const v of values) tail = tail.next = new ListNode(v)
+  // Insertion sort on the list: O(n^2) time, O(1) space.
+  const dummy = new ListNode(0)
+  let current = head
+  while (current !== null) {
+    const next = current.next
+    // Find the last node in the sorted part whose value is <= current.val.
+    let spot = dummy
+    while (spot.next !== null && spot.next.val <= current.val) {
+      spot = spot.next
+    }
+    current.next = spot.next
+    spot.next = current
+    current = next
+  }
   return dummy.next
 }

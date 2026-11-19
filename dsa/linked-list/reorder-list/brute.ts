@@ -1,10 +1,21 @@
 function reorderList(head: ListNode | null): void {
+  // Put the nodes in an array, then link them from both ends inward. O(n) space.
   const nodes: ListNode[] = []
-  for (let cur = head; cur; cur = cur.next) nodes.push(cur)
-  const order: ListNode[] = []
-  for (let i = 0, j = nodes.length - 1; i <= j; i++, j--) {
-    order.push(nodes[i])
-    if (i !== j) order.push(nodes[j])
+  let current = head
+  while (current !== null) {
+    nodes.push(current)
+    current = current.next
   }
-  for (let k = 0; k < order.length; k++) order[k].next = order[k + 1] ?? null
+  let i = 0
+  let j = nodes.length - 1
+  while (i < j) {
+    nodes[i].next = nodes[j]
+    i++
+    if (i === j) {
+      break
+    }
+    nodes[j].next = nodes[i]
+    j--
+  }
+  nodes[i].next = null // the middle node is the new tail
 }
