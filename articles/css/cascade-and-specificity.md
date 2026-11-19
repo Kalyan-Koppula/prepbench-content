@@ -137,6 +137,72 @@ An inherited value has **no specificity**: any rule that targets the element dir
 
 `all: unset` or `all: revert` resets every property on an element, handy for button resets.
 
+## Worked example: resolving a conflict
+
+```html
+<nav id="main-nav" class="nav">
+  <a class="link active" href="/">Home</a>
+</nav>
+```
+
+```css
+@layer base, components;
+
+@layer components {
+  .nav .link.active { color: purple; } /* (0,3,0) in layer "components" */
+}
+#main-nav a { color: green; }          /* (1,0,1), unlayered */
+a.link { color: blue; }                /* (0,1,1), unlayered */
+.nav a:hover { color: orange; }        /* (0,2,1), only while hovered */
+a { color: red !important; }           /* important, unlayered */
+```
+
+Resolve it the way the browser does, stopping as soon as one step decides:
+
+| Step | Question | Result |
+| --- | --- | --- |
+| 1. Relevance | Which rules match the link right now (not hovered)? | All but the `:hover` rule |
+| 2. Origin and importance | Any `!important` author declarations? | Yes: `a { color: red !important }` wins |
+
+Remove the `!important` and continue:
+
+| Step | Question | Result |
+| --- | --- | --- |
+| 3. Layers | Unlayered author styles beat layered ones (for normal declarations) | The purple rule in `components` loses despite its specificity |
+| 4. Specificity | `#main-nav a` (1,0,1) versus `a.link` (0,1,1) | The ID wins: **green** |
+| 5. Order | Only reached on a specificity tie | – |
+
+Two lessons: layers are compared **before** specificity, so a low-specificity unlayered rule beats a high-specificity layered one; and `!important` reverses layer order (important declarations in earlier layers win).
+
+## Custom properties and the cascade
+
+CSS custom properties (`--brand: #4f46e5`) are ordinary properties that take part in the cascade and **inherit** by default. Their value is substituted when another property uses `var()`, at computed-value time:
+
+```css
+:root { --accent: #2563eb; }
+.danger { --accent: #dc2626; }          /* overrides for this subtree */
+.button { background: var(--accent); }  /* blue normally, red inside .danger */
+
+.card { padding: var(--card-padding, 1rem); } /* fallback when the variable isn't set */
+```
+
+This makes them the standard tool for theming (swap a few variables under `[data-theme="dark"]`), component variants and design tokens. An invalid substituted value doesn't fall back to an earlier declaration; the property becomes "invalid at computed-value time" and uses its inherited or initial value instead. Registering a property with `@property` gives it a type, an initial value and optional non-inheritance, which also makes it animatable.
+
+## Organising CSS at scale
+
+The cascade is powerful but hard to reason about across a large codebase. The common strategies all limit how far a rule can reach:
+
+| Strategy | How it controls the cascade |
+| --- | --- |
+| BEM naming (`.card__title--large`) | One class per element, flat specificity, names that don't collide |
+| CSS Modules | Class names are made unique per file at build time |
+| Utility classes (Tailwind) | Single-purpose classes composed in markup; little cascading at all |
+| CSS-in-JS | Styles scoped to components, generated class names |
+| Cascade layers | Explicit ordering of resets, base, components, utilities and overrides |
+| `@scope` | Limits a block of rules to a subtree, with an optional lower boundary |
+
+A practical modern setup: `@layer reset, base, components, utilities;`, component styles scoped with modules or `@scope`, design tokens as custom properties, and no `!important` outside the utilities layer.
+
 ## Debugging
 
 - DevTools' Styles pane shows struck-through overridden declarations and which layer each rule belongs to.
@@ -169,3 +235,12 @@ No. `class="a b"` and `class="b a"` are identical; only stylesheet order and spe
 - Long descendant chains like `.page .content .list .item a` that are hard to override and fragile to markup changes.
 - Assuming unlayered vendor CSS can be beaten from inside a layer.
 - Forgetting that `:is(#id, .class)` gives ID-level specificity to the class branch too.
+
+## Key takeaways
+
+- The cascade decides by relevance, origin and importance, layers, specificity, then order.
+- Specificity is a triple (IDs, classes/attributes/pseudo-classes, elements); compare left to right.
+- `:where()` has zero specificity; `:is()`, `:not()` and `:has()` take their most specific argument.
+- Layers beat specificity; `!important` reverses layer order.
+- Custom properties cascade and inherit, which makes them ideal for theming.
+- Keep specificity flat and scoped; avoid IDs and `!important` in component styles.

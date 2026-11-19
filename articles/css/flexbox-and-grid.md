@@ -190,6 +190,85 @@ The footer sits at the bottom on short pages and below the content on long ones.
 .nav .account { margin-left: auto; } /* push to the right */
 ```
 
+## How flex sizes are calculated
+
+`flex: 1 1 200px` means `flex-grow: 1`, `flex-shrink: 1`, `flex-basis: 200px`. The algorithm:
+
+1. Start every item at its **flex basis** (or its content size for `auto`).
+2. Compare the total with the container. If there is **free space**, share it in proportion to `flex-grow`. If items **overflow**, take space away in proportion to `flex-shrink × flex-basis`.
+3. Clamp each item by its `min-width`/`max-width` and repeat for the rest if any item hit a limit.
+
+Example: a 900px row with three items.
+
+| Item | `flex` | Basis | Grow share | Final width |
+| --- | --- | --- | --- | --- |
+| A | `1 1 200px` | 200 | 1 / 4 of 300 = 75 | 275px |
+| B | `2 1 200px` | 200 | 2 / 4 of 300 = 150 | 350px |
+| C | `1 1 200px` | 200 | 1 / 4 of 300 = 75 | 275px |
+
+Free space is 900 − 600 = 300px, split 1 : 2 : 1. Note that B isn't twice as **wide** as A; it receives twice as much of the **extra** space. To get exact proportions, use a basis of 0: `flex: 1` (which is `1 1 0%`) and `flex: 2` give 300px and 600px of a 900px row.
+
+### The `min-width: auto` trap
+
+Flex items default to `min-width: auto`, which means "not narrower than my content". A long URL or a wide table inside an item prevents it from shrinking and overflows the container. The fix is `min-width: 0` on the item (or `overflow: hidden`), which is also why text truncation with `text-overflow: ellipsis` inside flex items often needs it.
+
+## How grid tracks are sized
+
+```css
+.layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) minmax(200px, 25%);
+  gap: 16px;
+}
+```
+
+1. Fixed tracks take their size: 240px.
+2. `minmax(min, max)` tracks start at their minimum.
+3. Gaps are subtracted.
+4. Remaining space goes to `fr` tracks in proportion to their factors (and to `max` limits).
+
+`1fr` is really `minmax(auto, 1fr)`: like flex items, it won't shrink below its content's minimum size. `minmax(0, 1fr)` lets a column shrink, which matters for code blocks and long words.
+
+### `auto-fit` versus `auto-fill`
+
+```css
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+```
+
+Both create as many 220px-or-wider columns as fit. With few items, `auto-fill` keeps the empty column tracks (items stay 220px-ish), while `auto-fit` collapses empty tracks so the existing items stretch to fill the row. This one line produces a responsive card grid with no media queries.
+
+## Subgrid
+
+Nested grids normally have their own tracks, so cards in a row can't line up their titles and footers. `subgrid` lets a child grid use its parent's tracks:
+
+```css
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); }
+.card {
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid; /* title, body, footer rows shared across the row of cards */
+}
+```
+
+Now every card's footer sits on the same line even when bodies have different lengths.
+
+## Alignment cheat sheet
+
+| Property | Flexbox | Grid |
+| --- | --- | --- |
+| `justify-content` | Distributes items along the main axis | Distributes tracks along the inline axis |
+| `align-items` | Aligns items on the cross axis | Aligns items in their row area |
+| `justify-items` | (ignored) | Aligns items in their column area |
+| `align-content` | Distributes lines when wrapping | Distributes tracks along the block axis |
+| `align-self` / `justify-self` | Per item on the cross axis / (ignored) | Per item |
+| `place-items`, `place-content` | Shorthands for align + justify | Same |
+
+Centring anything: `display: grid; place-items: center;` on the parent.
+
 ## Common interview questions
 
 **When do you choose grid over flexbox?**
@@ -217,3 +296,12 @@ Yes: visual order changes but DOM, reading and focus order don't, which can conf
 - `1fr` columns blowing out from wide content; use `minmax(0, 1fr)`.
 - Building whole page grids with nested flex containers and percentage widths.
 - Using `justify-content` to align a single grid item; use `justify-self` or `place-self`.
+
+## Key takeaways
+
+- Flexbox lays out along one axis from content outwards; grid lays out in two dimensions from the container inwards.
+- `flex-grow` shares **extra** space; use a basis of 0 for exact ratios.
+- Flex items and `1fr` tracks won't shrink below their content: add `min-width: 0` or `minmax(0, 1fr)`.
+- `repeat(auto-fit, minmax(…, 1fr))` gives a responsive grid without media queries.
+- `subgrid` aligns nested content to the parent grid.
+- Prefer `gap` over margins for spacing between items.

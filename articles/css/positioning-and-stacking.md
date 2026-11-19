@@ -131,6 +131,72 @@ Sticky fails when:
 - In a flex or grid container, the item stretches to the full height (`align-self: stretch`), leaving no room to stick; set `align-self: start`.
 - Table headers: put `position: sticky` on the `th` cells — the most reliable target across browsers.
 
+## The box model underneath
+
+Positioning moves boxes; the box model defines them. Every element generates a box with four areas: content, padding, border and margin.
+
+```css
+* , *::before, *::after { box-sizing: border-box; }
+```
+
+- With the default `content-box`, `width` sets only the content area, so `width: 200px; padding: 20px; border: 1px` renders 242px wide.
+- With `border-box`, `width` includes padding and border: 200px is 200px. Almost every modern codebase sets this globally.
+- Vertical margins between block siblings **collapse** (the larger wins) in normal flow, but not in flex or grid containers, nor for absolutely positioned or floated elements.
+
+The `display` value decides the **outer** behaviour (block or inline) and the **inner** layout of children (flow, flex, grid). `display: inline-block` is an inline outer box with block flow inside; `display: contents` removes the element's own box and promotes its children.
+
+## Worked example: why the dropdown is behind the header
+
+```html
+<header class="site-header">…</header>
+<main>
+  <div class="toolbar">
+    <div class="dropdown">…</div>
+  </div>
+</main>
+```
+
+```css
+.site-header { position: sticky; top: 0; z-index: 10; }
+.toolbar { transform: translateY(0); }           /* added for an animation */
+.dropdown { position: absolute; z-index: 9999; }
+```
+
+The dropdown opens and is drawn **under** the sticky header, despite `z-index: 9999`. Trace it:
+
+| Element | Creates a stacking context? | Why |
+| --- | --- | --- |
+| `.site-header` | Yes | `position: sticky` with a `z-index` |
+| `.toolbar` | Yes | Any `transform` creates one |
+| `.dropdown` | Yes, inside `.toolbar`'s context | Positioned with `z-index` |
+
+The dropdown's 9999 only orders it **within** `.toolbar`. At the root level, the comparison is `.site-header` (z-index 10) against `.toolbar` (z-index `auto`, treated as 0 within its parent's order). The header wins, and everything inside the toolbar goes underneath it.
+
+Fixes, best first:
+
+1. Render the dropdown in the **top layer** with the Popover API or a `<dialog>`, so no stacking context can trap it.
+2. Remove the accidental stacking context (`transform`, `filter`, `opacity < 1`, `will-change`, `contain`) from the ancestor.
+3. Give `.toolbar` its own `position: relative; z-index: 11`, so its whole context sits above the header.
+4. Portal the dropdown to the end of `<body>` (what many UI libraries do).
+
+## Anchor positioning
+
+Positioning a tooltip or menu next to its trigger used to need JavaScript to measure both elements and handle collisions with the viewport edge. CSS anchor positioning does it declaratively:
+
+```css
+.trigger { anchor-name: --menu-anchor; }
+
+.menu {
+  position: absolute;
+  position-anchor: --menu-anchor;
+  top: anchor(bottom);              /* menu's top edge at the trigger's bottom edge */
+  left: anchor(left);
+  position-try-fallbacks: flip-block; /* flip above the trigger if there's no room below */
+}
+```
+
+Combined with the Popover API (`popover` attribute plus `popovertarget` on the button), a menu gets top-layer rendering, light dismiss, keyboard handling and anchored placement without any positioning JavaScript. Check browser support before relying on it; libraries like Floating UI remain the fallback.
+
 ## Common interview questions
 
 **Difference between `relative`, `absolute` and `fixed`?**
@@ -157,3 +223,12 @@ Usually a missing `top`, an ancestor with `overflow` creating a different scroll
 - Animations with `transform` or `opacity` creating contexts that trap dropdowns.
 - `overflow: hidden` on a card clipping its absolutely positioned dropdown.
 - Forgetting a background on sticky elements.
+
+## Key takeaways
+
+- `relative` offsets an element in place; `absolute` positions it against its containing block; `fixed` against the viewport (unless an ancestor has a `transform`); `sticky` toggles between flow and fixed within its scroll container.
+- `z-index` only compares elements within the same stacking context.
+- `transform`, `filter`, `opacity < 1`, `isolation: isolate`, `will-change` and positioned elements with a `z-index` create stacking contexts.
+- Debug by walking up the ancestors and finding the first stacking context.
+- The top layer (dialogs, popovers) escapes every stacking context; anchor positioning places popovers without JavaScript.
+- Use `box-sizing: border-box` everywhere.

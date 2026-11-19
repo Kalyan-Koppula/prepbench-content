@@ -169,6 +169,96 @@ The first matching `<source>` wins; `<img>` is required and carries `alt`, sizin
 
 Use `margin-inline`, `padding-block`, `inset-inline-start`, `border-inline-end` instead of left/right/top/bottom so layouts adapt to RTL and vertical writing modes automatically.
 
+## Worked example: a product card that adapts to its container
+
+The same card appears in a narrow sidebar and a wide main column. Media queries can't tell those apart (the viewport is the same); container queries can:
+
+```css
+.card-slot {
+  container-type: inline-size; /* this element's width can be queried */
+  container-name: card;
+}
+
+.card {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-areas:
+    'image'
+    'body';
+}
+
+@container card (min-width: 420px) {
+  .card {
+    grid-template-columns: 160px 1fr;
+    grid-template-areas: 'image body';
+  }
+}
+
+@container card (min-width: 700px) {
+  .card {
+    grid-template-columns: 240px 1fr auto;
+    grid-template-areas: 'image body actions';
+  }
+  .card__title { font-size: clamp(1.25rem, 4cqi, 1.75rem); } /* cqi: 1% of the container's inline size */
+}
+```
+
+| Container width | Layout |
+| --- | --- |
+| < 420px (sidebar, phone) | Image stacked above text |
+| 420–699px | Image beside text |
+| ≥ 700px | Image, text and an actions column |
+
+The component carries its own responsive rules and works wherever it's placed. Media queries remain the right tool for page-level decisions: the overall grid, navigation style, and preferences like `prefers-reduced-motion` and `prefers-color-scheme`.
+
+## Viewport units on mobile
+
+On phones, the browser's address bar slides in and out, so "the viewport height" has three meanings:
+
+| Unit | Height used | Good for |
+| --- | --- | --- |
+| `svh` | Small viewport: bars shown | Content that must be fully visible, like a hero's call to action |
+| `lvh` | Large viewport: bars hidden | Backgrounds that may extend under the bars |
+| `dvh` | Dynamic: changes as the bars move | Full-height app shells (can cause relayout while scrolling) |
+| `vh` | Historically equal to `lvh` on mobile | The source of the "100vh is taller than the screen" bug |
+
+`min-height: 100svh` is the safe default for a full-screen section. The same small/large/dynamic prefixes exist for widths (`svw`), and `vi`/`vb` follow the writing direction.
+
+## User preferences
+
+Responsive design also means responding to the user's settings, not only the screen:
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+:root { color-scheme: light dark; }
+.surface { background: light-dark(#ffffff, #111827); }
+
+@media (prefers-contrast: more) {
+  .button { border: 2px solid currentColor; }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .row-actions { opacity: 0; }
+  .row:hover .row-actions, .row:focus-within .row-actions { opacity: 1; }
+}
+```
+
+The last rule hides secondary actions until hover **only** on devices that can hover; on touch screens they stay visible, because there is no hover to reveal them.
+
+## Testing responsive layouts
+
+- Use DevTools device mode, but also drag the viewport through every width: bugs live between breakpoints.
+- Zoom to 200% and 400% (WCAG reflow): content should reflow into one column without horizontal scrolling.
+- Increase the browser's default font size; layouts sized in `rem` should scale, fixed `px` heights will clip.
+- Test real devices for touch targets (at least 24×24 CSS pixels, ideally 44×44), safe areas on notched phones (`env(safe-area-inset-*)`), and the on-screen keyboard covering inputs.
+
 ## Common interview questions
 
 **Media query or container query?**
@@ -197,3 +287,12 @@ DevTools device mode at many widths (not just presets), real devices for touch a
 - Fixed `px` font sizes that ignore user preferences.
 - Images without `width`/`height`, causing layout shift.
 - Hiding content on mobile with `display: none` instead of rethinking the layout.
+
+## Key takeaways
+
+- Write mobile-first: base styles for small screens, `min-width` queries to enhance.
+- Media queries respond to the viewport and user preferences; container queries respond to the space a component actually has.
+- `clamp()` with viewport or container units gives fluid type and spacing without breakpoints.
+- Serve responsive images with `srcset`/`sizes` or `<picture>`, always with dimensions or `aspect-ratio`.
+- Use `rem` for type, `svh`/`dvh` instead of `vh` on mobile, and logical properties for direction-agnostic layouts.
+- Respect `prefers-reduced-motion`, colour scheme and pointer capabilities.
