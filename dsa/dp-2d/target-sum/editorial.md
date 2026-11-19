@@ -1,30 +1,59 @@
-**Key insight:** splitting the numbers into a plus-group `P` and a minus-group `N` gives `sum(P) = (total + target) / 2`, so the question becomes "how many subsets have this sum?" — a 0/1 knapsack count.
+**Key idea:** turn signs into a subset. The numbers with a plus sign sum to `P`, the rest to `total − P`, and you need `P − (total − P) = target`, so `P = (total + target) / 2`. The answer is the number of subsets summing to that `P`, a 0/1 knapsack count.
 
-## Approach
+## Recognising the pattern
 
-1. `total = sum(nums)`. If `|target| > total` or `total + target` is odd, return `0`.
-2. `goal = (total + target) / 2`.
-3. Count subsets summing to `goal`:
-   - **State:** `count[i][s]` = number of subsets of the first `i` numbers with sum `s`.
-   - **Recurrence:** `count[i][s] = count[i-1][s] + count[i-1][s - x]` (second term if `s ≥ x`), `x = nums[i-1]`.
-   - **Base cases:** `count[0][0] = 1`, `count[0][s > 0] = 0`.
-   - **Order:** `i` increasing.
-   - **Space optimisation:** one array with `s` swept **downward**, so `count[s - x]` is still the previous row's value.
-4. Zeros need no special case: for `x = 0` the update doubles `count[s]` for every `s`, matching the two sign choices.
+Assigning `+` or `−` to each number is a choice per item with a sum constraint: knapsack territory from the [2-D Dynamic Programming](/problems/patterns/dp-2d) sheet. The algebra removes negative sums entirely, so the table only needs indices `0 … P`.
 
-Progression: the brute force tries all `2ⁿ` sign patterns; memoising on `(index, running sum)` gives `O(n · total)` states (offset the sum to stay non-negative); the algebraic reduction shrinks it to the subset-count table above.
+## Brute force
+
+Try both signs for every number recursively and count the assignments that hit the target. That is the reference brute force below. `O(2^n)` time and `O(n)` depth; fine for `n ≤ 20`, which is this problem's limit, but it doesn't scale.
+
+## Count subsets with sum P
+
+1. Compute `total`. If `|target| > total` or `total + target` is odd, return 0: `P` must be a whole number between 0 and `total`.
+2. `goal = (total + target) / 2`; `count[0] = 1`.
+3. For each number `x`: for `s` from `goal` down to `x`: `count[s] += count[s − x]`.
+4. Return `count[goal]`.
+
+**Why downward.** `count[s − x]` must still count subsets **without** `x`. Going down, smaller sums haven't been updated for `x` yet. (This is the one-row version of `count[i][s] = count[i − 1][s] + count[i − 1][s − x]`.)
+
+**Zeros.** A zero can be `+0` or `−0`, giving two different assignments. The update `count[s] += count[s − 0]` doubles every count, which is exactly right.
+
+## Walkthrough
+
+`nums = [2, 1, 1]`, `target = 2`: `total = 4`, `goal = 3`.
+
+| after number | count[0] | count[1] | count[2] | count[3] |
+| --- | --- | --- | --- | --- |
+| – | 1 | 0 | 0 | 0 |
+| 2 | 1 | 0 | 1 | 0 |
+| 1 | 1 | 1 | 1 | 1 |
+| 1 | 1 | 2 | 2 | 2 |
+
+Answer `2`: plus-sets `{2, first 1}` and `{2, second 1}`, that is `+2 +1 −1` and `+2 −1 +1`.
 
 ## Complexity
 
-- Time `O(n · goal)` ≤ `O(n · total)`.
-- Space `O(goal)`.
+- All sign assignments: `O(2^n)`.
+- Memoised recursion on `(index, running sum)`: `O(n × total)` with an offset for negative sums.
+- Subset count: `O(n × goal)` time, `O(goal)` space.
 
-## Alternatives to mention
+## Edge cases
 
-- Memoised DFS over `(i, sum)` with a `Map` — fine for `n ≤ 20` and directly mirrors the problem statement; good if you don't spot the algebra.
+- Target out of reach (`|target| > total`): 0.
+- Odd `total + target`: 0.
+- Zeros: each doubles the count.
+- Negative target: the formula works unchanged; by symmetry the answer equals that for `−target`.
 
-## Pitfalls
+## Common mistakes
 
-- Missing the parity / range check: `goal` must be a non-negative integer.
-- Iterating `s` upward lets one number be counted multiple times.
-- Starting the inner loop at `s >= 1` instead of `s >= x` skips zeros entirely (then the doubling never happens).
+- Forgetting the parity and range checks, leading to fractional or negative indices.
+- Iterating sums upward, which reuses numbers.
+- Treating `+0` and `−0` as one assignment.
+
+## In the interview
+
+- Show the algebra first; it is the insight the interviewer is looking for.
+- Likely follow-ups:
+  - *Without the algebra?* DP over `(index, running sum)` with sums shifted by `total` so indices stay non-negative.
+  - *Minimise `|sum|` instead (Last Stone Weight II)?* Find the reachable subset sum closest to `total / 2`.

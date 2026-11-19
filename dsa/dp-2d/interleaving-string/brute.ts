@@ -1,16 +1,30 @@
-// Graph search over (used from s1, used from s2) states.
+// Depth-first search over states (characters used from s1, characters used from s2),
+// visiting each state at most once.
 function isInterleave(s1: string, s2: string, s3: string): boolean {
-  if (s1.length + s2.length !== s3.length) return false
-  const seen = new Set<string>()
-  const stack: [number, number][] = [[0, 0]]
-  while (stack.length) {
-    const [i, j] = stack.pop()!
-    if (i === s1.length && j === s2.length) return true
-    const key = i + ',' + j
-    if (seen.has(key)) continue
-    seen.add(key)
-    if (i < s1.length && s1[i] === s3[i + j]) stack.push([i + 1, j])
-    if (j < s2.length && s2[j] === s3[i + j]) stack.push([i, j + 1])
+  const m = s1.length
+  const n = s2.length
+  if (m + n !== s3.length) {
+    return false
+  }
+  const visited = new Array((m + 1) * (n + 1)).fill(false)
+  const stack: number[] = [0] // state (i, j) encoded as i * (n + 1) + j
+  while (stack.length > 0) {
+    const state = stack.pop() as number
+    if (visited[state]) {
+      continue
+    }
+    visited[state] = true
+    const i = Math.floor(state / (n + 1))
+    const j = state % (n + 1)
+    if (i === m && j === n) {
+      return true
+    }
+    if (i < m && s1[i] === s3[i + j]) {
+      stack.push((i + 1) * (n + 1) + j)
+    }
+    if (j < n && s2[j] === s3[i + j]) {
+      stack.push(i * (n + 1) + j + 1)
+    }
   }
   return false
 }

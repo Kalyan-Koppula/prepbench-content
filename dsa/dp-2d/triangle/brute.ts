@@ -1,19 +1,29 @@
-// Bellman-Ford style relaxation from the apex until nothing changes (handles negatives).
+// Top-down: best[i][j] = cheapest path from the apex to (i, j); the answer is
+// the smallest value in the last row.
 function minimumTotal(triangle: number[][]): number {
-  const dist = triangle.map((row) => row.map(() => Infinity))
-  dist[0][0] = triangle[0][0]
-  let changed = true
-  while (changed) {
-    changed = false
-    for (let i = 0; i + 1 < triangle.length; i++)
-      for (let j = 0; j <= i; j++)
-        for (const k of [j, j + 1]) {
-          const cand = dist[i][j] + triangle[i + 1][k]
-          if (cand < dist[i + 1][k]) {
-            dist[i + 1][k] = cand
-            changed = true
-          }
-        }
+  const rows = triangle.length
+  const best: number[][] = []
+  for (let i = 0; i < rows; i++) {
+    best.push(new Array(i + 1).fill(0))
   }
-  return Math.min(...dist[triangle.length - 1])
+  best[0][0] = triangle[0][0]
+  for (let i = 1; i < rows; i++) {
+    for (let j = 0; j <= i; j++) {
+      let fromAbove = Infinity
+      if (j < i) {
+        fromAbove = best[i - 1][j] // directly above
+      }
+      if (j > 0 && best[i - 1][j - 1] < fromAbove) {
+        fromAbove = best[i - 1][j - 1] // above and to the left
+      }
+      best[i][j] = triangle[i][j] + fromAbove
+    }
+  }
+  let answer = Infinity
+  for (let j = 0; j < rows; j++) {
+    if (best[rows - 1][j] < answer) {
+      answer = best[rows - 1][j]
+    }
+  }
+  return answer
 }

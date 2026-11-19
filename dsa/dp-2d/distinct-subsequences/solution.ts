@@ -1,14 +1,22 @@
 function numDistinct(s: string, t: string): number {
+  const m = s.length
   const n = t.length
-  if (n > s.length) return 0
-  // ways[j] = ways to form t[0..j) from the prefix of s processed so far.
-  const ways = new Array(n + 1).fill(0)
-  ways[0] = 1 // the empty target: delete everything
-  for (const ch of s) {
-    // Downward so ways[j - 1] is still the value before this character.
-    for (let j = n; j >= 1; j--) {
-      if (t[j - 1] === ch) ways[j] += ways[j - 1]
+  // ways[i][j] = number of ways to form the first j characters of t
+  // from the first i characters of s.
+  const ways: number[][] = []
+  for (let i = 0; i <= m; i++) {
+    ways.push(new Array(n + 1).fill(0))
+  }
+  for (let i = 0; i <= m; i++) {
+    ways[i][0] = 1 // the empty target: delete everything
+  }
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      ways[i][j] = ways[i - 1][j] // don't use s[i - 1]
+      if (s[i - 1] === t[j - 1]) {
+        ways[i][j] += ways[i - 1][j - 1] // use it as t[j - 1]
+      }
     }
   }
-  return ways[n]
+  return ways[m][n]
 }

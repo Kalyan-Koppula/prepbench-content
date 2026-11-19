@@ -1,10 +1,17 @@
 function uniquePaths(m: number, n: number): number {
-  // row[j] = number of routes to column j of the current row.
-  const row = new Array(n).fill(1) // first row: only by moving right
-  for (let i = 1; i < m; i++) {
-    for (let j = 1; j < n; j++) {
-      row[j] += row[j - 1] // from above (old row[j]) + from the left
+  // paths[i][j] = number of routes from the top-left corner to cell (i, j).
+  const paths: number[][] = []
+  for (let i = 0; i < m; i++) {
+    paths.push(new Array(n).fill(0))
+  }
+  for (let i = 0; i < m; i++) {
+    for (let j = 0; j < n; j++) {
+      if (i === 0 || j === 0) {
+        paths[i][j] = 1 // the first row and column can only be reached one way
+      } else {
+        paths[i][j] = paths[i - 1][j] + paths[i][j - 1] // from above + from the left
+      }
     }
   }
-  return row[n - 1]
+  return paths[m - 1][n - 1]
 }

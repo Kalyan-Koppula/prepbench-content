@@ -1,34 +1,32 @@
-// 0-1 BFS over (i, j) = characters of word1 / word2 consumed. Free move on a match;
-// cost-1 moves for replace (i+1, j+1), delete (i+1, j) and insert (i, j+1).
+// Top-down recursion with memoisation over suffixes:
+// cost(i, j) = fewest edits to turn word1[i..] into word2[j..].
 function minDistance(word1: string, word2: string): number {
-  const m = word1.length
-  const n = word2.length
-  const id = (i: number, j: number) => i * (n + 1) + j
-  const dist = new Array((m + 1) * (n + 1)).fill(Infinity)
-  dist[0] = 0
-  let deque: number[] = [0]
-  let next: number[] = []
-  for (let d = 0; deque.length; d++) {
-    // Process every state at distance d (free moves stay in this layer).
-    while (deque.length) {
-      const u = deque.pop()!
-      if (dist[u] !== d) continue
-      const i = Math.floor(u / (n + 1))
-      const j = u % (n + 1)
-      if (i === m && j === n) return d
-      const relax = (v: number, nd: number, sameLayer: boolean) => {
-        if (nd < dist[v]) {
-          dist[v] = nd
-          ;(sameLayer ? deque : next).push(v)
-        }
-      }
-      if (i < m && j < n && word1[i] === word2[j]) relax(id(i + 1, j + 1), d, true)
-      if (i < m && j < n) relax(id(i + 1, j + 1), d + 1, false)
-      if (i < m) relax(id(i + 1, j), d + 1, false)
-      if (j < n) relax(id(i, j + 1), d + 1, false)
-    }
-    deque = next
-    next = []
+  const memo: number[][] = []
+  for (let i = 0; i <= word1.length; i++) {
+    memo.push(new Array(word2.length + 1).fill(-1))
   }
-  return dist[id(m, n)]
+  return cost(word1, word2, 0, 0, memo)
+}
+
+function cost(a: string, b: string, i: number, j: number, memo: number[][]): number {
+  if (i === a.length) {
+    return b.length - j // insert the rest of b
+  }
+  if (j === b.length) {
+    return a.length - i // delete the rest of a
+  }
+  if (memo[i][j] !== -1) {
+    return memo[i][j]
+  }
+  let result: number
+  if (a[i] === b[j]) {
+    result = cost(a, b, i + 1, j + 1, memo)
+  } else {
+    const replace = cost(a, b, i + 1, j + 1, memo)
+    const remove = cost(a, b, i + 1, j, memo)
+    const insert = cost(a, b, i, j + 1, memo)
+    result = 1 + Math.min(replace, Math.min(remove, insert))
+  }
+  memo[i][j] = result
+  return result
 }

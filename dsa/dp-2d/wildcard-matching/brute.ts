@@ -1,21 +1,33 @@
-// Simulate the pattern as an automaton: track the set of pattern positions reachable
-// after reading each character of s.
+// Simulate the pattern as an automaton: active[k] says the first k pattern
+// characters can match what has been read so far. Read s one character at a time.
 function isMatch(s: string, p: string): boolean {
-  const close = (states: Set<number>) => {
-    // A '*' may match nothing, so you can step past it for free.
-    const out = new Set(states)
-    for (let k = 0; k < p.length; k++) if (out.has(k) && p[k] === '*') out.add(k + 1)
-    return out
-  }
-  let states = close(new Set([0]))
-  for (const ch of s) {
-    const next = new Set<number>()
-    for (const k of states) {
-      if (k === p.length) continue
-      if (p[k] === '*') next.add(k) // '*' consumes ch and stays
-      else if (p[k] === '?' || p[k] === ch) next.add(k + 1)
+  const n = p.length
+  let active = new Array(n + 1).fill(false)
+  active[0] = true
+  skipStars(p, active)
+  for (let i = 0; i < s.length; i++) {
+    const next = new Array(n + 1).fill(false)
+    for (let k = 0; k < n; k++) {
+      if (!active[k]) {
+        continue
+      }
+      if (p[k] === '*') {
+        next[k] = true // the star absorbs s[i] and stays active
+      } else if (p[k] === '?' || p[k] === s[i]) {
+        next[k + 1] = true
+      }
     }
-    states = close(next)
+    skipStars(p, next)
+    active = next
   }
-  return states.has(p.length)
+  return active[n]
+}
+
+// A star may match nothing, so being before a star also means being after it.
+function skipStars(p: string, active: boolean[]): void {
+  for (let k = 0; k < p.length; k++) {
+    if (active[k] && p[k] === '*') {
+      active[k + 1] = true
+    }
+  }
 }

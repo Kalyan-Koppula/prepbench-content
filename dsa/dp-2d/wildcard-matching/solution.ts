@@ -1,18 +1,25 @@
 function isMatch(s: string, p: string): boolean {
+  const m = s.length
   const n = p.length
-  // match[j] = does the current prefix of s match p[0..j)?  Start with the empty prefix of s.
-  let match = new Array(n + 1).fill(false)
-  match[0] = true
-  for (let j = 1; j <= n; j++) match[j] = match[j - 1] && p[j - 1] === '*'
-
-  for (let i = 1; i <= s.length; i++) {
-    const next = new Array(n + 1).fill(false) // next[0] = false: non-empty s vs empty pattern
+  // match[i][j] = the first i characters of s match the first j characters of p.
+  const match: boolean[][] = []
+  for (let i = 0; i <= m; i++) {
+    match.push(new Array(n + 1).fill(false))
+  }
+  match[0][0] = true
+  for (let j = 1; j <= n; j++) {
+    match[0][j] = match[0][j - 1] && p[j - 1] === '*' // only stars match an empty s
+  }
+  for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
       const pc = p[j - 1]
-      if (pc === '*') next[j] = next[j - 1] || match[j] // '*' matches empty, or eats s[i-1]
-      else next[j] = match[j - 1] && (pc === '?' || pc === s[i - 1])
+      if (pc === '*') {
+        // The star matches nothing (left), or it also covers s[i - 1] (above).
+        match[i][j] = match[i][j - 1] || match[i - 1][j]
+      } else if (pc === '?' || pc === s[i - 1]) {
+        match[i][j] = match[i - 1][j - 1]
+      }
     }
-    match = next
   }
-  return match[n]
+  return match[m][n]
 }

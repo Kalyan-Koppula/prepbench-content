@@ -1,29 +1,58 @@
-**Key insight:** the state is just "how many characters of `s1` and of `s2` have been used" — the prefix of `s3` built so far is then fixed (`i + j` characters), so only `(m + 1)(n + 1)` situations exist.
+**Key idea:** if `s3` interleaves `s1` and `s2`, then its first `i + j` characters interleave the first `i` of `s1` and the first `j` of `s2`, for some split. Let `ok[i][j]` say whether that prefix works. The last of those `i + j` characters came either from `s1` (so `ok[i − 1][j]` must hold and `s1[i − 1]` must equal it) or from `s2` (so `ok[i][j − 1]` and `s2[j − 1]`).
 
-## Approach
+## Recognising the pattern
 
-1. If `m + n !== s3.length`, return `false`.
-2. **State:** `ok[i][j]` = `s3[0 … i+j-1]` is an interleaving of `s1[0 … i-1]` and `s2[0 … j-1]`.
-3. **Recurrence:** the last character `s3[i + j - 1]` came from one of the two strings:
-   - `ok[i-1][j] && s1[i-1] === s3[i+j-1]`, or
-   - `ok[i][j-1] && s2[j-1] === s3[i+j-1]`.
-4. **Base case:** `ok[0][0] = true`. The first row/column follow from the same recurrence with one option missing (only `s2` / only `s1`).
-5. **Order:** `i` increasing, `j` increasing. Answer `ok[m][n]`.
-6. **Space optimisation:** one array over `j`. When computing `ok[j]`, its old value is `ok[i-1][j]` and `ok[j-1]` is already `ok[i][j-1]`.
+Two input strings consumed in some interleaved order is a two-prefix state from the [2-D Dynamic Programming](/problems/patterns/dp-2d) sheet. Greedy matching fails when both strings offer the same next character: the choice only becomes clear later.
 
-Progression: the brute recursion "take the next char from `s1` or `s2`" branches whenever both fronts match — exponential on inputs like `"aaa…"`; memoise on `(i, j)`; tabulate; roll into one row.
+## Alternative: search over states (shown below)
+
+A state `(i, j)` means `i` characters used from `s1` and `j` from `s2`. From it you can advance in `s1` or in `s2` if that string's next character matches `s3[i + j]`. The answer is whether `(m, n)` is reachable from `(0, 0)`. A DFS with a visited array is the reference brute force below. Each of the `(m + 1)(n + 1)` states is visited once. Without the visited array, the search revisits states and becomes exponential.
+
+## Bottom-up table
+
+1. If `m + n ≠ s3.length`, return false.
+2. `ok[0][0] = true`.
+3. For each `(i, j)` in row-major order (except `(0, 0)`), with `next = s3[i + j − 1]`:
+   - true if `i > 0`, `ok[i − 1][j]` and `s1[i − 1] = next`, or
+   - true if `j > 0`, `ok[i][j − 1]` and `s2[j − 1] = next`.
+4. Return `ok[m][n]`.
+
+**One row is enough.** Row `i` reads the row above at the same column and the current row to the left, just like Unique Paths, so a single array updated left to right works.
+
+## Walkthrough
+
+`s1 = "ab"` (rows), `s2 = "cd"` (columns), `s3 = "acbd"`
+
+|  | j = 0 | j = 1 (c) | j = 2 (d) |
+| --- | --- | --- | --- |
+| i = 0 | T | F (c ≠ a) | F |
+| i = 1 (a) | T (a = a) | T (from left: c = c) | F (d ≠ b) |
+| i = 2 (b) | F (b ≠ c) | T (from above: b = b) | T (from left: d = d) |
+
+Answer `true`: a from `s1`, c from `s2`, b from `s1`, d from `s2`.
 
 ## Complexity
 
-- Time `O(m · n)`.
-- Space `O(n)` with the rolling row (choose the shorter string for the row).
+- Search without a visited set: exponential.
+- Search with a visited array: `O(m · n)` time and space.
+- Table: `O(m · n)` time; `O(m · n)` space, or `O(n)` with one row.
 
-## Alternatives to mention
+## Edge cases
 
-- BFS/DFS over `(i, j)` with a visited set — the same state space explored as a graph.
+- Lengths don't add up: false immediately.
+- One string empty: `s3` must equal the other.
+- All empty: true.
+- Both strings share characters (`"aa"`, `"ab"`): the reason greedy fails.
 
-## Pitfalls
+## Common mistakes
 
-- A greedy "take from `s1` whenever it matches" fails when both strings offer the same character (`"aab"`, `"ac"`, `"aacab"`).
-- Two-pointer tricks can't decide ties — that's exactly why DP is needed.
-- Forgetting the length check makes `ok[m][n]` index past the end of `s3`.
+- Skipping the length check, which lets `ok[m][n]` be read for a longer `s3`.
+- Greedily taking from `s1` whenever it matches.
+- Off-by-one on `s3[i + j − 1]`.
+
+## In the interview
+
+- Explain why a greedy pointer walk fails with an example like `s1 = "aab"`, `s2 = "aac"`.
+- Likely follow-ups:
+  - *Return one interleaving?* Walk back from `(m, n)` choosing whichever true neighbour produced each cell.
+  - *Three source strings?* A 3-D table on `(i, j, k)`, with `s3` index `i + j + k`.

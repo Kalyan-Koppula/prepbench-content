@@ -1,27 +1,60 @@
-**Key insight:** strictly increasing moves can't loop, so the matrix is a DAG; the longest path *starting* at a cell depends only on its larger neighbours and never changes — memoised DFS computes each cell once.
+**Key idea:** the longest increasing path **starting** at a cell is 1 plus the longest one starting at any larger neighbour. Paths only go to strictly larger values, so they can never loop back: the "starts at" values form a DAG and can be cached. Compute each cell once with DFS and memoisation, and take the maximum over all cells.
 
-## Approach
+## Recognising the pattern
 
-- **State:** `len[r][c]` = number of cells on the longest strictly increasing path that starts at `(r, c)`.
-- **Recurrence:** `len[r][c] = 1 + max(len[nr][nc])` over the 4 neighbours with `matrix[nr][nc] > matrix[r][c]` (or `1` if none).
-- **Base case:** a local maximum (no larger neighbour) has `len = 1`.
-- **Order:** there's no simple row/column order — dependencies follow values. Either recurse with memoisation (top-down handles the order for you), or process cells in **decreasing value** order (sort, then fill bottom-up).
-- **Answer:** the maximum `len` over all cells.
-- No visited set is needed: the strict increase already rules out cycles.
+A grid where moves are allowed in all four directions would normally need graph search, but the strictly increasing rule removes cycles. A DAG plus "longest path" is DP over a topological order, as in the [2-D Dynamic Programming](/problems/patterns/dp-2d) sheet; memoised DFS finds that order automatically.
 
-Progression: plain DFS from every cell re-explores the same paths — exponential in the worst case; caching `len` per cell makes it `O(m · n)`. Bottom-up needs a topological order (sort by value or Kahn's algorithm).
+## Alternative: topological layers (shown below)
+
+Count, for each cell, how many neighbours are smaller. Cells with none are the start of every path: the first layer. Remove them and decrease the counts of their larger neighbours; cells reaching zero form the next layer. The number of layers is the length of the longest path, because each layer extends paths by one step. That is Kahn's algorithm, the reference brute force below. `O(m · n)` as well, with no recursion.
+
+Plain DFS from every cell without memoisation re-explores the same paths and is exponential.
+
+## Memoised DFS
+
+1. `memo[r][c] = 0` means "not computed yet".
+2. `longestFrom(r, c)`:
+   1. If computed, return it.
+   2. `best = 1`. For each of the four neighbours that is inside the grid and **strictly larger**: `best = max(best, 1 + longestFrom(neighbour))`.
+   3. Store and return `best`.
+3. The answer is the maximum of `longestFrom` over all cells.
+
+**Why no visited set.** In ordinary DFS, a visited set stops cycles. Here a path can't revisit a cell, because values strictly increase along it. Memoisation is purely for speed.
+
+## Walkthrough
+
+`matrix = [[5, 1, 9], [6, 2, 8], [7, 3, 4]]`. Values of `longestFrom` for each cell:
+
+|  | col 0 | col 1 | col 2 |
+| --- | --- | --- | --- |
+| row 0 | 5 → **3** | 1 → **6** | 9 → **1** |
+| row 1 | 6 → **2** | 2 → **5** | 8 → **2** |
+| row 2 | 7 → **1** | 3 → **4** | 4 → **3** |
+
+For example, `3` has larger neighbours `7` (1) and `4` (3), so `1 + 3 = 4`. The best start is `1`: 1 → 2 → 3 → 4 → 8 → 9, length `6`.
 
 ## Complexity
 
-- Time `O(m · n)` — each cell's DFS body runs once and checks 4 neighbours.
-- Space `O(m · n)` for the memo plus recursion depth up to `m · n` on a snake-shaped path.
+- DFS without memo: exponential.
+- Memoised DFS: `O(m · n)` time (each cell computed once, four neighbours each), `O(m · n)` space for the memo and up to `O(m · n)` recursion depth.
+- Topological layers: `O(m · n)` time and space, no recursion.
 
-## Alternatives to mention
+## Edge cases
 
-- **Topological peeling (Kahn):** compute each cell's count of smaller neighbours, start a BFS from cells with count `0`, and peel layer by layer. The number of layers is the answer. Iterative, so no recursion-depth risk — worth mentioning for JS, where very deep recursion can overflow the stack.
-- Sort cells by value and relax neighbours in that order: `O(mn log mn)`.
+- All values equal: 1.
+- A single cell: 1.
+- A long snake-shaped path: the recursion can get deep; mention the layered version if stack depth is a concern.
 
-## Pitfalls
+## Common mistakes
 
-- Adding a `visited` set "to avoid cycles" — it's unnecessary and, if not cleared correctly, gives wrong answers.
-- Using `>=` instead of `>` creates cycles among equal values and infinite recursion.
+- Allowing equal neighbours (`>=`), which creates cycles and infinite recursion.
+- Adding a visited set that is cleared between starts, which turns it back into exponential search.
+- Returning the memo value of the top-left cell instead of the maximum over all cells.
+
+## In the interview
+
+- Point out that strictly increasing paths make the graph acyclic; that justifies the memo.
+- Likely follow-ups:
+  - *Return the path?* Store the best next cell for each cell, then follow it from the best start.
+  - *Non-decreasing paths?* Equal neighbours create cycles; group equal-valued cells into components first.
+  - *Count all increasing paths?* Same memo, summing instead of taking a max.

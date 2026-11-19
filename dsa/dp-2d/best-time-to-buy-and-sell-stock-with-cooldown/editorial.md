@@ -1,35 +1,66 @@
-**Key insight:** model each day's end as a small state machine — *holding*, *just sold*, *free* — and carry the best profit for each state forward. The cooldown is just "you can't go from *just sold* straight to *holding*".
+**Key idea:** at the end of each day you are in one of three states: **holding** a share, **just sold** (so tomorrow is a forced rest), or **resting** with nothing and free to buy. Track the best profit for each state, and compute today's three values from yesterday's three. The answer is the better of the two states that hold no share at the end.
 
-## Approach
+## Recognising the pattern
 
-- **State:** `dp[i][s]` = best profit at the end of day `i` while in state `s`:
-  - `hold` — owning a share,
-  - `sold` — sold on day `i` (so day `i + 1` is a rest day),
-  - `free` — not owning, and free to buy tomorrow.
-- **Recurrence (transitions):**
-  - `hold[i] = max(hold[i-1], free[i-1] - prices[i])` — keep, or buy (only from `free`).
-  - `sold[i] = hold[i-1] + prices[i]` — sell today.
-  - `free[i] = max(free[i-1], sold[i-1])` — rest; yesterday's sale finishes cooling down.
-- **Base cases (day 0):** `hold = -prices[0]`, `sold = -∞` (nothing to sell), `free = 0`.
-- **Order:** day by day. Answer `max(free, sold)` on the last day — ending while holding is never optimal.
-- **Space optimisation:** each day reads only the previous day, so three variables. Save the old `hold` before overwriting it, because `sold` needs yesterday's value.
+"At each step you are in one of a few modes, and the rules depend on the mode" is the state-machine DP from the [2-D Dynamic Programming](/problems/patterns/dp-2d) sheet: the table is `day × state`, and with only three states it collapses to three variables.
 
-Progression: recursion `f(day, holding)` branching on buy/sell/wait is exponential; memoise on `(day, holding)` → `O(n)` states; tabulate as above; three rolling variables.
+```
+         buy                sell
+resting ─────▶ holding ─────────▶ justSold
+  ▲  ⟲           ⟲                   │
+  └──────────────────────────────────┘
+               (cooldown day)
+```
+
+## Alternative: O(n²) over trades (shown below)
+
+`best[i]` = most profit from days `i…` when you may buy on day `i`. Either do nothing today (`best[i + 1]`), or buy today and sell on some later day `j`, then continue from day `j + 2`, skipping the cooldown. That is the reference brute force below: `O(n²)` time, and a useful check on the state machine.
+
+## Three-state DP
+
+1. Day 0: `holding = −prices[0]`, `justSold = −∞` (impossible), `resting = 0`.
+2. For each later day, from **yesterday's** values:
+   - `holding = max(holding, resting − price)`: keep the share, or buy today. Buying is allowed only from `resting`, never straight after a sale.
+   - `justSold = holding + price`: sell today.
+   - `resting = max(resting, justSold)`: stay idle, or finish yesterday's cooldown.
+3. Return `max(resting, justSold)`.
+
+Save the old values before overwriting any of them; each new value must be computed from yesterday's.
+
+## Walkthrough
+
+`prices = [2, 5, 1, 4]`
+
+| day | price | holding | justSold | resting |
+| --- | --- | --- | --- | --- |
+| 0 | 2 | −2 | −∞ | 0 |
+| 1 | 5 | max(−2, 0 − 5) = −2 | −2 + 5 = 3 | max(0, −∞) = 0 |
+| 2 | 1 | max(−2, 0 − 1) = −1 | −2 + 1 = −1 | max(0, 3) = 3 |
+| 3 | 4 | max(−1, 3 − 4) = −1 | −1 + 4 = 3 | max(3, −1) = 3 |
+
+Answer `max(3, 3) = 3`. Selling at 5 on day 1 forces a rest on day 2, so you can't also buy at 1; either trade alone gives 3.
 
 ## Complexity
 
-- Time `O(n)`.
-- Space `O(1)`.
+- Trades over all pairs: `O(n²)` time, `O(n)` space.
+- Three-state DP: `O(n)` time, `O(1)` space.
 
-## Alternatives to mention
+## Edge cases
 
-- An `O(n²)` "pick the next sell day" DP: `best[i] = max(best[i+1], max over j>i of prices[j] - prices[i] + best[j+2])`. Correct, but too slow to lead with.
+- One day: 0.
+- Falling prices: 0 (never buy).
+- Rising prices: one long trade is as good as any split, since each split costs a cooldown day.
 
-## Follow-ups
+## Common mistakes
 
-- Same state-machine template solves the whole stock family: transaction fee (subtract on sell), at most `k` transactions (add a `k` dimension), unlimited trades (two states).
+- Buying from `justSold` instead of `resting`, which ignores the cooldown.
+- Updating the states in place, so today's `holding` feeds today's `justSold`.
+- Starting `justSold` at 0, which pretends a sale happened before day 0.
 
-## Pitfalls
+## In the interview
 
-- Allowing a buy from `sold` ignores the cooldown.
-- Updating `hold` first and then using the new value to compute `sold` (selling on the day you bought — harmless here, but it's a bug pattern in the fee variant).
+- Draw the three states and their transitions before writing code.
+- Likely follow-ups:
+  - *A transaction fee instead of a cooldown?* Two states; subtract the fee on each sale.
+  - *At most `k` transactions?* States `(transactions used, holding or not)`, `O(n · k)`.
+  - *Unlimited trades, no cooldown?* Sum every positive day-to-day increase.

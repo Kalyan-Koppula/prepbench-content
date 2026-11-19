@@ -1,21 +1,31 @@
-// Try every burst order, memoised on the set of balloons still standing (small n only).
+// The same interval recurrence, written top-down with memoisation.
 function maxCoins(nums: number[]): number {
-  const n = nums.length
-  const memo = new Map<number, number>()
-  const go = (alive: number): number => {
-    if (alive === 0) return 0
-    if (memo.has(alive)) return memo.get(alive)!
-    let best = 0
-    for (let i = 0; i < n; i++) {
-      if (!(alive & (1 << i))) continue
-      let left = 1
-      for (let j = i - 1; j >= 0; j--) if (alive & (1 << j)) { left = nums[j]; break }
-      let right = 1
-      for (let j = i + 1; j < n; j++) if (alive & (1 << j)) { right = nums[j]; break }
-      best = Math.max(best, left * nums[i] * right + go(alive & ~(1 << i)))
-    }
-    memo.set(alive, best)
-    return best
+  const val: number[] = [1]
+  for (let i = 0; i < nums.length; i++) {
+    val.push(nums[i])
   }
-  return go((1 << n) - 1)
+  val.push(1)
+  const memo: number[][] = []
+  for (let i = 0; i < val.length; i++) {
+    memo.push(new Array(val.length).fill(-1))
+  }
+  return bestBetween(val, 0, val.length - 1, memo)
+}
+
+function bestBetween(val: number[], l: number, r: number, memo: number[][]): number {
+  if (r - l < 2) {
+    return 0 // nothing strictly between l and r
+  }
+  if (memo[l][r] !== -1) {
+    return memo[l][r]
+  }
+  let best = 0
+  for (let k = l + 1; k < r; k++) {
+    const coins = bestBetween(val, l, k, memo) + val[l] * val[k] * val[r] + bestBetween(val, k, r, memo)
+    if (coins > best) {
+      best = coins
+    }
+  }
+  memo[l][r] = best
+  return best
 }

@@ -1,15 +1,23 @@
 function minPathSum(grid: number[][]): number {
   const m = grid.length
   const n = grid[0].length
-  // best[j] = cheapest cost to reach column j of the current row.
-  const best = new Array(n).fill(0)
-  best[0] = grid[0][0]
-  for (let j = 1; j < n; j++) best[j] = best[j - 1] + grid[0][j]
-  for (let i = 1; i < m; i++) {
-    best[0] += grid[i][0]
-    for (let j = 1; j < n; j++) {
-      best[j] = grid[i][j] + Math.min(best[j], best[j - 1]) // above vs left
+  // cost[i][j] = cheapest sum of a path from (0, 0) to (i, j), moving right or down.
+  const cost: number[][] = []
+  for (let i = 0; i < m; i++) {
+    cost.push(new Array(n).fill(0))
+  }
+  for (let i = 0; i < m; i++) {
+    for (let j = 0; j < n; j++) {
+      if (i === 0 && j === 0) {
+        cost[i][j] = grid[0][0]
+      } else if (i === 0) {
+        cost[i][j] = cost[i][j - 1] + grid[i][j] // first row: only from the left
+      } else if (j === 0) {
+        cost[i][j] = cost[i - 1][j] + grid[i][j] // first column: only from above
+      } else {
+        cost[i][j] = grid[i][j] + Math.min(cost[i - 1][j], cost[i][j - 1])
+      }
     }
   }
-  return best[n - 1]
+  return cost[m - 1][n - 1]
 }

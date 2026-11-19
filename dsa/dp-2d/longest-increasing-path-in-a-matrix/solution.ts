@@ -1,25 +1,41 @@
+const DR = [1, -1, 0, 0]
+const DC = [0, 0, 1, -1]
+
 function longestIncreasingPath(matrix: number[][]): number {
   const m = matrix.length
   const n = matrix[0].length
-  const memo: number[][] = Array.from({ length: m }, () => new Array(n).fill(0)) // 0 = not computed
-  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]]
-
-  // Longest strictly increasing path starting at (r, c).
-  const dfs = (r: number, c: number): number => {
-    if (memo[r][c]) return memo[r][c]
-    let best = 1
-    for (const [dr, dc] of dirs) {
-      const nr = r + dr
-      const nc = c + dc
-      if (nr >= 0 && nr < m && nc >= 0 && nc < n && matrix[nr][nc] > matrix[r][c]) {
-        best = Math.max(best, 1 + dfs(nr, nc))
+  // memo[r][c] = longest increasing path starting at (r, c); 0 = not computed yet.
+  const memo: number[][] = []
+  for (let r = 0; r < m; r++) {
+    memo.push(new Array(n).fill(0))
+  }
+  let answer = 0
+  for (let r = 0; r < m; r++) {
+    for (let c = 0; c < n; c++) {
+      const length = longestFrom(matrix, r, c, memo)
+      if (length > answer) {
+        answer = length
       }
     }
-    memo[r][c] = best
-    return best
   }
-
-  let answer = 0
-  for (let r = 0; r < m; r++) for (let c = 0; c < n; c++) answer = Math.max(answer, dfs(r, c))
   return answer
+}
+
+function longestFrom(matrix: number[][], r: number, c: number, memo: number[][]): number {
+  if (memo[r][c] !== 0) {
+    return memo[r][c]
+  }
+  let best = 1
+  for (let d = 0; d < 4; d++) {
+    const nr = r + DR[d]
+    const nc = c + DC[d]
+    if (nr >= 0 && nr < matrix.length && nc >= 0 && nc < matrix[0].length && matrix[nr][nc] > matrix[r][c]) {
+      const length = 1 + longestFrom(matrix, nr, nc, memo)
+      if (length > best) {
+        best = length
+      }
+    }
+  }
+  memo[r][c] = best
+  return best
 }

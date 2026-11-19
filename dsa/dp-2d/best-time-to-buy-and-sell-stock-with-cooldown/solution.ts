@@ -1,13 +1,15 @@
 function maxProfit(prices: number[]): number {
-  // Best profit at the end of the current day in each state.
-  let hold = -prices[0] // own a share
-  let sold = -Infinity // sold today (must rest tomorrow)
-  let free = 0 // no share, allowed to buy tomorrow
+  // The best profit at the end of the current day, for each of three states.
+  let holding = -prices[0] // we own a share
+  let justSold = -Infinity // we sold today, so tomorrow we must rest
+  let resting = 0 // we own nothing and may buy tomorrow
   for (let i = 1; i < prices.length; i++) {
-    const prevHold = hold
-    hold = Math.max(hold, free - prices[i]) // keep holding, or buy (only from free)
-    free = Math.max(free, sold) // rest; yesterday's sale finishes its cooldown
-    sold = prevHold + prices[i] // sell today
+    const oldHolding = holding
+    const oldJustSold = justSold
+    const oldResting = resting
+    holding = Math.max(oldHolding, oldResting - prices[i]) // keep it, or buy today
+    justSold = oldHolding + prices[i] // sell today
+    resting = Math.max(oldResting, oldJustSold) // stay idle, or finish the cooldown
   }
-  return Math.max(free, sold)
+  return Math.max(resting, justSold)
 }

@@ -1,31 +1,60 @@
-**Key insight:** match prefixes against prefixes. Letters and `?` must consume exactly one character on each side; a `*` either disappears (matches nothing) or swallows one more character of `s` while staying available.
+**Key idea:** let `match[i][j]` say whether the first `i` characters of `s` match the first `j` of `p`. A letter or `?` must match `s[i − 1]` and leaves `match[i − 1][j − 1]`. A `*` either matches nothing (`match[i][j − 1]`) or also covers `s[i − 1]` (`match[i − 1][j]`, staying on the same star so it can keep growing).
 
-## Approach
+## Recognising the pattern
 
-- **State:** `match[i][j]` = `s[0 … i-1]` matches `p[0 … j-1]`.
-- **Recurrence** on the last pattern character `pc = p[j-1]`:
-  - `pc === '*'` → `match[i][j] = match[i][j-1]` (star is empty) `|| match[i-1][j]` (star eats `s[i-1]`, `i > 0`).
-  - otherwise → `match[i][j] = match[i-1][j-1] && (pc === '?' || pc === s[i-1])`.
-- **Base cases:** `match[0][0] = true`; `match[0][j]` is true only while `p[0 … j-1]` is all `*`; `match[i > 0][0] = false`.
-- **Order:** `i` increasing, `j` increasing. Answer `match[m][n]`.
-- **Space optimisation:** row `i` reads row `i - 1` (`[j-1]`, `[j]`) and its own left cell, so two rows suffice.
+A pattern against a string, one position each, is the two-prefix table from the [2-D Dynamic Programming](/problems/patterns/dp-2d) sheet. Unlike [Regular Expression Matching](/problems/regular-expression-matching), the `*` here stands alone and matches any sequence, including empty.
 
-The `match[i-1][j]` term is the trick: instead of trying every length for a `*` (an extra loop), let it eat one character at a time and stay on the same `j`.
+## Alternative: simulate the pattern as an automaton (shown below)
 
-Progression: the plain recursion tries every split for every `*` — exponential with many stars; memoise on `(i, j)`; tabulate; keep two rows.
+Keep a boolean array `active[k]`: "the first `k` pattern characters can match what has been read so far". For each character of `s`, a star stays active (it absorbs the character), and a letter or `?` that matches moves to `k + 1`. After each step, being in front of a star also means being past it, since a star can match nothing. That is the reference brute force below: the same `O(m · n)`, processing the pattern as a set of states. Plain backtracking over how much each star absorbs is exponential.
+
+## Bottom-up table
+
+1. `match[0][0] = true`.
+2. Row 0: `match[0][j] = match[0][j − 1]` and `p[j − 1] = '*'`. Only a run of leading stars matches an empty `s`.
+3. For `i` from 1 to `m`, `j` from 1 to `n`:
+   - `*`: `match[i][j] = match[i][j − 1] || match[i − 1][j]`.
+   - `?` or an equal letter: `match[i][j] = match[i − 1][j − 1]`.
+   - Otherwise false.
+4. Return `match[m][n]`.
+
+## Walkthrough
+
+`s = "bridge"` (rows), `p = "b*e"` (columns). T marks true cells.
+
+|  | "" | b | * | e |
+| --- | --- | --- | --- | --- |
+| "" | T |  |  |  |
+| b |  | T | T (empty) |  |
+| r |  |  | T (absorb) |  |
+| i |  |  | T |  |
+| d |  |  | T |  |
+| g |  |  | T |  |
+| e |  |  | T | **T** |
+
+The star absorbs `ridg`; the final `e` matches diagonally from `match[5][2]`. Answer `true`.
 
 ## Complexity
 
-- Time `O(m · n)`.
-- Space `O(n)`.
+- Backtracking: exponential in the worst case.
+- Table or state simulation: `O(m · n)` time; `O(m · n)` space, or `O(n)` with one row (or the state array).
+- A greedy two-pointer method that remembers the last star runs in `O(m · n)` worst case and `O(1)` space; worth mentioning as the optimisation.
 
-## Alternatives to mention
+## Edge cases
 
-- **Greedy with backtracking to the last star:** walk both strings; on a `*`, remember its position and the current `s` index; on a mismatch, jump back to just after the last `*` and let it absorb one more character. `O(1)` space and usually fast, `O(m · n)` worst case. Elegant, but harder to prove correct on the spot.
-- Collapse runs of consecutive `*` first — they're equivalent to one.
+- Empty `s`: true only if `p` is all stars.
+- Empty `p`: true only if `s` is empty.
+- Repeated stars (`a**b`): behave like one star; collapsing them first is a small speed-up.
 
-## Pitfalls
+## Common mistakes
 
-- Treating `*` like regex `*` (repeat the previous character) — here it stands alone.
-- Forgetting the leading-stars base row: `s = ""`, `p = "**"` must be `true`.
-- Partial matches don't count; the answer is the bottom-right cell, not "any cell in the last row".
+- Forgetting row 0, so `"***"` fails to match `""`.
+- Using `match[i − 1][j − 1]` for a star, which lets it match exactly one character.
+- Confusing this `*` with the regular-expression `*`, which repeats the previous character.
+
+## In the interview
+
+- Contrast the two kinds of star early; it shows you read the problem carefully.
+- Likely follow-ups:
+  - *`O(1)` space?* The greedy two-pointer scan: on a mismatch, backtrack to the last star and let it absorb one more character.
+  - *Match against many file names?* Compile the pattern once; the state-simulation version is the start of that.

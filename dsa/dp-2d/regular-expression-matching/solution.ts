@@ -1,20 +1,30 @@
 function isMatch(s: string, p: string): boolean {
   const m = s.length
   const n = p.length
-  const same = (i: number, j: number) => p[j - 1] === '.' || p[j - 1] === s[i - 1] // s[i-1] vs p[j-1]
-
-  // match[i][j] = s[0..i) matches p[0..j).
-  const match: boolean[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(false))
+  // match[i][j] = the first i characters of s match the first j characters of p.
+  const match: boolean[][] = []
+  for (let i = 0; i <= m; i++) {
+    match.push(new Array(n + 1).fill(false))
+  }
   match[0][0] = true
   for (let i = 0; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
       if (p[j - 1] === '*') {
-        // Use "x*" zero times, or let it absorb s[i-1] and stay on the same j.
-        match[i][j] = match[i][j - 2] || (i > 0 && same(i, j - 1) && match[i - 1][j])
-      } else {
-        match[i][j] = i > 0 && same(i, j) && match[i - 1][j - 1]
+        // "x*" used zero times: skip both pattern characters.
+        let result = match[i][j - 2]
+        // "x*" absorbs s[i - 1]: x must match it, and the rest is the same pattern.
+        if (!result && i > 0 && charMatches(s[i - 1], p[j - 2])) {
+          result = match[i - 1][j]
+        }
+        match[i][j] = result
+      } else if (i > 0 && charMatches(s[i - 1], p[j - 1])) {
+        match[i][j] = match[i - 1][j - 1]
       }
     }
   }
   return match[m][n]
+}
+
+function charMatches(c: string, patternChar: string): boolean {
+  return patternChar === '.' || patternChar === c
 }

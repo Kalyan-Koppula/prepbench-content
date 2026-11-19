@@ -1,27 +1,55 @@
-**Key insight:** every bracketing has a *last* multiplication, which splits the chain at some `k` into two independent sub-chains. Try every `k` and reuse the best costs of the sub-chains — interval DP.
+**Key idea:** in any full parenthesisation of matrices `i..j`, there is a **last** multiplication, which splits the chain after some matrix `k` into `(i..k)` and `(k+1..j)`. Its cost is the product of the three outer dimensions, plus the best cost of each side. Try every `k` and keep the cheapest: `cost[i][j] = min over k of cost[i][k] + cost[k+1][j] + dims[i] · dims[k+1] · dims[j+1]`.
 
-## Approach
+## Recognising the pattern
 
-- **State:** `cost[i][j]` = minimum scalar multiplications to compute `Mᵢ · … · Mⱼ`. That product has shape `dims[i] × dims[j + 1]`.
-- **Recurrence:** `cost[i][j] = min over i ≤ k < j of cost[i][k] + cost[k+1][j] + dims[i] · dims[k+1] · dims[j+1]`.
-- **Base cases:** `cost[i][i] = 0` — a single matrix needs no work.
-- **Order:** by increasing chain length `len = j - i + 1`, so both sub-chains (shorter) are ready. Answer `cost[0][n-1]`.
-- **Space:** the full `n × n` table is required — a cell reads sub-intervals of every length, so there's no rolling-row trick.
+The order of operations changes the cost but not the result, and the choice splits a range into two independent subranges. That is interval DP from the [2-D Dynamic Programming](/problems/patterns/dp-2d) sheet. [Burst Balloons](/problems/burst-balloons) uses the same structure.
 
-Progression: plain recursion over split points recomputes the same sub-chains — the number of bracketings is the Catalan number `C(n-1)`, exponential; memoising on `(i, j)` gives `O(n²)` states × `O(n)` splits; tabulate by length.
+## Alternative: top-down recursion (shown below)
+
+`cheapest(i, j)` tries every split `k`, recursing on both halves, memoised on `(i, j)`. That is the reference brute force below. Without memoisation the number of parenthesisations grows like the Catalan numbers (about `4^n`).
+
+## Interval table
+
+1. Matrix `i` has shape `dims[i] × dims[i + 1]`; there are `n = dims.length − 1` matrices.
+2. `cost[i][i] = 0`: one matrix needs no multiplication.
+3. For `length` from 2 to `n`, for each start `i` with `j = i + length − 1`:
+   - `cost[i][j] = min over k in [i, j) of cost[i][k] + cost[k + 1][j] + dims[i] · dims[k + 1] · dims[j + 1]`.
+4. Return `cost[0][n − 1]`.
+
+**Where the product comes from.** The left part's result is `dims[i] × dims[k + 1]` and the right part's is `dims[k + 1] × dims[j + 1]`. Multiplying an `a × b` matrix by a `b × c` matrix takes `a · b · c` scalar multiplications.
+
+## Walkthrough
+
+`dims = [2, 3, 4, 5]`: matrices `2×3`, `3×4`, `4×5`.
+
+| range | splits | cost |
+| --- | --- | --- |
+| (0, 1) | k = 0: 2·3·4 = 24 | 24 |
+| (1, 2) | k = 1: 3·4·5 = 60 | 60 |
+| (0, 2) | k = 0: 0 + 60 + 2·3·5 = 90; k = 1: 24 + 0 + 2·4·5 = 64 | **64** |
+
+Answer `64`: `(M0 · M1) · M2`.
 
 ## Complexity
 
-- Time `O(n³)`.
-- Space `O(n²)`.
+- All parenthesisations: exponential (Catalan numbers).
+- Interval DP: `O(n³)` time, `O(n²)` space.
 
-## Follow-ups
+## Edge cases
 
-- **Print the bracketing:** store the best `k` in `split[i][j]` and recurse to build `"((M0M1)M2)"`.
-- Same template: Burst Balloons (choose the last balloon), minimum cost to cut a stick, optimal BST, palindrome partitioning II.
+- One matrix: 0.
+- Two matrices: a single product, no choice.
+- Dimensions of 1: they make some orders dramatically cheaper (`[10, 1, 10, 1]`: 20 versus 200).
 
-## Pitfalls
+## Common mistakes
 
-- Off-by-one on shapes: with matrix `Mᵢ = dims[i] × dims[i+1]`, the merge cost uses `dims[i]`, `dims[k+1]`, `dims[j+1]`.
-- Filling the table row by row (`i` ascending) reads `cost[k+1][j]` before it exists — iterate by length, or `i` descending.
-- Greedy "multiply the cheapest adjacent pair first" is not optimal.
+- Off-by-one with dimension indices: the split cost uses `dims[k + 1]`, not `dims[k]`.
+- Filling by `i` ascending instead of by length.
+- Greedily multiplying the cheapest adjacent pair first, which isn't optimal in general.
+
+## In the interview
+
+- State the shape convention (`dims[i] × dims[i + 1]`) first; most bugs come from it.
+- Likely follow-ups:
+  - *Print the parenthesisation?* Store the best `k` per range and build the string recursively.
+  - *Related problems?* Burst Balloons, Minimum Cost to Cut a Stick, Minimum Score Triangulation of a Polygon.

@@ -1,25 +1,61 @@
-**Key insight:** decide the fate of the last character of `s`'s prefix: drop it, or — when it equals the last character of `t`'s prefix — match the two. The counts for the two choices add, because they keep different position sets.
+**Key idea:** let `ways[i][j]` be the number of ways to form the first `j` characters of `t` from the first `i` characters of `s`. The character `s[i − 1]` is either not used (`ways[i − 1][j]`) or, if it equals `t[j − 1]`, used as that character (`ways[i − 1][j − 1]`). Add the two.
 
-## Approach
+## Recognising the pattern
 
-- **State:** `ways[i][j]` = number of ways to form `t[0 … j-1]` by deleting characters from `s[0 … i-1]`.
-- **Recurrence:**
-  - `ways[i][j] = ways[i-1][j]` (don't use `s[i-1]`)
-  - `+ ways[i-1][j-1]` if `s[i-1] === t[j-1]` (match them).
-- **Base cases:** `ways[i][0] = 1` for every `i` (delete everything to get the empty string); `ways[0][j > 0] = 0`.
-- **Order:** `i` increasing (characters of `s`), then `j`. Answer `ways[m][n]`.
-- **Space optimisation:** row `i` reads only row `i - 1`. In one array, sweep `j` from `n` **down** to `1`: `ways[j - 1]` then still holds the previous row's value. The "don't use" term is the unchanged `ways[j]` itself.
+Counting the ways one sequence appears inside another is the two-prefix table from the [2-D Dynamic Programming](/problems/patterns/dp-2d) sheet: the counting cousin of [Longest Common Subsequence](/problems/longest-common-subsequence), with "skip or use" in place of "skip either or match".
 
-Progression: recursion `count(i, j)` with skip/match branches is exponential; memoise on `(i, j)`; tabulate with the `j = 0` column set to `1`; roll to one row.
+## Alternative: memoised recursion over suffixes (shown below)
+
+`count(i, j)` = ways to form `t[j..]` from `s[i..]`. If `t` is used up, there is exactly one way (delete the rest). If `s` has fewer characters left than `t` needs, zero. Otherwise skip `s[i]`, plus match it with `t[j]` when they are equal. With memoisation, `O(m · n)`. That is the reference brute force below. Listing all subsequences of `s` instead would be `O(2^m)`.
+
+## Bottom-up table
+
+1. `ways[i][0] = 1` for every `i`: the empty target is formed one way.
+2. `ways[0][j] = 0` for `j > 0`: an empty source can't form a non-empty target.
+3. For `i` from 1 to `m`, `j` from 1 to `n`:
+   - `ways[i][j] = ways[i − 1][j]`.
+   - If `s[i − 1] = t[j − 1]`, add `ways[i − 1][j − 1]`.
+4. Return `ways[m][n]`.
+
+**One row, iterated downward.** Row `i` reads only row `i − 1`, at `j` and `j − 1`. With a single array, go `j` from `n` down to 1 so `ways[j − 1]` still holds the previous row's value.
+
+## Walkthrough
+
+`s = "banana"` (rows), `t = "ban"` (columns)
+
+|  | "" | b | a | n |
+| --- | --- | --- | --- | --- |
+| "" | 1 | 0 | 0 | 0 |
+| b | 1 | 1 | 0 | 0 |
+| a | 1 | 1 | 1 | 0 |
+| n | 1 | 1 | 1 | 1 |
+| a | 1 | 1 | 2 | 1 |
+| n | 1 | 1 | 2 | 3 |
+| a | 1 | 1 | 3 | 3 |
+
+At the second `n`: `ways = 1 (without it) + 2 (ba-prefixes before it) = 3`. Answer `3`.
 
 ## Complexity
 
-- Time `O(m · n)`.
-- Space `O(n)`.
+- All subsequences: `O(2^m)`.
+- Memoised recursion or table: `O(m · n)` time; `O(m · n)` space, or `O(n)` with one row.
 
-## Pitfalls
+## Edge cases
 
-- The "empty target" base case is `1`, not `0` — without it nothing ever gets counted.
-- Sweeping `j` upward lets one character of `s` match two positions of `t` (`"a"`, `"aa"` would give `1`).
-- Intermediate counts can dwarf the final answer (many ways to form a prefix of `t` that never complete). In fixed-width languages they overflow; in JS they lose precision past `2^53`. Mention a modulus or `BigInt` if the interviewer drops the "fits in 32 bits" guarantee.
-- Early exit: if `t` is longer than `s`, the answer is `0`.
+- `t` longer than `s`: 0.
+- `t` empty: 1.
+- Repeated letters (`"aaa"`, `"aa"`): 3, the number of ways to choose 2 positions of 3.
+- Large counts: intermediate values can exceed 32 bits in some languages even when the answer fits; use 64-bit integers.
+
+## Common mistakes
+
+- `ways[i][0] = 0`, which makes everything 0.
+- On a match, using only the diagonal and forgetting the "skip" option.
+- Iterating the one-row version upward, which lets one character of `s` match two characters of `t`.
+
+## In the interview
+
+- State the two choices for `s[i − 1]` clearly; the recurrence is then one line.
+- Likely follow-ups:
+  - *Is `t` a subsequence at all?* A two-pointer scan, `O(m)`.
+  - *Many targets against one long `s`?* Precompute, for each position, the next occurrence of each letter.
