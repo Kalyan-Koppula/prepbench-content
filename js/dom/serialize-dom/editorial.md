@@ -7,6 +7,31 @@
 3. Walk `childNodes`, skip whitespace-only text, serialize the rest and keep the non-null results.
 4. Return `{ tag: tagName.toLowerCase(), attributes, children }`.
 
+## Walkthrough
+
+`serialize(<div class="card"><h2>Title</h2>\n  <p>Body</p></div>)`:
+
+| Node | Output |
+| --- | --- |
+| div | `{ tag: 'div', attributes: { class: 'card' }, children: [...] }` |
+| h2 | `{ tag: 'h2', attributes: {}, children: ['Title'] }` |
+| whitespace-only text between elements | skipped |
+| p | `{ tag: 'p', attributes: {}, children: ['Body'] }` |
+
+Comments and other node types return `null` and are dropped. The output is plain data, so it can be sent as JSON and rebuilt with a renderer.
+
+## Complexity
+
+`O(n)` nodes.
+
+## Edge cases to test
+
+- Attributes, including those without values.
+- Mixed text and element children.
+- Whitespace-only text removed, meaningful text kept.
+- Comments ignored.
+- Round trip with a renderer reproduces the structure.
+
 ## Pitfalls
 
 - Using `children` instead of `childNodes` silently loses all the text.
@@ -21,3 +46,7 @@
 - **Form state:** `input.value`, `checked` and `selected` live in properties, not attributes. How would you capture them?
 - **Huge trees:** make it iterative, or stream it, so a 100k-node page doesn't blow the stack.
 - **Compact format:** encode elements as tuples `[tag, attrs, ...children]` to shrink the payload.
+
+## In the interview
+
+Mention the reverse operation (deserialising into DOM) and the security point: rendering serialised trees back must still escape text and reject dangerous attributes like `onclick`.

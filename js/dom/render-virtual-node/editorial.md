@@ -11,6 +11,30 @@
    - `true` → `setAttribute(name, '')`, anything else → `setAttribute(name, String(value))`.
 3. Walk `children` with a recursive `append` that flattens arrays, skips `null`/`undefined`/booleans and appends `render(child)`.
 
+## Walkthrough
+
+`render({ type: 'button', props: { className: 'primary', disabled: true, onClick: save }, children: ['Save ', count] })`:
+
+| Prop or child | Handling | DOM result |
+| --- | --- | --- |
+| `className` | mapped to the `class` attribute | `class="primary"` |
+| `disabled: true` | boolean true → empty attribute | `disabled=""` |
+| `onClick` | function prop starting with `on` | `addEventListener('click', save)` |
+| `'Save '`, `count` | strings and numbers become text nodes | `Save 3` |
+
+`false`, `null` and `undefined` props are skipped, and the same values as children render nothing, which makes conditional rendering (`cond && vnode`) work.
+
+## Complexity
+
+`O(n)` for `n` virtual nodes.
+
+## Edge cases to test
+
+- Nested elements and mixed children.
+- Nested child arrays are flattened.
+- Boolean attributes, `style` objects, event handlers.
+- `null`/`false` children skipped; `0` rendered.
+
 ## Pitfalls
 
 - `setAttribute('className', …)` creates an attribute literally called `classname`. React's `className` exists because `class` is a reserved word in JS, not because the DOM uses it.
@@ -26,3 +50,7 @@
 - **Fragments:** a `type` of `Fragment` renders its children into a `DocumentFragment`.
 - **SVG:** use `createElementNS` with the SVG namespace for `svg` and its descendants.
 - **Updates:** given the old and new vnode, patch the DOM instead of re-rendering (see *Diff and Patch*).
+
+## In the interview
+
+Connect it to JSX: `<button className="primary">` compiles to a call that creates exactly this object. The follow-up is diffing two trees instead of re-rendering everything ([diff-and-patch](/frontend/js/diff-and-patch)).

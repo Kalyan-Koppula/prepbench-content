@@ -7,6 +7,29 @@
 3. Start from the root's children so the root itself is never tested.
 4. Collect into a plain array.
 
+## Walkthrough
+
+`getElementsByClassName(root, 'btn primary')` checks every descendant for **all** listed classes:
+
+| Element | Classes | All of `btn`, `primary`? |
+| --- | --- | --- |
+| `button.btn.primary` | btn, primary | yes |
+| `button.btn` | btn | no |
+| `a.primary.btn.large` | primary, btn, large | yes (order and extras don't matter) |
+
+Whitespace in the argument is normalised, so `'  btn   primary '` behaves the same.
+
+## Complexity
+
+`O(n × k)` for `n` elements and `k` class names (each `classList.contains` is fast).
+
+## Edge cases to test
+
+- Multiple classes in any order.
+- Extra whitespace.
+- Empty string returns `[]`.
+- Document order; the root excluded.
+
 ## Pitfalls
 
 - Using `className.includes('btn')` matches `btn-primary` and `mybtn`. Compare tokens with `classList.contains` (or split `className`).
@@ -21,3 +44,7 @@
 - **Iterative version:** use an explicit stack, pushing children in reverse so they pop in order, to avoid deep recursion.
 - **`getElementsByTagName` / `querySelectorAll('.a.b')`:** reuse the same walker with a different predicate.
 - **Performance:** what if this runs on every keystroke over a 50k-node tree? Discuss indexing by class or narrowing the subtree.
+
+## In the interview
+
+Mention that `classList.contains` is case-sensitive (in standards mode), that the native result is live, and that `querySelectorAll('.btn.primary')` is the modern equivalent.

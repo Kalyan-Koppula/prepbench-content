@@ -7,6 +7,32 @@
 3. For each text node, run `matchAll`. Build a `DocumentFragment` with the text before each match, a `<mark>` holding the matched text, and the remainder.
 4. If anything matched, `replaceChild(fragment, textNode)` and add the matches to the count.
 
+## Walkthrough
+
+`highlight(root, ['java', 'javascript'])` on `<p>I like JavaScript and <b>java</b>.</p>`:
+
+| Step | Result |
+| --- | --- |
+| Sort keywords longest first | `['javascript', 'java']`, so "JavaScript" isn't split into "Java" + "Script" |
+| Build one case-insensitive regex | `/javascript|java/gi` (special characters escaped) |
+| Collect text nodes, skipping `MARK`, `SCRIPT`, `STYLE` | "I like JavaScript and ", "java", "." |
+| Replace each text node with a fragment of text and `<mark>` elements | `I like <mark>JavaScript</mark> and <b><mark>java</mark></b>.` |
+
+Working on **text nodes** keeps existing elements and event listeners intact, unlike rebuilding `innerHTML`, which would also risk XSS with user text.
+
+## Complexity
+
+`O(total text length)` plus node creation.
+
+## Edge cases to test
+
+- Overlapping keywords (longest wins).
+- Case-insensitive matches keep the original casing.
+- Keywords with regex characters (`c++`, `a.b`).
+- Text inside nested elements.
+- Running twice doesn't nest `<mark>` elements.
+- Returns the number of highlights.
+
 ## Pitfalls
 
 - `root.innerHTML = root.innerHTML.replace(/cat/gi, …)` rewrites attributes (`title="<mark>cat</mark>"`), breaks entities (`&lt;` contains `lt`), and recreates every element, dropping listeners and references.
@@ -21,3 +47,7 @@
 - **Matches across elements:** highlight `JavaScript` in `<b>Java</b>Script`. Concatenate the text of a block, match, then map offsets back to nodes, splitting marks per node.
 - **Un-highlight:** replace each `<mark>` with its text and call `normalize()` to merge adjacent text nodes.
 - **Large documents:** use a `TreeWalker` with `SHOW_TEXT`, and the CSS Custom Highlight API to highlight without touching the DOM at all.
+
+## In the interview
+
+The two key decisions are text-node processing (safety, preserving listeners) and longest-first alternation. Mention the CSS Custom Highlight API as a newer way to highlight ranges without changing the DOM.

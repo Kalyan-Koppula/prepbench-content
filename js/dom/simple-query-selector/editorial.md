@@ -7,6 +7,32 @@
 3. **Match the full selector:** the element must match the last compound. Then walk `parentElement` upward with a pointer at the previous compound, decrementing the pointer each time an ancestor matches. Success when the pointer passes the first compound.
 4. **Collect:** a pre-order walk over `root`'s descendants (not `root`), pushing each element that matches. Pre-order gives document order and no duplicates.
 
+## Walkthrough
+
+`querySelector(root, 'ul.menu li.active')`:
+
+| Step | Detail |
+| --- | --- |
+| Split on whitespace | compounds `ul.menu` and `li.active` (descendant combinator) |
+| Parse each compound | `{ tag: 'ul', classes: ['menu'] }`, `{ tag: 'li', classes: ['active'] }` |
+| Candidates | every descendant matching the **last** compound (`li.active`) |
+| Check ancestors right to left | walk up from each candidate looking for an ancestor matching `ul.menu` |
+| Return | the first candidate in document order that passes |
+
+Matching right to left (from the subject element outwards) is how browsers match selectors too: it rejects most elements after one cheap check.
+
+## Complexity
+
+`O(n × d)` in the worst case: each element, and up to `d` ancestors.
+
+## Edge cases to test
+
+- Tag, id, class and combinations (`a#x.y.z`).
+- Descendant chains of several levels.
+- No match returns `null`.
+- Document order of the first match.
+- Ancestors above the root don't count.
+
 ## Pitfalls
 
 - Matching left to right from `root` ("find all `nav`, then all `a` inside them") produces duplicates when matches nest and loses document order unless you de-duplicate and sort.
@@ -22,3 +48,7 @@
 - **Attribute selectors and `:not()`:** extend the compound parser into a proper tokenizer.
 - **Performance:** index by id/class/tag and start from the rarest part, or cache parsed selectors as browsers do.
 - **`matches(el, selector)` and `closest(el, selector)`:** both fall out of `matchesSelector`.
+
+## In the interview
+
+Name what's out of scope (child `>` and sibling combinators, attributes, pseudo-classes) and how you'd add `>`: check only the direct parent for that step.

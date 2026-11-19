@@ -10,6 +10,31 @@
    - props new or changed: set them; for events, remove the old listener before adding the new one;
    - children: patch the common prefix index by index, remove the extra old children **from the end backwards**, then append the extra new ones.
 
+## Walkthrough
+
+Old tree `ul > [li "A", li "B"]`, new tree `ul.list > [li "A", li "C", li "D"]`:
+
+| Node | Comparison | Patch |
+| --- | --- | --- |
+| `ul` | same type | update props: add `class="list"` |
+| child 0 | same type, same text | nothing |
+| child 1 | same type, text `B` → `C` | update the text node |
+| child 2 | new | create and append `li "D"` |
+
+Different types at a position replace the whole subtree; extra old children are removed. This positional strategy is simple but inefficient for insertions at the start of a list: every child appears changed. Keys solve that by matching children by identity instead of index.
+
+## Complexity
+
+`O(n)` over both trees for the positional diff.
+
+## Edge cases to test
+
+- Text changes, prop additions, changes and removals.
+- Event handler replacement (remove the old listener).
+- Type changes replace subtrees.
+- Added and removed children at the end.
+- The DOM node identity is preserved where types match.
+
 ## Pitfalls
 
 - Removing extra children in a forward loop: after removing index 1, the old index 2 slides into 1, so the loop skips nodes or calls `removeChild(undefined)`.
@@ -25,3 +50,7 @@
 - **Event delegation:** store handlers on the node (e.g. `el.__handlers`) and attach one listener per event type at the root.
 - **Return value:** have `patch` return the new real node so callers can keep references up to date.
 - **Batching:** collect patches first (diff phase), then apply them together (commit phase).
+
+## In the interview
+
+Explain the two heuristics real frameworks use: different types mean different subtrees, and keys identify children across renders. Mention why that makes the diff `O(n)` instead of the `O(n³)` general tree-edit distance.
