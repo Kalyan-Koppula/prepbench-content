@@ -9,6 +9,28 @@
 
 The pre-ES5 polyfill was `function F() {} F.prototype = proto; return new F()`. It can't do `null` (a `null` prototype on a constructor falls back to `Object.prototype` when you call `new`) and can't do descriptors.
 
+## Walkthrough
+
+`objectCreate(animal, { name: { value: 'Rex', enumerable: true } })`:
+
+| Step | Result |
+| --- | --- |
+| 1 | `{}` with its prototype set to `animal` |
+| 2 | `defineProperties` adds `name` (read-only, because `writable` defaults to false) |
+
+`objectCreate(null)` makes an object with no prototype at all: no `toString`, no `hasOwnProperty`, a safe dictionary.
+
+## Complexity
+
+`O(k)` for `k` property descriptors.
+
+## Edge cases to test
+
+- The prototype is set correctly.
+- `null` prototype objects.
+- Property descriptors with their defaults (non-writable, non-enumerable, non-configurable).
+- Invalid prototypes (numbers, strings) throw.
+
 ## Pitfalls
 
 - The `new F()` trick with `proto = null` silently gives you `Object.prototype`.
@@ -22,3 +44,7 @@ The pre-ES5 polyfill was `function F() {} F.prototype = proto; return new F()`. 
 - **Classical inheritance by hand:** `Child.prototype = Object.create(Parent.prototype)` and why the `constructor` property needs fixing.
 - **`setPrototypeOf` performance:** why engines warn against changing an existing object's prototype, and why it's fine on a fresh `{}`.
 - **`__proto__` in object literals:** `{ __proto__: proto }` as yet another way.
+
+## In the interview
+
+The classic pre-ES5 polyfill used a temporary constructor (`function F() {}; F.prototype = proto; return new F()`); mention it to show you know why `Object.create` was added.

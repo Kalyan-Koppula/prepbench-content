@@ -5,6 +5,27 @@
 1. If `a === b`, they're the same unless they are the two zeros: return `a !== 0 || 1 / a === 1 / b`.
 2. Otherwise they're different unless both are `NaN`: return `a !== a && b !== b`.
 
+## Walkthrough
+
+| Call | `===` | `Object.is` | Why |
+| --- | --- | --- | --- |
+| `(1, 1)` | true | true | same value |
+| `(NaN, NaN)` | false | **true** | `a !== a && b !== b` detects `NaN` |
+| `(0, -0)` | true | **false** | `1 / 0` is `Infinity`, `1 / -0` is `-Infinity` |
+| `({}, {})` | false | false | different references |
+
+The implementation starts from `===` and fixes its two exceptions.
+
+## Complexity
+
+`O(1)`.
+
+## Edge cases to test
+
+- `NaN` with `NaN`.
+- `+0` with `-0`, and `-0` with `-0`.
+- Ordinary values and references.
+
 ## Pitfalls
 
 - `isNaN(a) && isNaN(b)`: the global `isNaN` coerces, so `isNaN('abc')` is true and `objectIs('abc', 'xyz')` would be true. Use `Number.isNaN` or `x !== x`.
@@ -17,3 +38,7 @@
 - **`[NaN].indexOf(NaN)` vs `[NaN].includes(NaN)`:** why do they disagree?
 - **React:** why `useState` and `useEffect` deps use `Object.is`, and what that means for objects and arrays.
 - **Shallow equal:** build `shallowEqual(a, b)` with `objectIs` per key.
+
+## In the interview
+
+Explain where it matters: React compares state with `Object.is`, and `Map`/`Set`/`includes` use SameValueZero (which treats `+0` and `-0` as equal but `NaN` as equal to itself).

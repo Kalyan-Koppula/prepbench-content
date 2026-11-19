@@ -11,6 +11,32 @@
 
 A pre-ES2015 alternative to `new.target`: set `bound.prototype = Object.create(target.prototype)` and check `this instanceof bound`.
 
+## Walkthrough
+
+```js
+function Point(x, y) { this.x = x; this.y = y }
+const PointAt1 = Point.myBind({ ignored: true }, 1)
+```
+
+| Call | `new.target`? | Behaviour | Result |
+| --- | --- | --- | --- |
+| `PointAt1(2)` | no | `Point.apply({ ignored: true }, [1, 2])` | sets `x`, `y` on the bound object |
+| `new PointAt1(2)` | yes | create an instance of `Point.prototype`, call `Point` on it | a `Point` with `x = 1`, `y = 2` |
+
+Preset arguments are always applied first. When called with `new`, the bound `this` is ignored, matching native `bind`.
+
+## Complexity
+
+`O(p + a)` per call to combine arguments.
+
+## Edge cases to test
+
+- `this` is fixed for normal calls.
+- Presets come before call arguments.
+- `new` on the bound function creates an instance of the original constructor.
+- A constructor returning an object overrides the instance.
+- Binding a non-function throws.
+
 ## Pitfalls
 
 - Returning an arrow function: you can't call it with `new` at all.
@@ -24,3 +50,7 @@ A pre-ES2015 alternative to `new.target`: set `bound.prototype = Object.create(t
 - **`instanceof Bound`:** natively `new Bound() instanceof Bound` is true; which of the two implementations above gets that right?
 - **Classes:** `target.apply` throws for `class` constructors; `Reflect.construct(target, args, new.target)` fixes it.
 - **Arrow functions:** what does `arrow.bind(obj)` do (nothing to `this`, presets still apply)?
+
+## In the interview
+
+Write the simple version first (`return (...args) => fn.apply(thisArg, [...presets, ...args])`), then add `new` support, which is what interviewers check for the senior answer. Mention `name` (`'bound fn'`) and `length` as details native `bind` also sets.

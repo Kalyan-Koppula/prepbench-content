@@ -8,6 +8,30 @@
 4. Copy with `to[key] = from[key]`: reading runs getters, writing runs setters.
 5. Return `to`.
 
+## Walkthrough
+
+`objectAssign({ a: 1 }, null, { b: 2 }, { a: 3, [Symbol('s')]: 4 })`:
+
+| Source | Action | Target after |
+| --- | --- | --- |
+| `null` | skipped | `{ a: 1 }` |
+| `{ b: 2 }` | copy `b` | `{ a: 1, b: 2 }` |
+| `{ a: 3, [s]: 4 }` | copy `a` (overwrite) and the symbol key | `{ a: 3, b: 2, [s]: 4 }` |
+
+Only **own enumerable** properties are copied (string and symbol keys), using normal assignment, so setters on the target run. The copy is shallow: nested objects are shared.
+
+## Complexity
+
+`O(total keys)`.
+
+## Edge cases to test
+
+- Later sources overwrite earlier ones.
+- `null`/`undefined` sources are skipped; a `null` target throws.
+- Symbol keys are copied; inherited and non-enumerable ones aren't.
+- The target itself is returned (mutated).
+- Getters on sources are invoked; setters on the target are triggered.
+
 ## Pitfalls
 
 - `for…in`: includes inherited enumerable properties and skips symbols.
@@ -22,3 +46,7 @@
 - **Copy descriptors faithfully:** `Object.defineProperties(target, Object.getOwnPropertyDescriptors(source))`.
 - **Spread vs assign:** `{ ...a }` defines properties (no setters run) while `Object.assign` sets them.
 - **Errors mid-copy:** if a setter throws halfway, properties already copied stay. Why might that matter?
+
+## In the interview
+
+Contrast with object spread (`{ ...a, ...b }`), which defines properties on a new object instead of assigning, so it doesn't trigger setters.

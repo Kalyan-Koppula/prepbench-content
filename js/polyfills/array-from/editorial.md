@@ -7,6 +7,30 @@
 3. If `obj[Symbol.iterator]` is a function, `for…of` over it, mapping each value with `mapFn.call(thisArg, value, index)`.
 4. Otherwise normalize `length` (`Math.trunc(Number(len))`, clamp at 0, `NaN` → 0) and copy each index, mapping as you go.
 
+## Walkthrough
+
+Three inputs:
+
+| Call | Path | Result |
+| --- | --- | --- |
+| `arrayFrom('héllo')` | strings are iterable | `['h', 'é', 'l', 'l', 'o']` |
+| `arrayFrom(new Set([1, 1, 2]))` | iterable | `[1, 2]` |
+| `arrayFrom({ length: 3 }, (_, i) => i * i)` | array-like: read indices 0..2 | `[0, 1, 4]` |
+
+The iterator protocol is checked first; only objects without `Symbol.iterator` fall back to the `length` property.
+
+## Complexity
+
+`O(n)`.
+
+## Edge cases to test
+
+- Strings (including characters outside the basic multilingual plane, which iterate as one item).
+- Sets, maps (entries), generators.
+- Array-likes with and without values.
+- `mapFn` and `thisArg`.
+- `null`/`undefined` throw.
+
 ## Pitfalls
 
 - `Array.prototype.slice.call(source)`: keeps holes and ignores iterables like `Set`.
@@ -21,3 +45,7 @@
 - **`Array.fromAsync`:** accept async iterables and return a promise.
 - **Subclassing:** `MyArray.from(...)` returns a `MyArray`; how does the real one do that (`this` as constructor)?
 - **Huge lengths:** what happens with `{ length: 2 ** 32 }`?
+
+## In the interview
+
+The interesting decision is iterable versus array-like, and that iterating a string differs from indexing it (surrogate pairs). `Array.from({ length: n }, fn)` is a common idiom worth naming.
