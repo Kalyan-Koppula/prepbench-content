@@ -33,9 +33,13 @@ Because every label waits exactly `n` units, the queue stays ordered by release 
 | 1 | A | B:3 | A:2 until 3 |
 | 2 | B | – | A:2@3, B:2@4 |
 | 3 | idle (jump) | A:2 released | B:2@4 |
-| … | | | |
+| 4 | A | B:2 released | A:1@6 |
+| 5 | B | – | A:1@6, B:1@7 |
+| 6 | idle (jump) | A:1 released | B:1@7 |
+| 7 | A | B:1 released | – |
+| 8 | B | – | – |
 
-Following it through gives `A B idle A B idle A B`, 8 units. The formula agrees: `(3 − 1) · 3 + 2 = 8`.
+The schedule is `A B idle A B idle A B`, 8 units. The formula agrees: `(3 − 1) · 3 + 2 = 8`.
 
 ## Complexity
 
