@@ -9,6 +9,31 @@
 5. Always return `result`.
 6. `cancel()`: `clearTimeout`, reset `timer` and `saved`.
 
+## Walkthrough
+
+`throttle(fn, 100, { leading: false, trailing: true })` with calls at 0, 40 and 80 ms:
+
+| Time | Event | Action |
+| --- | --- | --- |
+| 0 | call A | no window: open one until 100; `leading` is false, so save A |
+| 40 | call B | window open: save B |
+| 80 | call C | window open: save C |
+| 100 | window ends | trailing: open a new window until 200, run C |
+| 200 | window ends | nothing saved: close |
+
+With `{ leading: true, trailing: false }`, A runs at 0, B and C are dropped, and the next run happens on the first call after the window closes. With both `false`, nothing ever runs (worth asking the interviewer whether that should throw).
+
+## Complexity
+
+`O(1)` per call.
+
+## Edge cases to test
+
+- Each combination of `leading` and `trailing`.
+- A single call with both edges enabled runs once, not twice.
+- `cancel()` drops the saved call and closes the window.
+- The returned value is the result of the most recent run.
+
 ## Pitfalls
 
 - Restarting the timer on every call: that's debounce. In `trailing: false` mode a call at 120ms must run even though the previous call was at 60ms.
@@ -22,3 +47,7 @@
 - **`flush()`:** run the saved call now.
 - **Timestamps:** implement with `Date.now()` and a single timer; handle the clock jumping backwards.
 - **Per-key throttling:** throttle analytics events per event name with one helper.
+
+## In the interview
+
+Model the throttle as "windows": a call either opens a window (leading edge) or is saved for the window's end (trailing edge). Each option then becomes one `if`. Mention that lodash implements throttle on top of debounce with `maxWait`.
