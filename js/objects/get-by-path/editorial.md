@@ -6,6 +6,31 @@
 2. Walk the keys: if the current value is `null` or `undefined`, return the default; otherwise step into `current[key]`.
 3. At the end, return the default only if the value is `undefined`.
 
+## Walkthrough
+
+`get({ a: { b: [{ c: 3 }] } }, 'a.b[0].c')`:
+
+| Step | Key | Current value |
+| --- | --- | --- |
+| parse | `'a.b[0].c'` → `['a', 'b', '0', 'c']` | – |
+| 1 | `a` | `{ b: [...] }` |
+| 2 | `b` | `[{ c: 3 }]` |
+| 3 | `0` | `{ c: 3 }` |
+| 4 | `c` | `3` |
+
+With `'a.x.y'`, step 2 gives `undefined` and step 3 stops early, returning the default value instead of throwing.
+
+## Complexity
+
+`O(k)` for `k` path segments.
+
+## Edge cases to test
+
+- Dot paths, bracket indices and array paths.
+- Missing intermediate values return the default.
+- A stored `undefined` returns the default; a stored `null` returns `null`.
+- Falsy values like `0` and `''` are returned, not replaced by the default.
+
 ## Pitfalls
 
 - `value || defaultValue` replaces `0`, `''`, `false` and `null` with the default.
@@ -20,3 +45,7 @@
 - **Memoise path parsing** for hot paths: cache `path -> keys` in a `Map`.
 - **Typed version:** in TypeScript, infer the return type from a literal path string.
 - **Write side:** see "Set by Path".
+
+## In the interview
+
+Mention that optional chaining (`a?.b?.[0]?.c ?? fallback`) replaced most uses when paths are known at write time; `get` remains useful for dynamic paths (configs, form libraries).

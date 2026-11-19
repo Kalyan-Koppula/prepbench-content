@@ -7,6 +7,30 @@
 3. If the segment exists but isn't one of your containers, it is a leaf: throw.
 4. At the last segment, if it already holds one of your containers, assigning would wipe nested keys: throw. Otherwise assign.
 
+## Walkthrough
+
+`unflattenObject({ 'a.b': 1, 'a.c.0': 'x', 'a.c.1': 'y', d: true })`:
+
+| Flat key | Parts | Containers created | Assigned |
+| --- | --- | --- | --- |
+| `a.b` | `a`, `b` | `a` → `{}` (next part isn't numeric) | `a.b = 1` |
+| `a.c.0` | `a`, `c`, `0` | `c` → `[]` (next part is numeric) | `a.c[0] = 'x'` |
+| `a.c.1` | – | reuses `a.c` | `a.c[1] = 'y'` |
+| `d` | `d` | – | `d = true` |
+
+Result: `{ a: { b: 1, c: ['x', 'y'] }, d: true }`. Conflicts such as `{ a: 1, 'a.b': 2 }` throw instead of silently losing data, and dangerous segments like `__proto__` are skipped.
+
+## Complexity
+
+`O(total characters in the keys)`.
+
+## Edge cases to test
+
+- Objects and arrays created from numeric segments.
+- Round-trip with `flattenObject`.
+- Conflicting keys throw.
+- Prototype-polluting segments are ignored.
+
 ## Pitfalls
 
 - Checking `typeof node[part] === 'object'` instead of "did I build it": a value like `{ settings: { a: 1 } }` gets mutated by `'settings.b'`, so the input leaks into and is changed by the output.
@@ -20,3 +44,7 @@
 - **Escaped dots:** let `'a\\.b'` mean a single key `a.b`.
 - **Sparse indices:** `{ 'list.5': 'x' }` creates a 6-slot array with holes. Would you compact it, or reject it?
 - **Query strings:** turn `URLSearchParams` like `filter.status=open&filter.tags.0=bug` into nested state.
+
+## In the interview
+
+Discuss the ambiguity choices (numeric segments mean arrays; conflicts throw) and the security angle. Typical uses: parsing form field names like `address.city`, or translation files.

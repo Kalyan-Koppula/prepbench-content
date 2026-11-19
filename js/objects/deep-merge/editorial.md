@@ -7,6 +7,32 @@
 3. If the incoming value is a plain object, recurse into the existing value when it is also a plain object (it is one of yours), otherwise into a new `{}`. Assign the returned object.
 4. Anything else (primitive, `null`, array, Date, instance, function) replaces the existing value.
 
+## Walkthrough
+
+`deepMerge({ theme: { color: 'blue', size: 12 } }, { theme: { size: 14 }, debug: true })`:
+
+| Key path | Existing | Incoming | Result |
+| --- | --- | --- | --- |
+| `theme` | object | object | merge recursively |
+| `theme.color` | `'blue'` | – | kept |
+| `theme.size` | 12 | 14 | 14 (later source wins) |
+| `debug` | – | `true` | added |
+
+Result: `{ theme: { color: 'blue', size: 14 }, debug: true }`. Arrays and other non-plain values are **replaced**, not merged, and `undefined` in a source doesn't overwrite. Keys like `__proto__` are skipped so a malicious JSON payload can't pollute `Object.prototype`.
+
+## Complexity
+
+`O(n)` for the total number of keys across sources.
+
+## Edge cases to test
+
+- Nested merges at several levels.
+- Later sources override earlier ones.
+- Arrays replace rather than concatenate.
+- `undefined` values don't overwrite.
+- Inputs aren't mutated.
+- A `__proto__` key in parsed JSON doesn't change prototypes.
+
 ## Pitfalls
 
 - `Object.assign(target, ...)` or `{ ...a, ...b }` is shallow: `theme` from `b` replaces `theme` from `a` wholesale.
@@ -20,3 +46,7 @@
 - **Cycles in sources:** track visited pairs.
 - **Typed signature:** `deepMerge<A, B>(a: A, b: B): DeepMerge<A, B>` as a type challenge.
 - **Mutating version** (lodash `merge`) vs this pure one: when is each appropriate?
+
+## In the interview
+
+Clarify the array policy (replace, concatenate or merge by index) up front. Then raise prototype pollution unprompted; it's the security question hiding inside this exercise.

@@ -8,6 +8,33 @@
 4. Cycles: keep a stack of `[x, y]` pairs being compared. If the pair is already on the stack, return `true` (assume equal; if they differ, some other branch will find it). Pop the pair when you finish, so a failed comparison isn't remembered as a success.
 5. Per kind: Date by `getTime()`, RegExp by `source` and `flags`, Map by size plus `has` and deep values, Set by matching each member against a not-yet-matched member, arrays by length and index, objects by `Object.keys` length plus `hasOwnProperty` and deep values.
 
+## Walkthrough
+
+`deepEqual({ a: [1, { b: NaN }] }, { a: [1, { b: NaN }] })`:
+
+| Compared | Rule | Result |
+| --- | --- | --- |
+| the two outer objects | same prototype, same keys | recurse |
+| `a` arrays | same prototype and length | recurse per index |
+| `1` vs `1` | `===` | equal |
+| `{ b: NaN }` objects | recurse | – |
+| `NaN` vs `NaN` | SameValueZero treats them as equal | equal |
+
+All pairs match, so the result is `true`. For cyclic structures, a pair already being compared further up the recursion is assumed equal, which stops infinite recursion.
+
+## Complexity
+
+`O(n)` for `n` values in plain structures. Comparing sets of objects is `O(n²)` in this version because each item searches for an equal partner.
+
+## Edge cases to test
+
+- Different key order: still equal.
+- `NaN` equals `NaN`; `+0` equals `-0` under SameValueZero.
+- Different prototypes (an array versus an object with numeric keys): not equal.
+- Dates by time, regexes by source and flags.
+- Maps and sets, including sets of objects.
+- Cyclic structures.
+
 ## Pitfalls
 
 - `typeof null === 'object'`; and `Object.keys([])` vs `Object.keys({})` are both empty, so without the prototype check `[]` equals `{}`.
@@ -22,3 +49,7 @@
 - **Typed arrays, `ArrayBuffer`, boxed primitives (`new Number(1)`):** more branches.
 - **Performance:** the Set matching is O(n²). When can you speed it up (all members primitive: just `has`)?
 - **Loose mode:** ignore prototypes and undefined-valued keys, like Jest's `toEqual`.
+
+## In the interview
+
+Agree on the equality semantics first (SameValueZero or `Object.is`, prototypes, which built-ins). Then walk the type checks in order. Mention that libraries like Lodash's `isEqual` handle many more cases (typed arrays, errors, boxed primitives).

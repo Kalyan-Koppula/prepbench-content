@@ -6,6 +6,34 @@
 2. Start with `walk(array, depth)`. `Infinity - 1 === Infinity`, so "flatten everything" needs no special case, and a depth of `0` or less pushes items as they are.
 3. Iterate with `forEach` (or `for` plus `i in items`) so holes are skipped like `.flat()` does.
 
+## Walkthrough
+
+`flatten([1, [2, [3, [4]]], 5], 2)`:
+
+| Item | Depth remaining | Action |
+| --- | --- | --- |
+| `1` | 2 | push |
+| `[2, [3, [4]]]` | 2 | walk with depth 1 |
+| `2` | 1 | push |
+| `[3, [4]]` | 1 | walk with depth 0 |
+| `3` | 0 | push |
+| `[4]` | 0 | depth exhausted: push the array itself |
+| `5` | 2 | push |
+
+Result: `[1, 2, 3, [4], 5]`, matching `[1, [2, [3, [4]]], 5].flat(2)`. With `Infinity` as the depth, everything is flattened.
+
+## Complexity
+
+`O(n)` for `n` total elements; recursion depth up to the requested depth.
+
+## Edge cases to test
+
+- Default depth 1.
+- Depth 0 returns a shallow copy.
+- `Infinity` flattens completely.
+- Holes are skipped, like `flat`.
+- Very deep nesting with `Infinity` (consider an iterative stack to avoid stack overflow).
+
 ## Pitfalls
 
 - `for...of` and `for (let i...)` visit holes as `undefined`, so the result gets extra items.
@@ -19,3 +47,7 @@
 - **Generator version:** `function* flattenIter(array, depth)` with `yield*`, which works lazily on huge inputs.
 - **Polyfill `Array.prototype.flat`**, including the `this` handling and holes rule.
 - **Typed version:** a `Flatten<T, Depth>` type.
+
+## In the interview
+
+Write the recursive version, then offer the iterative stack version for deep inputs, and mention `Array.prototype.flat` as the production answer.

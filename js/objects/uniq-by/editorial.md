@@ -5,6 +5,29 @@
 1. Normalise `by` into a function.
 2. Loop once: compute the key, skip the item if the set has it, otherwise add the key and keep the item.
 
+## Walkthrough
+
+`uniqBy([{ id: 1, v: 'a' }, { id: 2, v: 'b' }, { id: 1, v: 'c' }], 'id')`:
+
+| Item | Key | Seen before? | Output |
+| --- | --- | --- | --- |
+| `{ id: 1, v: 'a' }` | 1 | no | keep |
+| `{ id: 2, v: 'b' }` | 2 | no | keep |
+| `{ id: 1, v: 'c' }` | 1 | yes | skip |
+
+The **first** occurrence of each key wins, and order is preserved.
+
+## Complexity
+
+`O(n)` time and space with a `Set`.
+
+## Edge cases to test
+
+- Property-name and function keys.
+- First occurrence wins.
+- `NaN` keys deduplicate (sets use SameValueZero).
+- Object keys compare by reference.
+
 ## Pitfalls
 
 - Using a plain object as the "seen" map: keys turn into strings, so `1` and `'1'` collide, and every object key becomes `'[object Object]'`.
@@ -17,3 +40,7 @@
 - **Deep keys:** `uniqBy(rows, r => JSON.stringify(r.tags))`. What breaks (key order, `undefined`)?
 - **Streaming:** a generator that yields unique items from an infinite iterable.
 - **Memory:** what if keys are large objects? (`WeakSet` won't help for primitives; discuss.)
+
+## In the interview
+
+Mention the "last one wins" variant (iterate backwards or use a `Map` and overwrite) and that `[...new Set(array)]` is the identity-key special case.
