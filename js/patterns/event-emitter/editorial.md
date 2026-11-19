@@ -6,6 +6,38 @@
 2. `off(event, fn)` scans from the end and splices the first record whose `fn` matches.
 3. `emit` returns `false` if there are no records. Otherwise it loops over `[...list]`; for a `once` record it checks and sets `fired` and removes the record **before** calling it, then calls `fn.apply(this, args)`.
 
+## Walkthrough
+
+```js
+const bus = new EventEmitter()
+const offA = bus.on('save', a)
+bus.once('save', b)
+bus.emit('save', doc) // a(doc), b(doc)
+bus.emit('save', doc) // a(doc) only: b was a once-listener
+offA()
+bus.emit('save', doc) // nothing
+```
+
+| Emit | Listeners called | Listeners left |
+| --- | --- | --- |
+| 1st | a, b | a |
+| 2nd | a | a |
+| after `offA()` | – | none |
+
+`emit` iterates over a **copy** of the listener list, so a listener that unsubscribes itself (or adds new ones) doesn't disturb the current emission.
+
+## Complexity
+
+`O(listeners)` per emit; `off` is `O(listeners)` for that event.
+
+## Edge cases to test
+
+- `on`, `once`, `off`, and the unsubscribe function returned by `on`.
+- Arguments passed through to listeners.
+- Removing a listener during emit.
+- The same function registered twice.
+- Emitting an event with no listeners.
+
 ## Pitfalls
 
 - Iterating the live array: a listener that removes itself shifts the next one into its index and it gets skipped; a listener added during emit runs immediately (or forever, if it keeps adding).
@@ -21,3 +53,7 @@
 - **Memory leaks:** warn when more than N listeners are added for one event, like Node's `maxListeners`.
 - **Typed events:** `class Emitter<Events extends Record<string, unknown[]>>` so `emit('save', 1)` is a type error when `save` takes a string.
 - **Async emit:** `emitAsync` that awaits listeners in order.
+
+## In the interview
+
+Mention error isolation (should one throwing listener stop the rest?), memory leaks from listeners never removed, and the built-in `EventTarget` as an alternative in browsers.

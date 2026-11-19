@@ -9,6 +9,31 @@
 5. `can` is `pick(...) !== undefined`.
 6. Expose `state` and `context` as getters so callers always see the live values.
 
+## Walkthrough
+
+A fetch machine: `idle --FETCH--> loading`, `loading --RESOLVE--> success`, `loading --REJECT--> failure`, `failure --RETRY--> loading` (guarded by `retries < 3`).
+
+| Event | From | Guard | To | Side effects |
+| --- | --- | --- | --- | --- |
+| `FETCH` | idle | – | loading | `idle.exit`, transition action, `loading.entry` |
+| `REJECT` | loading | – | failure | `retries += 1` in the action |
+| `RETRY` | failure | `retries < 3` passes | loading | entry/exit hooks |
+| `RESOLVE` | failure | no transition defined | failure (ignored) | none |
+
+Events that aren't handled in the current state are ignored, which is the main benefit: impossible transitions (resolving while idle) simply can't happen. Unknown targets are rejected when the machine is created, not when the event fires.
+
+## Complexity
+
+`O(c)` per event for `c` candidate transitions.
+
+## Edge cases to test
+
+- Valid transitions and their hook order (exit, action, entry).
+- Ignored events.
+- Guards choosing between several candidates.
+- Context updates from actions.
+- Configuration errors (unknown initial or target states) throw at creation.
+
 ## Pitfalls
 
 - Returning a plain `{ state: current }` object: the property is a snapshot and never changes. Use a getter.
@@ -24,3 +49,7 @@
 - **Nested and parallel states** (statecharts): what changes in exit/entry order?
 - **Invoking promises:** a `loading` state that starts a fetch on entry and sends `OK`/`FAIL` when it settles, ignoring results that arrive after leaving the state.
 - **Typed machines:** make `send('TYPO')` a compile error.
+
+## In the interview
+
+Draw the statechart first. Mention XState and statecharts (nested and parallel states) as the production version, and why explicit states beat combinations of booleans (`isLoading && isError`).
