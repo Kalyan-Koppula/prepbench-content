@@ -1,13 +1,24 @@
 function shortestPalindrome(s: string): string {
-  const rev = s.split('').reverse().join('')
-  const t = s + '#' + rev
-  const lps = new Array<number>(t.length).fill(0)
-  for (let i = 1, len = 0; i < t.length; i++) {
-    while (len > 0 && t[i] !== t[len]) len = lps[len - 1]
-    if (t[i] === t[len]) len++
-    lps[i] = len
+  const n = s.length
+  let reversed = ''
+  for (let i = n - 1; i >= 0; i--) {
+    reversed += s[i]
   }
-  // longest prefix of s that is a suffix of rev = longest palindromic prefix
-  const k = t.length ? lps[t.length - 1] : 0
-  return rev.slice(0, s.length - k) + s
+  // In s + '#' + reversed, the longest prefix that is also a suffix is the
+  // longest palindromic prefix of s. The '#' stops a match crossing the middle.
+  const combined = s + '#' + reversed
+  const lps = new Array(combined.length).fill(0)
+  let length = 0
+  for (let i = 1; i < combined.length; i++) {
+    while (length > 0 && combined[i] !== combined[length]) {
+      length = lps[length - 1]
+    }
+    if (combined[i] === combined[length]) {
+      length++
+    }
+    lps[i] = length
+  }
+  const palindromicPrefix = lps[combined.length - 1]
+  // Mirror the rest of s in front of it.
+  return reversed.substring(0, n - palindromicPrefix) + s
 }

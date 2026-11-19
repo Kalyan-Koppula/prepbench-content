@@ -1,25 +1,59 @@
-**Key insight:** the characters you keep at the start form the longest **palindromic prefix** `P` of `s`. Everything after it (`rest`) must be mirrored in front: the answer is `reverse(rest) + s`. Finding `P` is a string-matching problem: it's the longest prefix of `s` that equals a suffix of `reverse(s)`.
+**Key idea:** you may only add characters in front, so the original string must end the palindrome. The best you can do is keep the **longest palindromic prefix** of `s` as the centre and mirror the rest in front of it. To find that prefix in linear time, build `s + '#' + reverse(s)` and compute the KMP `lps` value of the whole string: the longest prefix of `s` that matches a suffix of `reverse(s)` is exactly the longest palindromic prefix.
 
-## Approach
+## Recognising the pattern
 
-1. Build `t = s + '#' + reverse(s)`. The `#` stops a match from spanning both halves.
-2. Compute the KMP prefix function (`lps`) of `t`. `lps[t.length - 1]` is the length `k` of the longest prefix of `s` that is also a suffix of `reverse(s)` — i.e. the longest palindromic prefix.
-3. Return `reverse(s.slice(k)) + s`.
+"Longest prefix that equals a suffix of something" is what the KMP failure function computes, from the [Strings](/problems/patterns/strings) sheet. This problem is a clever application: a prefix of `s` that reads the same reversed is a prefix of `s` that equals a suffix of `reverse(s)`.
 
-Example: `s = "race"`. The longest palindromic prefix is `"r"`, so prepend `reverse("ace") = "eca"` → `"ecarace"`.
+## Brute force
+
+Check prefixes from longest to shortest until one is a palindrome, then prepend the reverse of the remaining suffix. That is the reference brute force below. `O(n²)` in the worst case (for example `"aaaa…ab"`).
+
+## KMP on the combined string
+
+1. `reversed = reverse(s)`.
+2. `combined = s + '#' + reversed`. The `#` is a character that doesn't occur in `s`; it stops a border from crossing the middle.
+3. Compute `lps` for `combined`.
+4. `k = lps[last]`: the length of the longest palindromic prefix.
+5. Return `reversed[0 .. n − k) + s`.
+
+**Why `reversed[0 .. n − k)`.** The first `n − k` characters of `reversed` are the last `n − k` characters of `s`, in reverse. Putting them in front mirrors the part of `s` that isn't already palindromic.
+
+**Why the separator.** Without it, for `s = "aa"` the combined string `"aaaa"` would have a border of length 3, longer than `s`.
+
+## Walkthrough
+
+`s = "aabba"`, `reversed = "abbaa"`, `combined = "aabba#abbaa"`.
+
+The longest prefix of `combined` that is also its suffix is `"aa"` (`lps[last] = 2`): the prefix `aa` of `s` equals the suffix `aa` of `reversed`, and `"aab"` doesn't match `"baa"`.
+
+| piece | value |
+| --- | --- |
+| palindromic prefix of s | "aa" |
+| rest of s | "bba" |
+| reversed rest, prepended | "abb" |
+| answer | "abb" + "aabba" = **"abbaabba"** |
 
 ## Complexity
 
-- Time `O(n)` — building `t` and its prefix function are linear.
-- Space `O(n)` — `t` and the `lps` array.
+- Check prefixes from the longest: `O(n²)` worst case.
+- KMP on the combined string: `O(n)` time and space.
+- A rolling hash comparing prefix hashes forward and backward also gives `O(n)` expected.
 
-## Alternatives to mention
+## Edge cases
 
-- Brute force: for `k` from `n` down to `0`, test whether `s[0..k)` is a palindrome — `O(n²)`. Easy to state; too slow for `5 · 10^4` adversarial inputs like `"aaaa…ab…"`.
-- Rolling hash: maintain forward and backward hashes of each prefix and record the longest prefix whose hashes agree. `O(n)` expected; needs care with collisions.
-- Manacher's algorithm also finds palindromic prefixes in `O(n)`, but it's heavier to write in an interview.
+- Already a palindrome: returned unchanged (`k = n`).
+- Empty string: empty.
+- No palindromic prefix longer than one character: mirror everything after the first character (`"race"` → `"ecarace"`).
 
-## Pitfalls
+## Common mistakes
 
-- Without the separator, `lps` can exceed `n` for strings like `"aaa"`.
-- Empty input returns `""`.
+- Forgetting the separator.
+- Prepending the reverse of the whole string instead of the remainder.
+- Computing `lps` on `s` alone, which finds borders of `s`, not palindromes.
+
+## In the interview
+
+- Explain why the answer keeps the longest palindromic prefix; then show how KMP finds it.
+- Likely follow-ups:
+  - *Add characters at the end instead?* Find the longest palindromic **suffix**: the same trick with `reverse(s) + '#' + s`.
+  - *Fewest insertions anywhere?* A 2-D DP: `n −` the longest palindromic subsequence.

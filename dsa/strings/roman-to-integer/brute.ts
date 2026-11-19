@@ -1,15 +1,28 @@
+// Read greedily from the left, trying the six two-letter subtractive forms first.
 function romanToInt(s: string): number {
-  const pairs: Record<string, number> = { CM: 900, CD: 400, XC: 90, XL: 40, IX: 9, IV: 4 }
-  const single: Record<string, number> = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 }
+  const values = new Map<string, number>()
+  values.set('CM', 900)
+  values.set('CD', 400)
+  values.set('XC', 90)
+  values.set('XL', 40)
+  values.set('IX', 9)
+  values.set('IV', 4)
+  values.set('M', 1000)
+  values.set('D', 500)
+  values.set('C', 100)
+  values.set('L', 50)
+  values.set('X', 10)
+  values.set('V', 5)
+  values.set('I', 1)
   let total = 0
   let i = 0
   while (i < s.length) {
-    const two = s.slice(i, i + 2)
-    if (two in pairs) {
-      total += pairs[two]
+    const two = s.substring(i, i + 2)
+    if (two.length === 2 && values.has(two)) {
+      total += values.get(two) as number
       i += 2
     } else {
-      total += single[s[i]]
+      total += values.get(s[i]) as number
       i++
     }
   }
