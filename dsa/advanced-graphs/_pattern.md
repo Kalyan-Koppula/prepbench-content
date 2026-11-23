@@ -8,15 +8,17 @@ summary: Weighted shortest paths, minimum spanning trees, union-find, topologica
 
 Plain BFS finds shortest paths when every edge costs the same. Many problems don't have that luxury: flights have prices, roads have lengths, a path's cost is the largest step instead of the sum. This sheet collects the algorithms that handle those cases. They all build on the traversals from [Graphs](/problems/patterns/graphs); what changes is **which node to process next** and **what you store per node**.
 
-| Question | Tool | Core idea |
-| --- | --- | --- |
-| Cheapest path from one source, non-negative weights | **Dijkstra** | Always expand the closest unfinished node (min-heap) |
-| Cheapest path with at most `k` edges, or negative weights | **Bellman-Ford** | Relax every edge, `k` (or `V − 1`) rounds |
-| Cheapest path between every pair, small `V` | **Floyd-Warshall** | Allow intermediate nodes one at a time |
-| Connect all nodes as cheaply as possible | **Minimum spanning tree** (Prim, Kruskal) | Grow by the cheapest edge that adds something new |
-| Merge groups, detect cycles as edges arrive | **Union-find** | Each group has a representative |
-| Order with dependencies | **Topological sort** | Take nodes with no remaining incoming edges |
-| Edges whose removal disconnects the graph | **Bridges** (Tarjan) | DFS discovery times and low-links |
+
+| Question                                                  | Tool                                      | Core idea                                            |
+| --------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------- |
+| Cheapest path from one source, non-negative weights       | **Dijkstra**                              | Always expand the closest unfinished node (min-heap) |
+| Cheapest path with at most `k` edges, or negative weights | **Bellman-Ford**                          | Relax every edge, `k` (or `V − 1`) rounds            |
+| Cheapest path between every pair, small `V`               | **Floyd-Warshall**                        | Allow intermediate nodes one at a time               |
+| Connect all nodes as cheaply as possible                  | **Minimum spanning tree** (Prim, Kruskal) | Grow by the cheapest edge that adds something new    |
+| Merge groups, detect cycles as edges arrive               | **Union-find**                            | Each group has a representative                      |
+| Order with dependencies                                   | **Topological sort**                      | Take nodes with no remaining incoming edges          |
+| Edges whose removal disconnects the graph                 | **Bridges** (Tarjan)                      | DFS discovery times and low-links                    |
+
 
 ## When to reach for it
 
@@ -42,12 +44,14 @@ Dijkstra keeps a tentative distance for every node and a min-heap of `(distance,
 
 From `A`:
 
-| pop (dist, node) | final? | relax | heap after |
-| --- | --- | --- | --- |
-| (0, A) | A = 0 | B: 1, C: 4 | (1, B), (4, C) |
-| (1, B) | B = 1 | D: 1 + 2 = 3 | (3, D), (4, C) |
-| (3, D) | D = 3 | C: 3 + 1 = 4 (no better) | (4, C) |
-| (4, C) | C = 4 | – | empty |
+
+| pop (dist, node) | final? | relax                    | heap after     |
+| ---------------- | ------ | ------------------------ | -------------- |
+| (0, A)           | A = 0  | B: 1, C: 4               | (1, B), (4, C) |
+| (1, B)           | B = 1  | D: 1 + 2 = 3             | (3, D), (4, C) |
+| (3, D)           | D = 3  | C: 3 + 1 = 4 (no better) | (4, C)         |
+| (4, C)           | C = 4  | –                        | empty          |
+
 
 The **invariant**: when a node is popped for the first time, its distance is the shortest possible. Later, stale entries for the same node are skipped.
 
@@ -140,13 +144,15 @@ Count incoming edges; start from nodes with none; removing a node decrements its
 
 ## Choosing the state
 
-| Problem | Node state | Cost combination |
-| --- | --- | --- |
-| Network Delay Time | node | sum |
-| Path With Minimum Effort | cell | max of step differences |
-| Swim in Rising Water | cell | max of heights |
+
+| Problem                         | Node state       | Cost combination        |
+| ------------------------------- | ---------------- | ----------------------- |
+| Network Delay Time              | node             | sum                     |
+| Path With Minimum Effort        | cell             | max of step differences |
+| Swim in Rising Water            | cell             | max of heights          |
 | Cheapest Flights Within K Stops | node (per round) | sum, with an edge limit |
-| Shortest Path in Binary Matrix | cell | +1 per step (plain BFS) |
+| Shortest Path in Binary Matrix  | cell             | +1 per step (plain BFS) |
+
 
 When a constraint like "at most `k` stops" matters, either add it to the state (`(node, stops)`) or process in rounds.
 
@@ -198,3 +204,4 @@ When a constraint like "at most `k` stops" matters, either add it to the state (
 9. [Swim in Rising Water](/problems/swim-in-rising-water): minimising the maximum along a path.
 10. [Alien Dictionary](/problems/alien-dictionary): building a graph from comparisons, then topological sort.
 11. [Critical Connections in a Network](/problems/critical-connections-in-a-network): bridges with discovery times and low-links.
+
