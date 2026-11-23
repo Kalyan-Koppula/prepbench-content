@@ -21,7 +21,7 @@ jobs:
     steps:
       # The pipeline lives in the private app repo; the PrepBench Content app
       # can read it.
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app
         with:
           app-id: ${{ vars.CONTENT_APP_ID }}
@@ -29,18 +29,20 @@ jobs:
           owner: Kalyan-Koppula
           repositories: prepbench
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: Kalyan-Koppula/prepbench
           token: ${{ steps.app.outputs.token }}
           path: app
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: app/content
 
-      - uses: actions/setup-node@v4
+      # Bun installs packages and runs the content checks; the React hook
+      # checks start Vitest, which runs on Node.
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
       - uses: oven-sh/setup-bun@v2
 
       - run: bun install --frozen-lockfile
@@ -55,7 +57,7 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app
         with:
           app-id: ${{ vars.CONTENT_APP_ID }}
