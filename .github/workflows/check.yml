@@ -1,0 +1,68 @@
+# Validates content with the app's own pipeline (every reference solution runs
+# against its tests, every hook question runs in jsdom). Required for merging
+# into main, so PRs from the PrepBench editor auto-merge only when this passes.
+# After a push to main it asks the app repo to deploy.
+name: Check content
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # The pipeline lives in the private app repo; the PrepBench Content app
+      # can read it.
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ vars.CONTENT_APP_ID }}
+          private-key: ${{ secrets.CONTENT_APP_PRIVATE_KEY }}
+          owner: Kalyan-Koppula
+          repositories: prepbench
+
+      - uses: actions/checkout@v4
+        with:
+          repository: Kalyan-Koppula/prepbench
+          token: ${{ steps.app.outputs.token }}
+          path: app
+      - uses: actions/checkout@v4
+        with:
+          path: app/content
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install --frozen-lockfile
+        working-directory: app
+      - run: bun run content:check
+        working-directory: app
+      - run: bun run content:check-hooks
+        working-directory: app
+
+  deploy:
+    needs: check
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ vars.CONTENT_APP_ID }}
+          private-key: ${{ secrets.CONTENT_APP_PRIVATE_KEY }}
+          owner: Kalyan-Koppula
+          repositories: prepbench
+      - name: Ask the app repo to deploy
+        run: gh api repos/Kalyan-Koppula/prepbench/dispatches -f event_type=content-updated -f "client_payload[sha]=${{ github.sha }}"
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
